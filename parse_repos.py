@@ -80,7 +80,7 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0;
 <ul class="nav nav-tabs" id="mainTabs" role="tablist">
 <li class="nav-item" role="presentation">
 <button class="nav-link active" id="download-tab" data-bs-toggle="tab" data-bs-target="#download-pane" type="button" role="tab">
-<i class="bi bi-download"></i> Letölthető robotok
+<i class="bi bi-download"></i> Elérhető robotok
 </button>
 </li>
 <li class="nav-item" role="presentation">
@@ -102,7 +102,7 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0;
 
 <!-- Tab Content -->
 <div class="tab-content" id="mainTabContent">
-<!-- Letölthető robotok tab -->
+<!-- Elérhető robotok tab -->
 <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
 
 <!-- Keresés és szűrés -->
@@ -281,7 +281,7 @@ html += f'''</div>
 <div class="card-body">
 <div id="executableRobotsList" class="mb-3">
 <div class="alert alert-info">
-<i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Letölthető robotok" tab-on a futtatáshoz.
+<i class="bi bi-info-circle"></i> Válasszon ki robotokat az "Elérhető robotok" tab-on a futtatáshoz.
 </div>
 </div>
 <div class="row">
@@ -493,7 +493,7 @@ function updateExecutableRobotsList() {{
     const container = document.getElementById('executableRobotsList');
     
     if (executableRobots.length === 0) {{
-        container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Letölthető robotok" tab-on a futtatáshoz.</div>';
+        container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat az "Elérhető robotok" tab-on a futtatáshoz.</div>';
         return;
     }}
     
