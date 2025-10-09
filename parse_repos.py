@@ -155,6 +155,19 @@ for i, repo in enumerate(data, 1):
     else:
         description_html = "Nincs leírás"
     
+    # Utolsó módosítás dátumának formázása
+    pushed_at = repo.get("pushed_at", "")
+    if pushed_at:
+        from datetime import datetime
+        try:
+            # ISO formátumból olvasható dátummá alakítás
+            dt = datetime.fromisoformat(pushed_at.replace('Z', '+00:00'))
+            formatted_date = dt.strftime("%Y.%m.%d %H:%M")
+        except:
+            formatted_date = "Ismeretlen dátum"
+    else:
+        formatted_date = "Nincs adat"
+    
     html += f'''
     <div class="col-lg-6 col-xl-4 mb-4">
         <div class="card h-100 shadow-sm repo-card" data-repo="{repo["name"]}">
@@ -193,9 +206,9 @@ for i, repo in enumerate(data, 1):
             </div>
             <div class="card-footer bg-light">
                 <small class="text-muted">
-                    <i class="bi bi-github"></i> 
+                    <i class="bi bi-clock"></i> 
                     <a href="https://github.com/{repo["full_name"]}" target="_blank" class="text-decoration-none">
-                        {repo["full_name"]}
+                        Utolsó módosítás: {formatted_date}
                     </a>
                 </small>
             </div>
