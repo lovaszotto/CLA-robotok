@@ -1,3 +1,3 @@
 # results
 
-Ebben a könyvtárban találhatók a futtatások eredményei, logok, riportok.
+Ebben a könyvtárban találhatók a futtatások eredményei, Log To Consoleok, riportok.
