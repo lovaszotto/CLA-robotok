@@ -12,11 +12,11 @@ Robot letöltése a központi nyilvántartásból
     Log To Console    Letöltés sikeresen elindult
     # lépjen be a https://github.com/lovaszotto?tab=repositories oldalra
     # jelenítse meg chrome-ban
-    Open Browser    https://github.com/lovaszotto?tab=repositories    chrome
-    Maximize Browser Window
+    #Open Browser    https://github.com/lovaszotto?tab=repositories    chrome
+    #Maximize Browser Window
     # A böngésző nyitva marad további műveletekhez
     #Log    Böngésző megnyitva - kézi bezárásig nyitva marad
-    Sleep    30s    # Várakozás 30 másodpercig, hogy megtekinthesse az oldalt
+    #Sleep    30s    # Várakozás 30 másodpercig, hogy megtekinthesse az oldalt
     # klónozza a repository-t
     # lépjen be a letöltött mappába
     # végezze el a szükséges módosításokat
@@ -45,7 +45,8 @@ Robot letöltése a központi nyilvántartásból
         IF    '${python_result.stderr}' != ''
             Log To Console    Python hiba: ${python_result.stderr}
         END
-        
+        #jelenítse meg a generált web oldalt és ne zárja be a böngészőt
+        Open Browser    file://${CURDIR}/repos.html    chrome
     ELSE
         Log To Console    Hiba a repository lista lekérésében: ${result.stderr}
         
