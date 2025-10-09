@@ -16,7 +16,9 @@ def get_branches(repo_full_name):
                     parts = line.split('\t')
                     if len(parts) >= 2:
                         branch_name = parts[1].replace('refs/heads/', '')
-                        branches.append(branch_name)
+                        # Kiszűrjük a "main" branch-et
+                        if branch_name.lower() != 'main':
+                            branches.append(branch_name)
             return branches
         else:
             return []
@@ -105,13 +107,13 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0;
 
 <!-- Keresés és szűrés -->
 <div class="row mb-4">
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="input-group">
             <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
             <input type="text" class="form-control" id="repoSearch" placeholder="Repository keresése..." onkeyup="filterRepos()">
         </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
         <div class="input-group">
             <span class="input-group-text bg-success text-white"><i class="bi bi-funnel"></i></span>
             <select class="form-select" id="branchFilter" onchange="filterRepos()">
@@ -125,14 +127,11 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0;
             </select>
         </div>
     </div>
-</div>
-
-<div class="actions">
-<button class="btn-custom" onclick="selectAll()"><i class="bi bi-check-all"></i> Összes kiválasztása</button>
-<button class="btn-custom" onclick="deselectAll()"><i class="bi bi-x-circle"></i> Összes törlése</button>
-<button class="btn-custom" onclick="showSelected()"><i class="bi bi-list-check"></i> Kiválasztottak megjelenítése</button>
-<button class="btn-custom" onclick="addToExecutableList()"><i class="bi bi-play-circle"></i> Futtatáshoz hozzáad</button>
-<button class="btn-custom" onclick="exportSelected()"><i class="bi bi-download"></i> Export JSON</button>
+    <div class="col-md-4">
+        <button id="addToExecutableBtn" class="btn btn-secondary w-100" onclick="addToExecutableList()" disabled>
+            <i class="bi bi-play-circle"></i> Válassz robotokat
+        </button>
+    </div>
 </div>
 
 <div class="row" id="repoCards">'''
@@ -142,7 +141,7 @@ for i, repo in enumerate(data, 1):
     branch_html = ''
     for branch in branches:
         branch_id = f"branch_{i}_{branch}".replace('-', '_').replace(' ', '_').replace('/', '_')
-        branch_html += f'<div class="branch-checkbox"><input type="checkbox" id="{branch_id}" value="{branch}" data-repo="{repo["name"]}"><label for="{branch_id}">{branch}</label></div>'
+        branch_html += f'<div class="branch-checkbox"><input type="checkbox" id="{branch_id}" value="{branch}" data-repo="{repo["name"]}" onchange="updateAddToExecutableButton()"><label for="{branch_id}">{branch}</label></div>'
     if not branch_html:
         branch_html = '<div class="text-muted fst-italic"><i class="bi bi-exclamation-triangle"></i> Nincs elérhető branch</div>'
     
@@ -313,10 +312,9 @@ html += f'''</div>
 <p class="card-text">Ez az alkalmazás lehetővé teszi a GitHub repository-k és branch-ek egyszerű kezelését és letöltését.</p>
 <ul class="list-unstyled">
 <li><i class="bi bi-check-circle-fill text-success"></i> Repository-k listázása</li>
-<li><i class="bi bi-check-circle-fill text-success"></i> Branch-ek kezelése</li>
+<li><i class="bi bi-check-circle-fill text-success"></i> Robot-ok kezelése</li>
 <li><i class="bi bi-check-circle-fill text-success"></i> Keresés és szűrés</li>
-<li><i class="bi bi-check-circle-fill text-success"></i> JSON export</li>
-<li><i class="bi bi-check-circle-fill text-success"></i> Lapozható táblázat</li>
+<li><i class="bi bi-check-circle-fill text-success"></i> Interaktív felület</li>
 </ul>
 </div>
 </div>
@@ -376,28 +374,7 @@ html += f'''</div>
 </div>
 </div>
 <div class="col-md-6">
-<div class="card">
-<div class="card-header bg-success text-white">
-<h5><i class="bi bi-download"></i> Export Beállítások</h5>
-</div>
-<div class="card-body">
-<div class="form-check mb-3">
-<input class="form-check-input" type="radio" name="exportFormat" id="jsonFormat" checked>
-<label class="form-check-label" for="jsonFormat">JSON formátum</label>
-</div>
-<div class="form-check mb-3">
-<input class="form-check-input" type="radio" name="exportFormat" id="csvFormat">
-<label class="form-check-label" for="csvFormat">CSV formátum</label>
-</div>
-<div class="form-check mb-3">
-<input class="form-check-input" type="checkbox" id="includeTimestamp" checked>
-<label class="form-check-label" for="includeTimestamp">Időbélyeg hozzáadása</label>
-</div>
-<button class="btn btn-outline-success" onclick="saveSettings()">
-<i class="bi bi-save"></i> Beállítások mentése
-</button>
-</div>
-</div>
+
 </div>
 </div>
 </div>
@@ -437,90 +414,39 @@ function selectAllInRepo(repoName) {{
     const card = document.querySelector(`[data-repo="${{repoName}}"]`);
     const checkboxes = card.querySelectorAll('input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = true);
+    updateAddToExecutableButton();
 }}
 
 function deselectAllInRepo(repoName) {{
     const card = document.querySelector(`[data-repo="${{repoName}}"]`);
     const checkboxes = card.querySelectorAll('input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = false);
+    updateAddToExecutableButton();
 }}
 
-function selectAll() {{
-    document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-}}
-
-function deselectAll() {{
-    document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-}}
-
-function showSelected() {{
-    const selected = [];
-    document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {{
-        selected.push({{
-            repository: checkbox.dataset.repo,
-            branch: checkbox.value
-        }});
-    }});
+function updateAddToExecutableButton() {{
+    const anyChecked = document.querySelectorAll('input[type="checkbox"]:checked').length > 0;
+    const btn = document.getElementById('addToExecutableBtn');
     
-    console.log('Kiválasztott branch-ek:', selected);
-    
-    if (selected.length === 0) {{
-        alert('Nincs kiválasztott branch!');
+    if (anyChecked) {{
+        btn.disabled = false;
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-success');
+        btn.innerHTML = '<i class="bi bi-play-circle"></i> Futtatáshoz hozzáad';
     }} else {{
-        let message = `Kiválasztott branch-ek (összesen: ${{selected.length}} db):\\n\\n`;
-        const groupedByRepo = {{}};
-        
-        selected.forEach(item => {{
-            if (!groupedByRepo[item.repository]) {{
-                groupedByRepo[item.repository] = [];
-            }}
-            groupedByRepo[item.repository].push(item.branch);
-        }});
-        
-        for (const [repo, branches] of Object.entries(groupedByRepo)) {{
-            message += `📁 ${{repo}}: ${{branches.join(', ')}}\\n`;
-        }}
-        
-        alert(message);
+        btn.disabled = true;
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-secondary');
+        btn.innerHTML = '<i class="bi bi-play-circle"></i> Válassz robotokat';
     }}
 }}
 
-function exportSelected() {{
-    const selected = [];
-    document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {{
-        selected.push({{
-            repository: checkbox.dataset.repo,
-            branch: checkbox.value
-        }});
-    }});
-    
-    if (selected.length === 0) {{
-        alert('Nincs kiválasztott branch az exportáláshoz!');
-        return;
-    }}
-    
-    const jsonData = JSON.stringify(selected, null, 2);
-    const blob = new Blob([jsonData], {{ type: 'application/json' }});
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'kivalasztott_branchek.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    alert(`${{selected.length}} branch exportálva JSON fájlba!`);
-}}
 
 function saveSettings() {{
     const settings = {{
         darkMode: document.getElementById('darkMode').checked,
         compactView: document.getElementById('compactView').checked,
-        pageSize: document.getElementById('pageSize').value,
-        exportFormat: document.querySelector('input[name="exportFormat"]:checked').id,
-        includeTimestamp: document.getElementById('includeTimestamp').checked
+        pageSize: document.getElementById('pageSize').value
     }};
     
     localStorage.setItem('robotManagerSettings', JSON.stringify(settings));
@@ -666,17 +592,22 @@ function loadSettings() {{
         document.getElementById('darkMode').checked = settings.darkMode || false;
         document.getElementById('compactView').checked = settings.compactView || false;
         document.getElementById('pageSize').value = settings.pageSize || '10';
-        
-        if (settings.exportFormat) {{
-            document.getElementById(settings.exportFormat).checked = true;
-        }}
-        document.getElementById('includeTimestamp').checked = settings.includeTimestamp !== false;
     }}
 }}
 
 // Beállítások betöltése az oldal betöltésekor
 $(document).ready(function() {{
     loadSettings();
+    
+    // Összes checkbox alapértelmezetten nincs kijelölve
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+    
+    // Gomb alapértelmezetten disabled állapotban
+    const btn = document.getElementById('addToExecutableBtn');
+    btn.disabled = true;
+    btn.classList.remove('btn-success');
+    btn.classList.add('btn-secondary');
+    btn.innerHTML = '<i class="bi bi-play-circle"></i> Válassz robotokat';
 }});
 </script>
 </body></html>'''
