@@ -25,17 +25,14 @@ Robot letöltése a központi nyilvántartásból
     # kérje le a repository listát Git parancsokkal a GitHub API-ból
     #Log To Console    Repository lista lekérése Git parancsokkal...
     
-    # GitHub API hívás a repository lista lekéréséhez
-    ${result}=    Run Process    curl    -s    https://api.github.com/users/lovaszotto/repos    shell=True
+    # GitHub API hívás a repository lista lekéréséhez Python script-tel UTF-8 kódolással
+    ${result}=    Run Process    python    fetch_github_repos.py    lovaszotto    shell=True
     Log To Console    GitHub API válasz státusz: ${result.rc}
     
-    # Ha a curl parancs sikeres volt
+    # Ha a Python script sikeres volt
     IF    ${result.rc} == 0
-        Log To Console    Repository adatok sikeresen lekérve
-        
-        # Mentjük a választ fájlba további feldolgozáshoz
-        Create File    repos_response.json    ${result.stdout}
-        Log To Console    Repository adatok mentve repos_response.json fájlba
+        Log To Console    Repository adatok sikeresen lekérve UTF-8 kódolással
+        Log To Console    ${result.stdout}
         
         # JSON feldolgozás Python script-tel - repository-k és branch-ek listázása
         Log To Console    Repository-k és branch-ek lekérése...
