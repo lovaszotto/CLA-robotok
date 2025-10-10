@@ -38,42 +38,54 @@ html = f'''<!DOCTYPE html>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 <style>
-body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }}
+body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #dc3545 0%, #f1aeb5 50%, #f8d7da 100%); min-height: 100vh; }}
 .main-container {{ max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }}
-.page-header {{ background: linear-gradient(135deg, #198754 0%, #20c997 100%); color: white; padding: 30px; text-align: center; }}
+.page-header {{ background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; padding: 30px; display: flex; align-items: center; justify-content: space-between; }}
+.page-header .header-content {{ display: flex; flex-direction: column; align-items: center; flex: 1; }}
+.page-header .clarity-logo {{ width: 60px; height: 60px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }}
 .page-header h1 {{ margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }}
 .timestamp {{ margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }}
-.nav-tabs {{ border-bottom: 3px solid #198754; background: #f8f9fa; }}
+.nav-tabs {{ border-bottom: 3px solid #dc3545; background: #f8f9fa; }}
 .nav-tabs .nav-link {{ color: #495057; border: none; padding: 15px 25px; font-weight: 600; border-radius: 0; }}
-.nav-tabs .nav-link.active {{ background: #198754; color: white; border-bottom: 3px solid #198754; }}
-.nav-tabs .nav-link:hover {{ background: #e9ecef; color: #198754; }}
+.nav-tabs .nav-link.active {{ background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; border-bottom: 3px solid #dc3545; }}
+.nav-tabs .nav-link:hover {{ background: linear-gradient(135deg, #f1aeb5 0%, #f8d7da 100%); color: #dc3545; }}
 .tab-content {{ padding: 30px; }}
 .branch-checkbox {{ margin: 5px 0; display: flex; align-items: center; }}
 .branch-checkbox input {{ margin-right: 10px; transform: scale(1.2); }}
 .branch-checkbox label {{ cursor: pointer; user-select: none; font-size: 13px; color: #495057; }}
 .branch-checkbox label:hover {{ color: #198754; }}
 .actions {{ text-align: center; margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }}
-.btn-custom {{ background: linear-gradient(135deg, #198754 0%, #20c997 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }}
-.btn-custom:hover {{ transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, #157347 0%, #1a936f 100%); }}
+.btn-custom {{ background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }}
+.btn-custom:hover {{ transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, #b02a37 0%, #dc3545 50%, #f1aeb5 100%); }}
 .repo-card {{ transition: all 0.3s ease; border: 2px solid transparent; }}
-.repo-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important; border-color: #198754; }}
-.repo-card .card-header {{ background: linear-gradient(135deg, #198754 0%, #20c997 100%) !important; }}
+.repo-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important; border-color: #dc3545; }}
+.repo-card .card-header {{ background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%) !important; }}
 .repo-card .card-title a:hover {{ text-decoration: underline !important; }}
 .branches-container {{ max-height: 300px; overflow-y: auto; }}
 .branch-checkbox {{ padding: 8px 12px; margin: 2px 0; border-radius: 6px; transition: background-color 0.2s; }}
 .branch-checkbox:hover {{ background-color: #f8f9fa; }}
-.branch-checkbox input:checked + label {{ font-weight: bold; color: #198754; }}
+.branch-checkbox input:checked + label {{ font-weight: bold; color: #dc3545; }}
 #repoSearch, #branchFilter {{ border: 2px solid #e9ecef; }}
-#repoSearch:focus, #branchFilter:focus {{ border-color: #198754; box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25); }}
+#repoSearch:focus, #branchFilter:focus {{ border-color: #dc3545; box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25); }}
 .input-group-text.bg-primary {{ background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%) !important; }}
-.input-group-text.bg-success {{ background: linear-gradient(135deg, #198754 0%, #20c997 100%) !important; }}
+.input-group-text.bg-success {{ background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%) !important; }}
 .hidden {{ display: none !important; }}
 </style>
 </head><body>
 <div class="main-container">
 <div class="page-header">
-<h1><i class="bi bi-robot"></i> GitHub Robotok Kezelő</h1>
+<svg class="clarity-logo" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+<rect x="0" y="0" width="80" height="80" fill="white" rx="8" stroke="#ddd" stroke-width="1"/>
+<rect x="20" y="10" width="16" height="16" fill="#dc3545" transform="rotate(45 28 18)"/>
+<rect x="10" y="35" width="16" height="16" fill="#dc3545" transform="rotate(45 18 43)"/>
+<rect x="30" y="55" width="16" height="16" fill="#dc3545" transform="rotate(45 38 63)"/>
+<line x1="25" y1="30" x2="30" y2="35" stroke="#333" stroke-width="3"/>
+<line x1="30" y1="25" x2="35" y2="30" stroke="#333" stroke-width="3"/>
+</svg>
+<div class="header-content">
+<h1><i class="bi bi-robot"></i> Robotok</h1>
 <div class="timestamp">Generálva: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+</div>
 </div>
 
 <!-- Tab Navigation -->
