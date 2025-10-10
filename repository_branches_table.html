@@ -6,11 +6,10 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 <style>
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #dc3545 0%, #f1aeb5 50%, #f8d7da 100%); min-height: 100vh; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: white; min-height: 100vh; }
 .main-container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
-.page-header { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; padding: 30px; display: flex; align-items: center; justify-content: space-between; }
-.page-header .header-content { display: flex; flex-direction: column; align-items: center; flex: 1; }
-.page-header .clarity-logo { width: 60px; height: 60px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15)); }
+.page-header { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; padding: 30px; text-align: center; }
+.page-header .header-content { display: flex; flex-direction: column; align-items: center; }
 .page-header h1 { margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .nav-tabs { border-bottom: 3px solid #dc3545; background: #f8f9fa; }
@@ -42,17 +41,8 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </head><body>
 <div class="main-container">
 <div class="page-header">
-<svg class="clarity-logo" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-<rect x="0" y="0" width="80" height="80" fill="white" rx="8" stroke="#ddd" stroke-width="1"/>
-<rect x="20" y="10" width="16" height="16" fill="#dc3545" transform="rotate(45 28 18)"/>
-<rect x="10" y="35" width="16" height="16" fill="#dc3545" transform="rotate(45 18 43)"/>
-<rect x="30" y="55" width="16" height="16" fill="#dc3545" transform="rotate(45 38 63)"/>
-<line x1="25" y1="30" x2="30" y2="35" stroke="#333" stroke-width="3"/>
-<line x1="30" y1="25" x2="35" y2="30" stroke="#333" stroke-width="3"/>
-</svg>
 <div class="header-content">
-<h1><i class="bi bi-robot"></i> Robotok</h1>
-<div class="timestamp">Generálva: 2025-10-10 06:10:25</div>
+<h1><i class="bi bi-robot"></i> Segíthetünk?</h1>
 </div>
 </div>
 
@@ -76,6 +66,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <li class="nav-item" role="presentation">
 <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings-pane" type="button" role="tab">
 <i class="bi bi-gear"></i> Beállítások
+</button>
+</li>
+<li class="nav-item" role="presentation">
+<button class="nav-link" id="exit-tab" data-bs-toggle="tab" data-bs-target="#exit-pane" type="button" role="tab">
+<i class="bi bi-box-arrow-right"></i> Kilépés
 </button>
 </li>
 </ul>
@@ -154,7 +149,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                 <small class="text-muted">
                     <i class="bi bi-clock"></i> 
                     <a href="https://github.com/lovaszotto/CLA-robotok" target="_blank" class="text-decoration-none">
-                        Utolsó módosítás: 2025.10.10 03:46
+                        Utolsó módosítás: 2025.10.10 04:11
                     </a>
                 </small>
             </div>
@@ -386,7 +381,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <small class="text-muted">Összesen branch</small>
 </div>
 <div class="col-12">
-<h3 class="text-warning">06:10</h3>
+<h3 class="text-warning">09:09</h3>
 <small class="text-muted">Utolsó frissítés</small>
 </div>
 </div>
@@ -462,6 +457,22 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </button>
 </div>
 </div>
+</div>
+</div>
+</div>
+
+<!-- Kilépés tab -->
+<div class="tab-pane fade" id="exit-pane" role="tabpanel">
+<div class="text-center mt-5">
+<h3><i class="bi bi-box-arrow-right text-danger"></i> Kilépés</h3>
+<p class="lead mb-4">Biztos, hogy ki szeretne lépni az alkalmazásból?</p>
+<div class="d-grid gap-2 d-md-block">
+<button class="btn btn-danger btn-lg" onclick="exitApplication()">
+<i class="bi bi-box-arrow-right"></i> Kilépés
+</button>
+<button class="btn btn-secondary btn-lg" onclick="cancelExit()">
+<i class="bi bi-arrow-left"></i> Mégse
+</button>
 </div>
 </div>
 </div>
@@ -706,5 +717,22 @@ $(document).ready(function() {
     btn.classList.add('btn-secondary');
     btn.innerHTML = '<i class="bi bi-play-circle"></i> Válassz robotokat';
 });
+
+// Kilépés funkciók
+function exitApplication() {
+    window.close();
+    // Ha a window.close() nem működik (biztonsági okokból), átirányítás az üres oldalra
+    setTimeout(function() {
+        document.body.innerHTML = '<div class="text-center mt-5"><h1>Az alkalmazás bezárult</h1><p>Bezárhatja ezt a böngésző fület.</p></div>';
+    }, 100);
+}
+
+function cancelExit() {
+    // Visszatérés az első tabra
+    const firstTab = document.querySelector('#download-tab');
+    if (firstTab) {
+        firstTab.click();
+    }
+}
 </script>
 </body></html>
