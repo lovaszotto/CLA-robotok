@@ -1,97 +1,97 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<robot generator="Robot 7.3.2 (Python 3.13.7 on win32)" generated="2025-10-10T05:26:23.703206" rpa="false" schemaversion="5">
+<robot generator="Robot 7.3.2 (Python 3.13.7 on win32)" generated="2025-10-10T05:46:23.544183" rpa="false" schemaversion="5">
 <suite id="s1" name="CLA-Developer" source="C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer\CLA-Developer.robot">
 <test id="s1-t1" name="Robot letöltése a központi nyilvántartásból" line="9">
 <kw name="Log To Console" owner="BuiltIn">
 <arg>Letöltés sikeresen elindult</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T05:26:23.918792" elapsed="0.000206"/>
+<status status="PASS" start="2025-10-10T05:46:23.699537" elapsed="0.000322"/>
 </kw>
 <kw name="Run Process" owner="Process">
-<msg time="2025-10-10T05:26:23.919319" level="INFO">Starting process:
+<msg time="2025-10-10T05:46:23.700759" level="INFO">Starting process:
 python fetch_github_repos.py lovaszotto</msg>
-<msg time="2025-10-10T05:26:23.924429" level="INFO">Waiting for process to complete.</msg>
-<msg time="2025-10-10T05:26:24.841626" level="INFO">Process completed.</msg>
-<msg time="2025-10-10T05:26:24.841783" level="INFO">${result} = &lt;result object with rc 0&gt;</msg>
+<msg time="2025-10-10T05:46:23.709746" level="INFO">Waiting for process to complete.</msg>
+<msg time="2025-10-10T05:46:24.357215" level="INFO">Process completed.</msg>
+<msg time="2025-10-10T05:46:24.357367" level="INFO">${result} = &lt;result object with rc 0&gt;</msg>
 <var>${result}</var>
 <arg>python</arg>
 <arg>fetch_github_repos.py</arg>
 <arg>lovaszotto</arg>
 <arg>shell=True</arg>
 <doc>Runs a process and waits for it to complete.</doc>
-<status status="PASS" start="2025-10-10T05:26:23.919196" elapsed="0.922610"/>
+<status status="PASS" start="2025-10-10T05:46:23.700381" elapsed="0.657009"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
 <arg>GitHub API válasz státusz: ${result.rc}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T05:26:24.842074" elapsed="0.000834"/>
+<status status="PASS" start="2025-10-10T05:46:24.357671" elapsed="0.000550"/>
 </kw>
 <if>
 <branch type="IF" condition="${result.rc} == 0">
 <kw name="Log To Console" owner="BuiltIn">
 <arg>Repository adatok sikeresen lekérve UTF-8 kódolással</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T05:26:24.843713" elapsed="0.000164"/>
+<status status="PASS" start="2025-10-10T05:46:24.358675" elapsed="0.000186"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
 <arg>${result.stdout}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T05:26:24.843967" elapsed="0.000275"/>
+<status status="PASS" start="2025-10-10T05:46:24.358960" elapsed="0.000303"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
 <arg>Repository-k és branch-ek lekérése...</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T05:26:24.844311" elapsed="0.000090"/>
+<status status="PASS" start="2025-10-10T05:46:24.359359" elapsed="0.000090"/>
 </kw>
 <kw name="Run Process" owner="Process">
-<msg time="2025-10-10T05:26:24.844676" level="INFO">Starting process:
+<msg time="2025-10-10T05:46:24.359638" level="INFO">Starting process:
 python parse_repos.py</msg>
-<msg time="2025-10-10T05:26:24.849286" level="INFO">Waiting for process to complete.</msg>
-<msg time="2025-10-10T05:26:28.863782" level="INFO">Process completed.</msg>
-<msg time="2025-10-10T05:26:28.864105" level="INFO">${python_result} = &lt;result object with rc 0&gt;</msg>
+<msg time="2025-10-10T05:46:24.364161" level="INFO">Waiting for process to complete.</msg>
+<msg time="2025-10-10T05:46:28.080027" level="INFO">Process completed.</msg>
+<msg time="2025-10-10T05:46:28.080299" level="INFO">${python_result} = &lt;result object with rc 0&gt;</msg>
 <var>${python_result}</var>
 <arg>python</arg>
 <arg>parse_repos.py</arg>
 <arg>shell=True</arg>
 <arg>timeout=120s</arg>
 <doc>Runs a process and waits for it to complete.</doc>
-<status status="PASS" start="2025-10-10T05:26:24.844464" elapsed="4.019681"/>
+<status status="PASS" start="2025-10-10T05:46:24.359508" elapsed="3.720842"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
 <arg>${python_result.stdout}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T05:26:28.864426" elapsed="0.000716"/>
+<status status="PASS" start="2025-10-10T05:46:28.080752" elapsed="0.000932"/>
 </kw>
 <if>
 <branch type="IF" condition="'${python_result.stderr}' != ''">
 <kw name="Log To Console" owner="BuiltIn">
 <arg>Python hiba: ${python_result.stderr}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T05:26:28.866054" elapsed="0.000051"/>
+<status status="NOT RUN" start="2025-10-10T05:46:28.082640" elapsed="0.000048"/>
 </kw>
-<status status="NOT RUN" start="2025-10-10T05:26:28.865390" elapsed="0.000779"/>
+<status status="NOT RUN" start="2025-10-10T05:46:28.081918" elapsed="0.000836"/>
 </branch>
-<status status="PASS" start="2025-10-10T05:26:28.865344" elapsed="0.000883"/>
+<status status="PASS" start="2025-10-10T05:46:28.081873" elapsed="0.000943"/>
 </if>
 <kw name="Open Browser" owner="SeleniumLibrary">
-<msg time="2025-10-10T05:26:28.866656" level="INFO">Opening browser 'chrome' to base url 'file://C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer/repos.html'.</msg>
+<msg time="2025-10-10T05:46:28.083278" level="INFO">Opening browser 'chrome' to base url 'file://C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer/repos.html'.</msg>
 <arg>file://C:\\Users\\oLovasz\\MyRobotFramework\\DownloadedRobots\\CLA-robotok\\CLA-Developer/repos.html</arg>
 <arg>chrome</arg>
 <doc>Opens a new browser instance to the optional ``url``.</doc>
-<status status="PASS" start="2025-10-10T05:26:28.866370" elapsed="1.341312"/>
+<status status="PASS" start="2025-10-10T05:46:28.082976" elapsed="1.391628"/>
 </kw>
-<status status="PASS" start="2025-10-10T05:26:24.843207" elapsed="5.364572"/>
+<status status="PASS" start="2025-10-10T05:46:24.358379" elapsed="5.116449"/>
 </branch>
 <branch type="ELSE">
 <kw name="Log To Console" owner="BuiltIn">
 <arg>Hiba a repository lista lekérésében: ${result.stderr}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T05:26:30.207999" elapsed="0.000035"/>
+<status status="NOT RUN" start="2025-10-10T05:46:29.475425" elapsed="0.000088"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
 <arg>Fallback: Ismert repository klónozása...</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T05:26:30.208130" elapsed="0.000023"/>
+<status status="NOT RUN" start="2025-10-10T05:46:29.475767" elapsed="0.000061"/>
 </kw>
 <kw name="Run Process" owner="Process">
 <var>${git_result}</var>
@@ -101,27 +101,27 @@ python parse_repos.py</msg>
 <arg>https://github.com/lovaszotto/CLA-ROBOTOK.git</arg>
 <arg>shell=True</arg>
 <doc>Runs a process and waits for it to complete.</doc>
-<status status="NOT RUN" start="2025-10-10T05:26:30.208232" elapsed="0.000022"/>
+<status status="NOT RUN" start="2025-10-10T05:46:29.476033" elapsed="0.000057"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
 <arg>Git ls-remote eredmény: ${git_result.stdout}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T05:26:30.208333" elapsed="0.000020"/>
+<status status="NOT RUN" start="2025-10-10T05:46:29.476289" elapsed="0.000051"/>
 </kw>
-<status status="NOT RUN" start="2025-10-10T05:26:30.207843" elapsed="0.000540"/>
+<status status="NOT RUN" start="2025-10-10T05:46:29.474974" elapsed="0.001447"/>
 </branch>
-<status status="PASS" start="2025-10-10T05:26:24.843165" elapsed="5.365248"/>
+<status status="PASS" start="2025-10-10T05:46:24.358350" elapsed="5.118148"/>
 </if>
 <doc>Az elkészült új robot letöltése a Központi Nyilvántartásból</doc>
-<status status="PASS" start="2025-10-10T05:26:23.918015" elapsed="6.290877"/>
+<status status="PASS" start="2025-10-10T05:46:23.698419" elapsed="5.778652"/>
 </test>
 <kw name="Log To Console" owner="BuiltIn" type="TEARDOWN">
 <arg>Git parancsok végrehajtva</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T05:26:30.209899" elapsed="0.000236"/>
+<status status="PASS" start="2025-10-10T05:46:29.479113" elapsed="0.000587"/>
 </kw>
 <doc>CLA-Developer robot: Robot letöltése a központi nyilvántartásból, módosítása és visszatöltése a nyilvántartásba</doc>
-<status status="PASS" start="2025-10-10T05:26:23.704050" elapsed="6.506149"/>
+<status status="PASS" start="2025-10-10T05:46:23.544998" elapsed="5.934839"/>
 </suite>
 <statistics>
 <total>

@@ -80,7 +80,7 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0;
 <ul class="nav nav-tabs" id="mainTabs" role="tablist">
 <li class="nav-item" role="presentation">
 <button class="nav-link active" id="download-tab" data-bs-toggle="tab" data-bs-target="#download-pane" type="button" role="tab">
-<i class="bi bi-download"></i> Futtatható robotok
+<i class="bi bi-robot"></i> Futtatható robotok
 </button>
 </li>
 <li class="nav-item" role="presentation">
