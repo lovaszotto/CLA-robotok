@@ -80,12 +80,12 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0;
 <ul class="nav nav-tabs" id="mainTabs" role="tablist">
 <li class="nav-item" role="presentation">
 <button class="nav-link active" id="download-tab" data-bs-toggle="tab" data-bs-target="#download-pane" type="button" role="tab">
-<i class="bi bi-download"></i> Elérhető robotok
+<i class="bi bi-download"></i> Futtatható robotok
 </button>
 </li>
 <li class="nav-item" role="presentation">
 <button class="nav-link" id="executable-tab" data-bs-toggle="tab" data-bs-target="#executable-pane" type="button" role="tab">
-<i class="bi bi-play-circle"></i> Futtatható robotok
+<i class="bi bi-play-circle"></i> Futtatás
 </button>
 </li>
 <li class="nav-item" role="presentation">
@@ -102,7 +102,7 @@ body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0;
 
 <!-- Tab Content -->
 <div class="tab-content" id="mainTabContent">
-<!-- Elérhető robotok tab -->
+<!-- Futtatható robotok tab -->
 <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
 
 <!-- Keresés és szűrés -->
@@ -219,11 +219,11 @@ html += f'''</div>
 
 </div>
 
-<!-- Futtatható robotok tab -->
+<!-- Futtatás tab -->
 <div class="tab-pane fade" id="executable-pane" role="tabpanel">
 <div class="row mb-4">
 <div class="col-md-8">
-<h3><i class="bi bi-play-circle-fill text-success"></i> Futtatható Robotok</h3>
+<h3><i class="bi bi-play-circle-fill text-success"></i> Futtatás</h3>
 <p class="text-muted">Itt futtathatja a kiválasztott Robot Framework teszteket közvetlenül a böngészőből.</p>
 </div>
 <div class="col-md-4">
@@ -233,46 +233,7 @@ html += f'''</div>
 </div>
 </div>
 
-<div class="card mb-4">
-<div class="card-header bg-primary text-white">
-<h5><i class="bi bi-gear-wide-connected"></i> Futtatási Beállítások</h5>
-</div>
-<div class="card-body">
-<div class="row">
-<div class="col-md-4">
-<label for="pythonPath" class="form-label">Python útvonal:</label>
-<input type="text" class="form-control" id="pythonPath" value="python" placeholder="python vagy teljes útvonal">
-</div>
-<div class="col-md-4">
-<label for="outputDir" class="form-label">Kimenet mappa:</label>
-<input type="text" class="form-control" id="outputDir" value="./results" placeholder="./results">
-</div>
-<div class="col-md-4">
-<label for="logLevel" class="form-label">Log szint:</label>
-<select class="form-select" id="logLevel">
-<option value="INFO" selected>INFO</option>
-<option value="DEBUG">DEBUG</option>
-<option value="WARN">WARN</option>
-<option value="ERROR">ERROR</option>
-</select>
-</div>
-</div>
-<div class="row mt-3">
-<div class="col-md-6">
-<div class="form-check">
-<input class="form-check-input" type="checkbox" id="includeKeywords" checked>
-<label class="form-check-label" for="includeKeywords">Kulcsszavak logolása</label>
-</div>
-</div>
-<div class="col-md-6">
-<div class="form-check">
-<input class="form-check-input" type="checkbox" id="dryRun">
-<label class="form-check-label" for="dryRun">Dry run (csak validáció)</label>
-</div>
-</div>
-</div>
-</div>
-</div>
+
 
 <div class="card">
 <div class="card-header bg-secondary text-white">
@@ -281,7 +242,7 @@ html += f'''</div>
 <div class="card-body">
 <div id="executableRobotsList" class="mb-3">
 <div class="alert alert-info">
-<i class="bi bi-info-circle"></i> Válasszon ki robotokat az "Elérhető robotok" tab-on a futtatáshoz.
+<i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.
 </div>
 </div>
 <div class="row">
@@ -387,7 +348,41 @@ html += f'''</div>
 </div>
 </div>
 <div class="col-md-6">
-
+<div class="card">
+<div class="card-header bg-success text-white">
+<h5><i class="bi bi-gear-wide-connected"></i> Futtatási Beállítások</h5>
+</div>
+<div class="card-body">
+<div class="mb-3">
+<label for="pythonPath" class="form-label">Python útvonal:</label>
+<input type="text" class="form-control" id="pythonPath" value="python" placeholder="python vagy teljes útvonal">
+</div>
+<div class="mb-3">
+<label for="outputDir" class="form-label">Kimenet mappa:</label>
+<input type="text" class="form-control" id="outputDir" value="./results" placeholder="./results">
+</div>
+<div class="mb-3">
+<label for="logLevel" class="form-label">Log szint:</label>
+<select class="form-select" id="logLevel">
+<option value="INFO" selected>INFO</option>
+<option value="DEBUG">DEBUG</option>
+<option value="WARN">WARN</option>
+<option value="ERROR">ERROR</option>
+</select>
+</div>
+<div class="form-check mb-3">
+<input class="form-check-input" type="checkbox" id="includeKeywords" checked>
+<label class="form-check-label" for="includeKeywords">Kulcsszavak logolása</label>
+</div>
+<div class="form-check mb-3">
+<input class="form-check-input" type="checkbox" id="dryRun">
+<label class="form-check-label" for="dryRun">Dry run (csak validáció)</label>
+</div>
+<button class="btn btn-outline-success" onclick="saveSettings()">
+<i class="bi bi-save"></i> Beállítások mentése
+</button>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -459,14 +454,19 @@ function saveSettings() {{
     const settings = {{
         darkMode: document.getElementById('darkMode').checked,
         compactView: document.getElementById('compactView').checked,
-        pageSize: document.getElementById('pageSize').value
+        pageSize: document.getElementById('pageSize').value,
+        pythonPath: document.getElementById('pythonPath').value,
+        outputDir: document.getElementById('outputDir').value,
+        logLevel: document.getElementById('logLevel').value,
+        includeKeywords: document.getElementById('includeKeywords').checked,
+        dryRun: document.getElementById('dryRun').checked
     }};
     
     localStorage.setItem('robotManagerSettings', JSON.stringify(settings));
     alert('Beállítások elmentve!');
 }}
 
-// Futtatható robotok funkciók
+// Futtatás funkciók
 let executableRobots = [];
 
 function addToExecutableList() {{
@@ -484,7 +484,7 @@ function addToExecutableList() {{
     }});
     updateExecutableRobotsList();
     
-    // Váltás a futtatható robotok tab-ra
+    // Váltás a futtatás tab-ra
     const executableTab = new bootstrap.Tab(document.getElementById('executable-tab'));
     executableTab.show();
 }}
@@ -493,7 +493,7 @@ function updateExecutableRobotsList() {{
     const container = document.getElementById('executableRobotsList');
     
     if (executableRobots.length === 0) {{
-        container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat az "Elérhető robotok" tab-on a futtatáshoz.</div>';
+        container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>';
         return;
     }}
     
@@ -605,6 +605,11 @@ function loadSettings() {{
         document.getElementById('darkMode').checked = settings.darkMode || false;
         document.getElementById('compactView').checked = settings.compactView || false;
         document.getElementById('pageSize').value = settings.pageSize || '10';
+        document.getElementById('pythonPath').value = settings.pythonPath || 'python';
+        document.getElementById('outputDir').value = settings.outputDir || './results';
+        document.getElementById('logLevel').value = settings.logLevel || 'INFO';
+        document.getElementById('includeKeywords').checked = settings.includeKeywords !== false;
+        document.getElementById('dryRun').checked = settings.dryRun || false;
     }}
 }}
 
