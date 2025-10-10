@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.3.2 (Python 3.13.7 on win32)" generated="2025-10-10T10:27:57.575895" rpa="false" schemaversion="5">
+<suite id="s1" name="CLA-Developer" source="C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer\CLA-Developer.robot">
+<test id="s1-t1" name="Robot letöltése a központi nyilvántartásból" line="10">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Letöltés sikeresen elindult</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-10T10:27:57.730460" elapsed="0.000298"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Language detection test</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-10T10:27:57.731026" elapsed="0.000201"/>
+</kw>
+<kw name="Evaluate" owner="BuiltIn">
+<msg time="2025-10-10T10:27:57.859750" level="INFO">${lang} = hu</msg>
+<var>${lang}</var>
+<arg>__import__('langdetect').detect('This is English. Ez egy magyar mondat. Miért tartod mégis angolnak')</arg>
+<doc>Evaluates the given expression in Python and returns the result.</doc>
+<status status="PASS" start="2025-10-10T10:27:57.731430" elapsed="0.128373"/>
+</kw>
+<kw name="Log" owner="BuiltIn">
+<msg time="2025-10-10T10:27:57.860353" level="INFO">hu</msg>
+<arg>${lang}</arg>
+<doc>Logs the given message with the given level.</doc>
+<status status="PASS" start="2025-10-10T10:27:57.860162" elapsed="0.000233"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>${lang}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-10T10:27:57.860606" elapsed="0.000265"/>
+</kw>
+<kw name="Fail" owner="BuiltIn">
+<msg time="2025-10-10T10:27:57.861269" level="FAIL">Teszt céljából itt megállítjuk a végrehajtást</msg>
+<arg>Teszt céljából itt megállítjuk a végrehajtást</arg>
+<doc>Fails the test with the given message and optionally alters its tags.</doc>
+<status status="FAIL" start="2025-10-10T10:27:57.861090" elapsed="0.000284">Teszt céljából itt megállítjuk a végrehajtást</status>
+</kw>
+<kw name="Run Process" owner="Process">
+<var>${result}</var>
+<arg>python</arg>
+<arg>fetch_github_repos.py</arg>
+<arg>lovaszotto</arg>
+<arg>shell=True</arg>
+<doc>Runs a process and waits for it to complete.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.861610" elapsed="0.000028"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>GitHub API válasz státusz: ${result.rc}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.861824" elapsed="0.000020"/>
+</kw>
+<if>
+<branch type="IF" condition="${result.rc} == 0">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Repository adatok sikeresen lekérve UTF-8 kódolással</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862026" elapsed="0.000015"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>${result.stdout}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862087" elapsed="0.000013"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Repository-k és branch-ek lekérése...</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862140" elapsed="0.000012"/>
+</kw>
+<kw name="Run Process" owner="Process">
+<var>${python_result}</var>
+<arg>python</arg>
+<arg>parse_repos.py</arg>
+<arg>shell=True</arg>
+<arg>timeout=120s</arg>
+<doc>Runs a process and waits for it to complete.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862193" elapsed="0.000013"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>${python_result.stdout}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862249" elapsed="0.000011"/>
+</kw>
+<if>
+<branch type="IF" condition="'${python_result.stderr}' != ''">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Python hiba: ${python_result.stderr}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862341" elapsed="0.000012"/>
+</kw>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862296" elapsed="0.000075"/>
+</branch>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862286" elapsed="0.000107"/>
+</if>
+<kw name="Open Browser" owner="SeleniumLibrary">
+<arg>file://C:\\Users\\oLovasz\\MyRobotFramework\\DownloadedRobots\\CLA-robotok\\CLA-Developer/repos.html</arg>
+<arg>chrome</arg>
+<doc>Opens a new browser instance to the optional ``url``.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862449" elapsed="0.000014"/>
+</kw>
+<status status="NOT RUN" start="2025-10-10T10:27:57.861957" elapsed="0.000524"/>
+</branch>
+<branch type="ELSE">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Hiba a repository lista lekérésében: ${result.stderr}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862540" elapsed="0.000011"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Fallback: Ismert repository klónozása...</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862589" elapsed="0.000012"/>
+</kw>
+<kw name="Run Process" owner="Process">
+<var>${git_result}</var>
+<arg>git</arg>
+<arg>ls-remote</arg>
+<arg>--heads</arg>
+<arg>https://github.com/lovaszotto/CLA-ROBOTOK.git</arg>
+<arg>shell=True</arg>
+<doc>Runs a process and waits for it to complete.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862639" elapsed="0.000014"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Git ls-remote eredmény: ${git_result.stdout}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862714" elapsed="0.000013"/>
+</kw>
+<status status="NOT RUN" start="2025-10-10T10:27:57.862499" elapsed="0.000246"/>
+</branch>
+<status status="NOT RUN" start="2025-10-10T10:27:57.861935" elapsed="0.000826"/>
+</if>
+<doc>Az elkészült új robot letöltése a Központi Nyilvántartásból</doc>
+<status status="FAIL" start="2025-10-10T10:27:57.729585" elapsed="0.133369">Teszt céljából itt megállítjuk a végrehajtást</status>
+</test>
+<kw name="Log To Console" owner="BuiltIn" type="TEARDOWN">
+<arg>Git parancsok végrehajtva</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-10T10:27:57.863581" elapsed="0.000112"/>
+</kw>
+<doc>CLA-Developer robot: Robot letöltése a központi nyilvántartásból, módosítása és visszatöltése a nyilvántartásba</doc>
+<status status="FAIL" start="2025-10-10T10:27:57.577020" elapsed="0.286707"/>
+</suite>
+<statistics>
+<total>
+<stat pass="0" fail="1" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="CLA-Developer" id="s1" pass="0" fail="1" skip="0">CLA-Developer</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>

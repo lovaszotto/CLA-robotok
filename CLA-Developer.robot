@@ -3,6 +3,7 @@ Documentation     CLA-Developer robot: Robot letöltése a központi nyilvántar
 Library           OperatingSystem
 Library           SeleniumLibrary
 Library           Process
+Library           BuiltIn
 Suite Teardown    Log To Console    Git parancsok végrehajtva    
 
 *** Test Cases ***
@@ -10,6 +11,8 @@ Robot letöltése a központi nyilvántartásból
     [Documentation]    Az elkészült új robot letöltése a Központi Nyilvántartásból
     # Itt add meg a letöltés lépéseit Robot Framework szintaxissal
     Log To Console    Letöltés sikeresen elindult
+
+
     # lépjen be a https://github.com/lovaszotto?tab=repositories oldalra
     # jelenítse meg chrome-ban
     #Open Browser    https://github.com/lovaszotto?tab=repositories    chrome
