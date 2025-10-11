@@ -1,0 +1,30 @@
+# Robot Framework eredmények
+results/
+results/*
+
+# Python cache fájlok
+__pycache__/
+*.pyc
+*.pyo
+
+# Flask cache
+instance/
+.webassets-cache
+
+# IDE fájlok
+.vscode/
+.idea/
+
+# OS fájlok
+.DS_Store
+Thumbs.db
+
+# Temp fájlok
+*.tmp
+*.temp
+
+# Log fájlok
+*.log
+
+# GitHub API cache
+repos_response.json

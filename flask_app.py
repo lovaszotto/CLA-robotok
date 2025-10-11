@@ -138,10 +138,26 @@ def api_execute():
     # Tényleges futtatás indítása Robot Framework-kel
     if not repo or not branch:
         return jsonify({"status": "error", "message": "Hiányzó repo vagy branch"}), 400
+    
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
-    status = "ok" if rc == 0 else "fail"
+    status = "success" if rc == 0 else "failed"
+    
+    # Eredmény tárolása
+    result_entry = {
+        'id': len(execution_results) + 1,
+        'timestamp': timestamp,
+        'repo': repo,
+        'branch': branch,
+        'status': status,
+        'returncode': rc,
+        'results_dir': out_dir,
+        'type': 'single'
+    }
+    execution_results.append(result_entry)
+    
     return jsonify({
-        "status": status,
+        "status": "ok" if rc == 0 else "fail",
         "repo": repo,
         "branch": branch,
         "returncode": rc,
@@ -154,12 +170,29 @@ def api_execute_bulk():
     data = request.get_json(silent=True) or {}
     robots = data.get('robots') or []
     printed = []
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     for r in robots:
         repo = (r.get('repo') or '').strip()
         branch = (r.get('branch') or '').strip()
         print(f"EXECUTE SELECTED: {repo}/{branch}")
         if repo and branch:
             rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
+            status = "success" if rc == 0 else "failed"
+            
+            # Eredmény tárolása
+            result_entry = {
+                'id': len(execution_results) + 1,
+                'timestamp': timestamp,
+                'repo': repo,
+                'branch': branch,
+                'status': status,
+                'returncode': rc,
+                'results_dir': out_dir,
+                'type': 'bulk'
+            }
+            execution_results.append(result_entry)
+            
             printed.append({
                 "repo": repo,
                 "branch": branch,
@@ -192,6 +225,74 @@ def shutdown():
     func()
     return jsonify({"status": "shutting down"})
 
+# Globális eredmények tárolás
+execution_results = []
+
+@app.route('/api/clear-results', methods=['POST'])
+def clear_results():
+    """Törli az összes tárolt futási eredményt"""
+    global execution_results
+    execution_results = []
+    return jsonify({"status": "success", "message": "Eredmények törölve"})
+
+@app.route('/api/results', methods=['GET'])
+def get_results():
+    """Visszaadja a futási eredményeket lapozással és szűrésekkel"""
+    try:
+        # URL paraméterek
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 10))
+        search = request.args.get('search', '')
+        status_filter = request.args.get('status', '')
+        date_filter = request.args.get('date', '')
+        sort_by = request.args.get('sort', 'timestamp')
+        sort_order = request.args.get('order', 'desc')
+        
+        # Eredmények szűrése
+        filtered_results = execution_results.copy()
+        
+        if search:
+            filtered_results = [r for r in filtered_results 
+                              if search.lower() in r['repo'].lower() or 
+                                 search.lower() in r['branch'].lower()]
+        
+        if status_filter:
+            filtered_results = [r for r in filtered_results 
+                              if r['status'] == status_filter]
+        
+        if date_filter:
+            filtered_results = [r for r in filtered_results 
+                              if r['timestamp'].startswith(date_filter)]
+        
+        # Rendezés
+        reverse = sort_order == 'desc'
+        if sort_by == 'timestamp':
+            filtered_results.sort(key=lambda x: x['timestamp'], reverse=reverse)
+        elif sort_by == 'repo':
+            filtered_results.sort(key=lambda x: x['repo'], reverse=reverse)
+        elif sort_by == 'branch':
+            filtered_results.sort(key=lambda x: x['branch'], reverse=reverse)
+        elif sort_by == 'status':
+            filtered_results.sort(key=lambda x: x['status'], reverse=reverse)
+        
+        # Lapozás
+        total = len(filtered_results)
+        start = (page - 1) * per_page
+        end = start + per_page
+        results_page = filtered_results[start:end]
+        
+        return jsonify({
+            'results': results_page,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': (total + per_page - 1) // per_page
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def get_html_template():
     """Visszaadja a HTML template-et a parse_repos.py alapján"""
     
@@ -200,7 +301,10 @@ def get_html_template():
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Segíthetünk? - Robot Kezelő</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Segíthetünk? - Robot Kezelő v2.0 - CACHE CLEARED</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 <style>
@@ -219,9 +323,20 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 .actions { text-align: center; margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }
 .btn-custom { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
 .btn-custom:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, #b02a37 0%, #dc3545 50%, #f1aeb5 100%); }
-.repo-card { transition: all 0.3s ease; border: 2px solid transparent; }
-.repo-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important; border-color: #dc3545; }
-.repo-card .card-header { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%) !important; }
+.repo-card { 
+    transition: all 0.3s ease; 
+    border: 2px solid transparent; 
+    background: linear-gradient(135deg, #ffffff 0%, #fdf2f2 100%) !important;
+}
+.repo-card:hover { 
+    transform: translateY(-5px); 
+    box-shadow: 0 8px 25px rgba(220,53,69,0.25) !important; 
+    border-color: #dc3545; 
+}
+.repo-card .card-header { 
+    background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #c82333 100%) !important; 
+    color: white !important;
+}
 .repo-card .card-title a:hover { text-decoration: underline !important; }
 .branches-container { max-height: 300px; overflow-y: auto; }
 .branch-checkbox { padding: 8px 12px; margin: 2px 0; border-radius: 6px; transition: background-color 0.2s; }
@@ -231,6 +346,8 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 .input-group-text.bg-primary { background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%) !important; }
 .input-group-text.bg-success { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%) !important; }
 .hidden { display: none !important; }
+.spinning { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 </style>
 </head><body>
 
@@ -251,6 +368,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <li class="nav-item" role="presentation">
 <button class="nav-link" id="executable-tab" data-bs-toggle="tab" data-bs-target="#executable-pane" type="button" role="tab">
 <i class="bi bi-play-circle"></i> Futtatás
+</button>
+</li>
+<li class="nav-item" role="presentation">
+<button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results-pane" type="button" role="tab">
+<i class="bi bi-list-task"></i> Eredmények
 </button>
 </li>
 <li class="nav-item" role="presentation">
@@ -289,8 +411,8 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
             <input type="text" class="form-control" id="branchFilter" placeholder="Robot szűrése..." onkeyup="filterRepos()">
         </div>
     </div>
-    <div class="col-md-4 d-flex align-items-center">
-        <button class="btn btn-custom" id="runSelectedBtn" onclick="runSelectedRobots()" disabled>
+    <div class="col-md-4">
+        <button class="btn btn-custom w-100" id="runSelectedBtn" onclick="runSelectedRobots()" disabled style="height: 38px;">
             <i class="bi bi-play-fill"></i> Futáshoz hozzáad
         </button>
     </div>
@@ -343,7 +465,17 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 
 <!-- Futtatás tab -->
 <div class="tab-pane fade" id="executable-pane" role="tabpanel">
-<h3><i class="bi bi-play-circle-fill text-success"></i> Kiválasztott Robotok Futtatása</h3>
+<div class="d-flex justify-content-between align-items-center mb-3">
+<h3 class="mb-0"><i class="bi bi-play-circle-fill text-success"></i> Kiválasztott Robotok Futtatása</h3>
+<div id="executionButtons" style="display: none;">
+<button class="btn btn-outline-secondary btn-lg me-2" onclick="clearSelection()">
+<i class="bi bi-trash"></i> Lista törlése
+</button>
+<button class="btn btn-success btn-lg" onclick="executeAllRobots()">
+<i class="bi bi-play-fill"></i> Összes futtatása
+</button>
+</div>
+</div>
 <div id="selectedRobotsContainer">
 <div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>
 </div>
@@ -355,7 +487,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="row">
 <div class="col-md-6">
 <div class="card">
-<div class="card-header bg-info text-white">
+<div class="card-header text-white" style="background: linear-gradient(135deg, #dc3545, #c82333);">
 <h5><i class="bi bi-laptop"></i> Rendszer</h5>
 </div>
 <div class="card-body">
@@ -445,6 +577,88 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <i class="bi bi-arrow-clockwise"></i> Alapértelmezett
 </button>
 </div>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Eredmények tab -->
+<div class="tab-pane fade" id="results-pane" role="tabpanel">
+<div class="card">
+<div class="card-header text-white" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+<h5 class="mb-0"><i class="bi bi-list-task"></i> Futási Eredmények</h5>
+</div>
+<div class="card-body">
+<!-- Keresés és szűrés -->
+<div class="row mb-3">
+<div class="col-md-4">
+<div class="input-group">
+<span class="input-group-text"><i class="bi bi-search"></i></span>
+<input type="text" class="form-control" id="searchResults" placeholder="Keresés robot vagy branch szerint...">
+</div>
+</div>
+<div class="col-md-3">
+<select class="form-select" id="statusFilter">
+<option value="">Összes státusz</option>
+<option value="success">Sikeres</option>
+<option value="failed">Sikertelen</option>
+</select>
+</div>
+<div class="col-md-3">
+<input type="date" class="form-control" id="dateFilter" title="Szűrés dátum szerint">
+</div>
+<div class="col-md-2">
+<button class="btn btn-outline-danger w-100" onclick="refreshResults()">
+<i class="bi bi-arrow-clockwise"></i> Frissítés
+</button>
+</div>
+</div>
+
+<!-- Eredmények táblázat -->
+<div class="table-responsive">
+<table class="table table-striped table-hover">
+<thead class="table-dark">
+<tr>
+<th onclick="sortResults('timestamp')">
+<i class="bi bi-calendar"></i> Időpont 
+<span class="sort-indicator" id="sort-timestamp"></span>
+</th>
+<th onclick="sortResults('repo')">
+<i class="bi bi-github"></i> Repository 
+<span class="sort-indicator" id="sort-repo"></span>
+</th>
+<th onclick="sortResults('branch')">
+<i class="bi bi-git"></i> Branch 
+<span class="sort-indicator" id="sort-branch"></span>
+</th>
+<th onclick="sortResults('status')">
+<i class="bi bi-check-circle"></i> Státusz 
+<span class="sort-indicator" id="sort-status"></span>
+</th>
+<th><i class="bi bi-folder"></i> Eredmények</th>
+<th><i class="bi bi-gear"></i> Műveletek</th>
+</tr>
+</thead>
+<tbody id="resultsTableBody">
+<tr>
+<td colspan="6" class="text-center text-muted py-4">
+<i class="bi bi-hourglass-split"></i> Eredmények betöltése...
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<!-- Lapozás -->
+<div class="d-flex justify-content-between align-items-center mt-3">
+<div>
+<span class="text-muted" id="resultsInfo">Összesen: 0 eredmény</span>
+</div>
+<nav>
+<ul class="pagination pagination-sm" id="resultsPagination">
+<!-- Dinamikusan generált lapozó -->
+</ul>
+</nav>
 </div>
 </div>
 </div>
@@ -540,18 +754,13 @@ function runSelectedRobots() {
 function showSelectedRobots(robots) {
     const container = document.getElementById('selectedRobotsContainer');
     
-    // "Kiválasztott Robotok:" szekció a tetejére
-    let html = `
-    <div class="text-center mb-4">
-        <button class="btn btn-success btn-lg" onclick="executeAllRobots()">
-            <i class="bi bi-play-fill"></i> Összes futtatása
-        </button>
-        <button class="btn btn-outline-secondary btn-lg ms-2" onclick="clearSelection()">
-            <i class="bi bi-trash"></i> Lista törlése
-        </button>
-    </div>`;
+    // Gombok megjelenítése a fejlécben
+    const executionButtons = document.getElementById('executionButtons');
+    if (executionButtons) {
+        executionButtons.style.display = 'block';
+    }
     
-    html += '<h4><i class="bi bi-list-check"></i> Kiválasztott Robotok:</h4>';
+    let html = '<h4><i class="bi bi-list-check"></i> Kiválasztott Robotok:</h4>';
     
     html += '<div class="row">';
     robots.forEach((robot, index) => {
@@ -574,6 +783,21 @@ function showSelectedRobots(robots) {
 }
 
 function executeRobot(repo, branch) {
+    // "Fut" státusz megjelenítése azonnal
+    const container = document.getElementById('selectedRobotsContainer');
+    const currentTime = new Date().toLocaleString('hu-HU');
+    const tempMsg = document.createElement('div');
+    tempMsg.className = 'alert alert-info mt-3';
+    tempMsg.id = `status-${repo}-${branch}`;
+    tempMsg.innerHTML = `
+        <i class="bi bi-arrow-clockwise spinning"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong> 
+        <small class="text-muted">(${currentTime})</small>
+        <div class="mt-2">
+            <span class="badge bg-primary">Státusz: Fut</span>
+        </div>
+    `;
+    container.appendChild(tempMsg);
+    
     // Szerver értesítése a futtatásról
     fetch('/api/execute', {
         method: 'POST',
@@ -583,13 +807,28 @@ function executeRobot(repo, branch) {
     .then(r => r.json())
     .then(data => {
         console.log('Szerver válasz (execute):', data);
+        
+        // Ideiglenes "Fut" üzenet eltávolítása
+        const tempMsg = document.getElementById(`status-${repo}-${branch}`);
+        if (tempMsg) tempMsg.remove();
+        
         const msg = document.createElement('div');
-        msg.className = 'alert alert-success mt-3';
         const currentTime = new Date().toLocaleString('hu-HU');
-        msg.innerHTML = `<i class="bi bi-check-circle"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small>`;
+        const statusIcon = getStatusIcon(data.returncode);
+        const statusText = getStatusText(data.returncode);
+        const statusClass = getStatusClass(data.returncode);
+        
+        msg.className = `alert ${statusClass} mt-3`;
+        msg.innerHTML = `
+            ${statusIcon} Futtatás befejezve: <strong>${repo}/${branch}</strong> 
+            <small class="text-muted">(${currentTime})</small>
+            <div class="mt-2">
+                <span class="badge bg-secondary">Végső státusz: ${statusText}</span>
+            </div>
+        `;
         const container = document.getElementById('selectedRobotsContainer');
         container.appendChild(msg);
-        setTimeout(() => msg.remove(), 4000);
+        setTimeout(() => msg.remove(), 10000);
     })
     .catch(err => {
         console.error('Hiba (execute):', err);
@@ -607,6 +846,53 @@ function executeAllRobots() {
         alert('Nincs kiválasztott robot.');
         return;
     }
+    
+    // Ha csak egy robot van kiválasztva, egyedi futtatásként kezeljük
+    if (robots.length === 1) {
+        const robot = robots[0];
+        executeRobot(robot.repo, robot.branch);
+        return;
+    }
+    
+    // "Fut" státusz megjelenítése minden robotnak azonnal (többes futtatás esetén)
+    const container = document.getElementById('selectedRobotsContainer');
+    const currentTime = new Date().toLocaleString('hu-HU');
+    
+    // Csoport fejléc
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'alert alert-info mt-3';
+    groupHeader.innerHTML = `
+        <i class="bi bi-arrow-clockwise spinning"></i> Tömeges futtatás elindult 
+        <small class="text-muted">(${currentTime})</small>
+        <div class="mt-2">
+            <span class="badge bg-primary">Státusz: ${robots.length} robot fut</span>
+        </div>
+    `;
+    container.appendChild(groupHeader);
+    
+    // Egyedi kártyák minden robothoz
+    robots.forEach(robot => {
+        const tempCard = document.createElement('div');
+        tempCard.className = 'col-md-6 mb-2 mt-2';
+        tempCard.id = `bulk-status-${robot.repo}-${robot.branch}`;
+        tempCard.innerHTML = `
+            <div class="card border-info">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-github"></i> <strong>${robot.repo}</strong> / 
+                            <i class="bi bi-git"></i> ${robot.branch}
+                        </div>
+                        <div>
+                            <i class="bi bi-arrow-clockwise spinning text-primary"></i> <small>Fut</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(tempCard);
+    });
+    
     // Szervernek elküldjük a teljes listát
     fetch('/api/execute-bulk', {
         method: 'POST',
@@ -616,25 +902,86 @@ function executeAllRobots() {
     .then(r => r.json())
     .then(data => {
         console.log('Szerver válasz (bulk):', data);
-        const container = document.getElementById('selectedRobotsContainer');
-        const currentTime = new Date().toLocaleString('hu-HU');
-        let html = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> Elküldve a szervernek: <small class="text-muted">(${currentTime})</small></div>`;
-        html += '<ul class="list-group mb-3">';
-        (data.robots || robots).forEach(r => {
-            html += `<li class="list-group-item"><i class="bi bi-github"></i> <strong>${r.repo}</strong> / <i class="bi bi-git"></i> ${r.branch}</li>`;
-        });
-        html += '</ul>';
-        container.insertAdjacentHTML('beforeend', html);
+        
+        // A csoport fejléc eltávolítása
+        const groupHeader = container.querySelector('.alert-info');
+        if (groupHeader) {
+            groupHeader.remove();
+        }
+        
+        // Egyedi kártyák frissítése
+        if (data.robots) {
+            data.robots.forEach((result, index) => {
+                const robot = robots[index];
+                const card = document.getElementById(`bulk-status-${robot.repo}-${robot.branch}`);
+                if (card) {
+                    const currentTime = new Date().toLocaleString('hu-HU');
+                    const statusIcon = getStatusIcon(result.returncode);
+                    const statusText = getStatusText(result.returncode);
+                    const statusClass = getStatusClass(result.returncode);
+                    
+                    card.className = 'col-12 mb-2';
+                    card.innerHTML = `
+                        <div class="alert ${statusClass} mt-3">
+                            ${statusIcon} Futtatás befejezve: <strong>${robot.repo}/${robot.branch}</strong> 
+                            <small class="text-muted">(${currentTime})</small>
+                            <div class="mt-2">
+                                <span class="badge bg-secondary">Végső státusz: ${statusText}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
     })
     .catch(err => {
-        console.error('Hiba (bulk execute):', err);
-        alert('Hiba történt a szerver hívása közben.');
+        console.error('Tömeges futtatás hiba:', err);
+        // Hiba esetén minden kártya frissítése
+        robots.forEach(robot => {
+            const card = document.getElementById(`bulk-status-${robot.repo}-${robot.branch}`);
+            if (card) {
+                card.className = 'col-md-6 mb-2 mt-2';
+                card.innerHTML = `
+                    <div class="card border-danger">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-github"></i> <strong>${robot.repo}</strong> / 
+                                    <i class="bi bi-git"></i> ${robot.branch}
+                                </div>
+                                <div class="text-danger">
+                                    <i class="bi bi-x-circle"></i> <small>Sikertelen</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        // Fejléc frissítése
+        const groupHeader = container.querySelector('.alert-info');
+        if (groupHeader) {
+            groupHeader.className = 'alert alert-danger mt-3';
+            groupHeader.innerHTML = `
+                <i class="bi bi-x-circle"></i> Tömeges futtatás sikertelen
+                <div class="mt-2">
+                    <span class="badge bg-danger">Hiba történt</span>
+                </div>
+            `;
+        }
     });
 }
 
 function clearSelection() {
     document.querySelectorAll('.robot-checkbox:checked').forEach(cb => cb.checked = false);
     updateRunButton();
+    
+    // Gombok elrejtése
+    const executionButtons = document.getElementById('executionButtons');
+    if (executionButtons) {
+        executionButtons.style.display = 'none';
+    }
+    
     const container = document.getElementById('selectedRobotsContainer');
     container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>';
 }
@@ -678,6 +1025,34 @@ function loadSettings() {
     }
 }
 
+// Státusz segédfüggvények
+function getStatusIcon(returnCode) {
+    switch(returnCode) {
+        case 0: return '<i class="bi bi-check-circle-fill text-success"></i>';
+        case null:
+        case undefined: return '<i class="bi bi-hourglass-split text-warning"></i>';
+        default: return '<i class="bi bi-x-circle-fill text-danger"></i>';
+    }
+}
+
+function getStatusText(returnCode) {
+    switch(returnCode) {
+        case 0: return 'Sikeres';
+        case null:
+        case undefined: return 'Várakozás';
+        default: return 'Sikertelen';
+    }
+}
+
+function getStatusClass(returnCode) {
+    switch(returnCode) {
+        case 0: return 'alert-success';
+        case null:
+        case undefined: return 'alert-warning';
+        default: return 'alert-danger';
+    }
+}
+
 // Kilépés funkciók
 function exitApplication() {
     // Először próbáljuk leállítani a szervert
@@ -712,6 +1087,207 @@ document.addEventListener('change', function(e) {
         updateRunButton();
     }
 });
+
+// Eredmények kezelése
+let currentPage = 1;
+let currentSort = 'timestamp';
+let currentOrder = 'desc';
+
+function loadResults(page = 1, search = '', statusFilter = '', dateFilter = '') {
+    currentPage = page;
+    
+    const params = new URLSearchParams({
+        page: page,
+        per_page: 10,
+        search: search,
+        status: statusFilter,
+        date: dateFilter,
+        sort: currentSort,
+        order: currentOrder
+    });
+    
+    fetch(`/api/results?${params}`)
+    .then(response => response.json())
+    .then(data => {
+        displayResults(data.results);
+        displayPagination(data.pagination);
+        updateResultsInfo(data.pagination);
+    })
+    .catch(err => {
+        console.error('Eredmények betöltése sikertelen:', err);
+        document.getElementById('resultsTableBody').innerHTML = `
+            <tr><td colspan="6" class="text-center text-danger py-4">
+                <i class="bi bi-exclamation-triangle"></i> Hiba az eredmények betöltése során
+            </td></tr>
+        `;
+    });
+}
+
+function displayResults(results) {
+    const tbody = document.getElementById('resultsTableBody');
+    if (results.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="6" class="text-center text-muted py-4">
+                <i class="bi bi-inbox"></i> Nincs megjeleníthető eredmény
+            </td></tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = results.map(result => {
+        const statusBadge = result.status === 'success' 
+            ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Sikeres</span>'
+            : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sikertelen</span>';
+            
+        const typeBadge = result.type === 'bulk'
+            ? '<span class="badge bg-info ms-1">Tömeges</span>'
+            : '<span class="badge bg-secondary ms-1">Egyedi</span>';
+            
+        return `
+            <tr>
+                <td>${result.timestamp}${typeBadge}</td>
+                <td><i class="bi bi-github"></i> ${result.repo}</td>
+                <td><i class="bi bi-git"></i> ${result.branch}</td>
+                <td>${statusBadge}</td>
+                <td>
+                    ${result.results_dir ? `<small class="text-muted">${result.results_dir}</small>` : '-'}
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewDetails(${result.id})" title="Részletek">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                    ${result.results_dir ? `
+                        <button class="btn btn-sm btn-outline-success ms-1" onclick="openResults('${result.results_dir}')" title="Eredmények megnyitása">
+                            <i class="bi bi-folder-open"></i>
+                        </button>
+                    ` : ''}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function displayPagination(pagination) {
+    const nav = document.getElementById('resultsPagination');
+    if (pagination.pages <= 1) {
+        nav.innerHTML = '';
+        return;
+    }
+    
+    let paginationHtml = '';
+    
+    // Előző oldal
+    if (pagination.page > 1) {
+        paginationHtml += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadResults(${pagination.page - 1}, getCurrentSearch(), getCurrentStatusFilter(), getCurrentDateFilter())">Előző</a>
+            </li>
+        `;
+    }
+    
+    // Oldalszámok
+    const startPage = Math.max(1, pagination.page - 2);
+    const endPage = Math.min(pagination.pages, pagination.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        paginationHtml += `
+            <li class="page-item ${i === pagination.page ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="loadResults(${i}, getCurrentSearch(), getCurrentStatusFilter(), getCurrentDateFilter())">${i}</a>
+            </li>
+        `;
+    }
+    
+    // Következő oldal
+    if (pagination.page < pagination.pages) {
+        paginationHtml += `
+            <li class="page-item">
+                <a class="page-link" href="#" onclick="loadResults(${pagination.page + 1}, getCurrentSearch(), getCurrentStatusFilter(), getCurrentDateFilter())">Következő</a>
+            </li>
+        `;
+    }
+    
+    nav.innerHTML = paginationHtml;
+}
+
+function updateResultsInfo(pagination) {
+    const info = document.getElementById('resultsInfo');
+    const start = (pagination.page - 1) * pagination.per_page + 1;
+    const end = Math.min(start + pagination.per_page - 1, pagination.total);
+    info.textContent = `${start}-${end} / ${pagination.total} eredmény (${pagination.page}. oldal)`;
+}
+
+function getCurrentSearch() {
+    return document.getElementById('searchResults').value;
+}
+
+function getCurrentStatusFilter() {
+    return document.getElementById('statusFilter').value;
+}
+
+function getCurrentDateFilter() {
+    return document.getElementById('dateFilter').value;
+}
+
+function refreshResults() {
+    loadResults(1, getCurrentSearch(), getCurrentStatusFilter(), getCurrentDateFilter());
+}
+
+function sortResults(column) {
+    if (currentSort === column) {
+        currentOrder = currentOrder === 'desc' ? 'asc' : 'desc';
+    } else {
+        currentSort = column;
+        currentOrder = 'desc';
+    }
+    
+    // Rendezési indikátorok frissítése
+    document.querySelectorAll('.sort-indicator').forEach(el => el.textContent = '');
+    document.getElementById(`sort-${column}`).textContent = currentOrder === 'desc' ? '↓' : '↑';
+    
+    loadResults(currentPage, getCurrentSearch(), getCurrentStatusFilter(), getCurrentDateFilter());
+}
+
+function viewDetails(resultId) {
+    alert(`Eredmény részletei: ID ${resultId}`);
+}
+
+function openResults(resultsDir) {
+    alert(`Eredmények megnyitása: ${resultsDir}`);
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Keresés eseménykezelő
+    const searchInput = document.getElementById('searchResults');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(() => {
+                refreshResults();
+            }, 500);
+        });
+    }
+    
+    // Szűrők eseménykezelői
+    const statusFilter = document.getElementById('statusFilter');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', refreshResults);
+    }
+    
+    const dateFilter = document.getElementById('dateFilter');
+    if (dateFilter) {
+        dateFilter.addEventListener('change', refreshResults);
+    }
+    
+    // Eredmények tab aktiválásakor betöltés
+    const resultsTab = document.getElementById('results-tab');
+    if (resultsTab) {
+        resultsTab.addEventListener('shown.bs.tab', function() {
+            loadResults();
+        });
+    }
+});
+
 </script>
 </body></html>'''
 
