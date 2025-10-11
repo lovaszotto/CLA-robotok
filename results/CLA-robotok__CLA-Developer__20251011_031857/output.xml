@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot generator="Robot 7.3.2 (Python 3.13.7 on win32)" generated="2025-10-11T03:18:57.348016" rpa="false" schemaversion="5">
+<suite id="s1" name="Do-Selected" source="C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer\do-selected.robot">
+<test id="s1-t1" name="Kiírás konzolra paraméterekből" line="11">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>\n=== KIVÁLASZTOTT ROBOT ===</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.369055" elapsed="0.000166"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Repository: ${REPO}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.369306" elapsed="0.000100"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Branch: ${BRANCH}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.369457" elapsed="0.000077"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>=========================\n</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.369581" elapsed="0.000064"/>
+</kw>
+<doc>A REPO és BRANCH változók értékeinek kiírása.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.367960" elapsed="0.001738"/>
+</test>
+<test id="s1-t2" name="Letöltöttség ellenőrzése" line="17">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>\n=== LETÖLTÖTTSÉG ELLENŐRZÉSE ===</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.369953" elapsed="0.000068"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2025-10-11T03:18:57.370208" level="INFO">${repo_path} = c:/Users/oLovasz/MyRobotFramework/DownloadedRobots//CLA-robotok</msg>
+<var>${repo_path}</var>
+<arg>${DOWNLOADED_ROBOTS}/${REPO}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.370068" elapsed="0.000156"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2025-10-11T03:18:57.370412" level="INFO">${branch_path} = c:/Users/oLovasz/MyRobotFramework/DownloadedRobots//CLA-robotok/CLA-Developer</msg>
+<var>${branch_path}</var>
+<arg>${repo_path}/${BRANCH}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.370334" elapsed="0.000091"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Full Repository: ${repo_path}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.370466" elapsed="0.000067"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Full Branch: ${branch_path}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.370580" elapsed="0.000066"/>
+</kw>
+<kw name="Directory Should Exist" owner="OperatingSystem">
+<msg time="2025-10-11T03:18:57.370784" level="INFO" html="true">Directory '&lt;a href="file://c:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok"&gt;c:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok&lt;/a&gt;' exists.</msg>
+<msg time="2025-10-11T03:18:57.370824" level="INFO">${downloaded_repo_exists} = None</msg>
+<var>${downloaded_repo_exists}</var>
+<arg>${repo_path}</arg>
+<doc>Fails unless the given path points to an existing directory.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.370687" elapsed="0.000147"/>
+</kw>
+<kw name="Directory Should Exist" owner="OperatingSystem">
+<msg time="2025-10-11T03:18:57.370940" level="INFO" html="true">Directory '&lt;a href="file://c:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer"&gt;c:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer&lt;/a&gt;' exists.</msg>
+<msg time="2025-10-11T03:18:57.370979" level="INFO">${downloaded_robot_exists} = None</msg>
+<var>${downloaded_robot_exists}</var>
+<arg>${branch_path}</arg>
+<doc>Fails unless the given path points to an existing directory.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.370875" elapsed="0.000114"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Repository mappa létezik: ${downloaded_repo_exists}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.371028" elapsed="0.000071"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Branch mappa létezik: ${downloaded_robot_exists}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.371138" elapsed="0.000064"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>=========================\n</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.371239" elapsed="0.000188"/>
+</kw>
+<doc>Ellenőrzi, hogy a REPO és BRANCH ban megadott értékekhez létezik-e mappa.</doc>
+<status status="PASS" start="2025-10-11T03:18:57.369796" elapsed="0.001679"/>
+</test>
+<status status="PASS" start="2025-10-11T03:18:57.349154" elapsed="0.022504"/>
+</suite>
+<statistics>
+<total>
+<stat pass="2" fail="0" skip="0">All Tests</stat>
+</total>
+<tag>
+</tag>
+<suite>
+<stat name="Do-Selected" id="s1" pass="2" fail="0" skip="0">Do-Selected</stat>
+</suite>
+</statistics>
+<errors>
+</errors>
+</robot>

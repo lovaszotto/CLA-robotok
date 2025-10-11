@@ -1,136 +1,113 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<robot generator="Robot 7.3.2 (Python 3.13.7 on win32)" generated="2025-10-10T09:09:10.228752" rpa="false" schemaversion="5">
-<suite id="s1" name="CLA-Developer" source="C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer\CLA-Developer.robot">
-<test id="s1-t1" name="Robot letöltése a központi nyilvántartásból" line="9">
+<robot generator="Robot 7.3.2 (Python 3.13.7 on win32)" generated="2025-10-11T03:28:00.338851" rpa="false" schemaversion="5">
+<suite id="s1" name="Do-Selected" source="C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer\do-selected.robot">
+<test id="s1-t1" name="Kiírás konzolra paraméterekből" line="11">
 <kw name="Log To Console" owner="BuiltIn">
-<arg>Letöltés sikeresen elindult</arg>
+<arg>\n=== KIVÁLASZTOTT ROBOT ===</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T09:09:10.377111" elapsed="0.000235"/>
-</kw>
-<kw name="Run Process" owner="Process">
-<msg time="2025-10-10T09:09:10.377765" level="INFO">Starting process:
-python fetch_github_repos.py lovaszotto</msg>
-<msg time="2025-10-10T09:09:10.382790" level="INFO">Waiting for process to complete.</msg>
-<msg time="2025-10-10T09:09:11.617124" level="INFO">Process completed.</msg>
-<msg time="2025-10-10T09:09:11.617287" level="INFO">${result} = &lt;result object with rc 0&gt;</msg>
-<var>${result}</var>
-<arg>python</arg>
-<arg>fetch_github_repos.py</arg>
-<arg>lovaszotto</arg>
-<arg>shell=True</arg>
-<doc>Runs a process and waits for it to complete.</doc>
-<status status="PASS" start="2025-10-10T09:09:10.377626" elapsed="1.239687"/>
+<status status="PASS" start="2025-10-11T03:28:00.359181" elapsed="0.000213"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
-<arg>GitHub API válasz státusz: ${result.rc}</arg>
+<arg>Repository: ${REPO}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T09:09:11.617579" elapsed="0.000437"/>
-</kw>
-<if>
-<branch type="IF" condition="${result.rc} == 0">
-<kw name="Log To Console" owner="BuiltIn">
-<arg>Repository adatok sikeresen lekérve UTF-8 kódolással</arg>
-<doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T09:09:11.618564" elapsed="0.000181"/>
+<status status="PASS" start="2025-10-11T03:28:00.359527" elapsed="0.000168"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
-<arg>${result.stdout}</arg>
+<arg>Branch: ${BRANCH}</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T09:09:11.618834" elapsed="0.000312"/>
+<status status="PASS" start="2025-10-11T03:28:00.359786" elapsed="0.000107"/>
 </kw>
 <kw name="Log To Console" owner="BuiltIn">
-<arg>Repository-k és branch-ek lekérése...</arg>
+<arg>=========================\n</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T09:09:11.619217" elapsed="0.000099"/>
+<status status="PASS" start="2025-10-11T03:28:00.359994" elapsed="0.000122"/>
 </kw>
-<kw name="Run Process" owner="Process">
-<msg time="2025-10-10T09:09:11.619531" level="INFO">Starting process:
-python parse_repos.py</msg>
-<msg time="2025-10-10T09:09:11.627784" level="INFO">Waiting for process to complete.</msg>
-<msg time="2025-10-10T09:09:16.142934" level="INFO">Process completed.</msg>
-<msg time="2025-10-10T09:09:16.143265" level="INFO">${python_result} = &lt;result object with rc 0&gt;</msg>
-<var>${python_result}</var>
-<arg>python</arg>
-<arg>parse_repos.py</arg>
-<arg>shell=True</arg>
-<arg>timeout=120s</arg>
-<doc>Runs a process and waits for it to complete.</doc>
-<status status="PASS" start="2025-10-10T09:09:11.619385" elapsed="4.523952"/>
-</kw>
-<kw name="Log To Console" owner="BuiltIn">
-<arg>${python_result.stdout}</arg>
-<doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T09:09:16.143553" elapsed="0.000778"/>
-</kw>
-<if>
-<branch type="IF" condition="'${python_result.stderr}' != ''">
-<kw name="Log To Console" owner="BuiltIn">
-<arg>Python hiba: ${python_result.stderr}</arg>
-<doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T09:09:16.145283" elapsed="0.000063"/>
-</kw>
-<status status="NOT RUN" start="2025-10-10T09:09:16.144522" elapsed="0.000877"/>
-</branch>
-<status status="PASS" start="2025-10-10T09:09:16.144480" elapsed="0.001000"/>
-</if>
-<kw name="Open Browser" owner="SeleniumLibrary">
-<msg time="2025-10-10T09:09:16.146186" level="INFO">Opening browser 'chrome' to base url 'file://C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\CLA-robotok\CLA-Developer/repos.html'.</msg>
-<arg>file://C:\\Users\\oLovasz\\MyRobotFramework\\DownloadedRobots\\CLA-robotok\\CLA-Developer/repos.html</arg>
-<arg>chrome</arg>
-<doc>Opens a new browser instance to the optional ``url``.</doc>
-<status status="PASS" start="2025-10-10T09:09:16.145604" elapsed="1.158572"/>
-</kw>
-<status status="PASS" start="2025-10-10T09:09:11.618186" elapsed="5.686079"/>
-</branch>
-<branch type="ELSE">
-<kw name="Log To Console" owner="BuiltIn">
-<arg>Hiba a repository lista lekérésében: ${result.stderr}</arg>
-<doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T09:09:17.304451" elapsed="0.000031"/>
-</kw>
-<kw name="Log To Console" owner="BuiltIn">
-<arg>Fallback: Ismert repository klónozása...</arg>
-<doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T09:09:17.304592" elapsed="0.000056"/>
-</kw>
-<kw name="Run Process" owner="Process">
-<var>${git_result}</var>
-<arg>git</arg>
-<arg>ls-remote</arg>
-<arg>--heads</arg>
-<arg>https://github.com/lovaszotto/CLA-ROBOTOK.git</arg>
-<arg>shell=True</arg>
-<doc>Runs a process and waits for it to complete.</doc>
-<status status="NOT RUN" start="2025-10-10T09:09:17.304769" elapsed="0.000025"/>
-</kw>
-<kw name="Log To Console" owner="BuiltIn">
-<arg>Git ls-remote eredmény: ${git_result.stdout}</arg>
-<doc>Logs the given message to the console.</doc>
-<status status="NOT RUN" start="2025-10-10T09:09:17.304873" elapsed="0.000021"/>
-</kw>
-<status status="NOT RUN" start="2025-10-10T09:09:17.304314" elapsed="0.000608"/>
-</branch>
-<status status="PASS" start="2025-10-10T09:09:11.618153" elapsed="5.686797"/>
-</if>
-<doc>Az elkészült új robot letöltése a Központi Nyilvántartásból</doc>
-<status status="PASS" start="2025-10-10T09:09:10.376321" elapsed="6.928984"/>
+<doc>A REPO és BRANCH változók értékeinek kiírása.</doc>
+<status status="PASS" start="2025-10-11T03:28:00.358653" elapsed="0.001550"/>
 </test>
-<kw name="Log To Console" owner="BuiltIn" type="TEARDOWN">
-<arg>Git parancsok végrehajtva</arg>
+<test id="s1-t2" name="Letöltöttség ellenőrzése" line="17">
+<kw name="Log To Console" owner="BuiltIn">
+<arg>\n=== LETÖLTÖTTSÉG ELLENŐRZÉSE ===</arg>
 <doc>Logs the given message to the console.</doc>
-<status status="PASS" start="2025-10-10T09:09:17.306477" elapsed="0.000289"/>
+<status status="PASS" start="2025-10-11T03:28:00.360611" elapsed="0.000102"/>
 </kw>
-<doc>CLA-Developer robot: Robot letöltése a központi nyilvántartásból, módosítása és visszatöltése a nyilvántartásba</doc>
-<status status="PASS" start="2025-10-10T09:09:10.229556" elapsed="7.077277"/>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2025-10-11T03:28:00.360903" level="INFO">${repo_path} = c:/Users/oLovasz/MyRobotFramework/DownloadedRobots//CLA-robotokx</msg>
+<var>${repo_path}</var>
+<arg>${DOWNLOADED_ROBOTS}/${REPO}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2025-10-11T03:28:00.360805" elapsed="0.000115"/>
+</kw>
+<kw name="Set Variable" owner="BuiltIn">
+<msg time="2025-10-11T03:28:00.361117" level="INFO">${branch_path} = c:/Users/oLovasz/MyRobotFramework/DownloadedRobots//CLA-robotokx/CLA-Developerx</msg>
+<var>${branch_path}</var>
+<arg>${repo_path}/${BRANCH}</arg>
+<doc>Returns the given values which can then be assigned to a variables.</doc>
+<status status="PASS" start="2025-10-11T03:28:00.361017" elapsed="0.000114"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Full Repository: ${repo_path}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:28:00.361209" elapsed="0.000098"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Full Branch: ${branch_path}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="PASS" start="2025-10-11T03:28:00.361383" elapsed="0.000093"/>
+</kw>
+<kw name="Directory">
+<msg time="2025-10-11T03:28:00.362031" level="FAIL">No keyword with name 'Directory' found. Did you mean:
+    OperatingSystem.Move Directory
+    OperatingSystem.List Directory
+    OperatingSystem.Copy Directory
+    OperatingSystem.Empty Directory</msg>
+<var>${downloaded_repo_exists}</var>
+<arg>Exist</arg>
+<arg>${repo_path}</arg>
+<status status="FAIL" start="2025-10-11T03:28:00.362013" elapsed="0.000044">No keyword with name 'Directory' found. Did you mean:
+    OperatingSystem.Move Directory
+    OperatingSystem.List Directory
+    OperatingSystem.Copy Directory
+    OperatingSystem.Empty Directory</status>
+</kw>
+<kw name="Directory">
+<var>${downloaded_robot_exists}</var>
+<arg>Exist</arg>
+<arg>${branch_path}</arg>
+<status status="NOT RUN" start="2025-10-11T03:28:00.362163" elapsed="0.000010"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>\nRepository mappa létezik: ${downloaded_repo_exists}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-11T03:28:00.362242" elapsed="0.000010"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>Branch mappa létezik: ${downloaded_robot_exists}</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-11T03:28:00.362314" elapsed="0.000008"/>
+</kw>
+<kw name="Log To Console" owner="BuiltIn">
+<arg>=========================\n</arg>
+<doc>Logs the given message to the console.</doc>
+<status status="NOT RUN" start="2025-10-11T03:28:00.362417" elapsed="0.000008"/>
+</kw>
+<doc>Ellenőrzi, hogy a REPO és BRANCH ban megadott értékekhez létezik-e mappa.</doc>
+<status status="FAIL" start="2025-10-11T03:28:00.360433" elapsed="0.002081">No keyword with name 'Directory' found. Did you mean:
+    OperatingSystem.Move Directory
+    OperatingSystem.List Directory
+    OperatingSystem.Copy Directory
+    OperatingSystem.Empty Directory</status>
+</test>
+<status status="FAIL" start="2025-10-11T03:28:00.340359" elapsed="0.022470"/>
 </suite>
 <statistics>
 <total>
-<stat pass="1" fail="0" skip="0">All Tests</stat>
+<stat pass="1" fail="1" skip="0">All Tests</stat>
 </total>
 <tag>
 </tag>
 <suite>
-<stat name="CLA-Developer" id="s1" pass="1" fail="0" skip="0">CLA-Developer</stat>
+<stat name="Do-Selected" id="s1" pass="1" fail="1" skip="0">Do-Selected</stat>
 </suite>
 </statistics>
 <errors>

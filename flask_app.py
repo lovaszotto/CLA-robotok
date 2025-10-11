@@ -18,7 +18,7 @@ def run_robot_with_params(repo: str, branch: str):
     results_dir = os.path.join('results', f'{safe_repo}__{safe_branch}__{timestamp}')
     os.makedirs(results_dir, exist_ok=True)
 
-    suite_path = os.path.join('tests', 'print_selected.robot')
+    suite_path = 'do-selected.robot'
     cmd = ['robot', '-d', results_dir, '-v', f'Repo:{repo}', '-v', f'Branch:{branch}', suite_path]
 
     # A REPO/BRANCH változókat a meglévő teszt "REPO" és "BRANCH" nevű változóihoz igazítjuk
@@ -539,7 +539,19 @@ function runSelectedRobots() {
 
 function showSelectedRobots(robots) {
     const container = document.getElementById('selectedRobotsContainer');
-    let html = '<h4><i class="bi bi-list-check"></i> Kiválasztott Robotok:</h4>';
+    
+    // "Kiválasztott Robotok:" szekció a tetejére
+    let html = `
+    <div class="text-center mb-4">
+        <button class="btn btn-success btn-lg" onclick="executeAllRobots()">
+            <i class="bi bi-play-fill"></i> Összes futtatása
+        </button>
+        <button class="btn btn-outline-secondary btn-lg ms-2" onclick="clearSelection()">
+            <i class="bi bi-trash"></i> Lista törlése
+        </button>
+    </div>`;
+    
+    html += '<h4><i class="bi bi-list-check"></i> Kiválasztott Robotok:</h4>';
     
     html += '<div class="row">';
     robots.forEach((robot, index) => {
@@ -558,16 +570,6 @@ function showSelectedRobots(robots) {
     });
     html += '</div>';
     
-    html += `
-    <div class="text-center mt-4">
-        <button class="btn btn-success btn-lg" onclick="executeAllRobots()">
-            <i class="bi bi-play-fill"></i> Összes futtatása
-        </button>
-        <button class="btn btn-outline-secondary btn-lg ms-2" onclick="clearSelection()">
-            <i class="bi bi-trash"></i> Lista törlése
-        </button>
-    </div>`;
-    
     container.innerHTML = html;
 }
 
@@ -583,9 +585,10 @@ function executeRobot(repo, branch) {
         console.log('Szerver válasz (execute):', data);
         const msg = document.createElement('div');
         msg.className = 'alert alert-success mt-3';
-        msg.innerHTML = `<i class="bi bi-check-circle"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong>`;
+        const currentTime = new Date().toLocaleString('hu-HU');
+        msg.innerHTML = `<i class="bi bi-check-circle"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small>`;
         const container = document.getElementById('selectedRobotsContainer');
-        container.prepend(msg);
+        container.appendChild(msg);
         setTimeout(() => msg.remove(), 4000);
     })
     .catch(err => {
@@ -614,13 +617,14 @@ function executeAllRobots() {
     .then(data => {
         console.log('Szerver válasz (bulk):', data);
         const container = document.getElementById('selectedRobotsContainer');
-        let html = '<div class="alert alert-success"><i class="bi bi-check-circle"></i> Elküldve a szervernek:</div>';
+        const currentTime = new Date().toLocaleString('hu-HU');
+        let html = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> Elküldve a szervernek: <small class="text-muted">(${currentTime})</small></div>`;
         html += '<ul class="list-group mb-3">';
         (data.robots || robots).forEach(r => {
             html += `<li class="list-group-item"><i class="bi bi-github"></i> <strong>${r.repo}</strong> / <i class="bi bi-git"></i> ${r.branch}</li>`;
         });
         html += '</ul>';
-        container.insertAdjacentHTML('afterbegin', html);
+        container.insertAdjacentHTML('beforeend', html);
     })
     .catch(err => {
         console.error('Hiba (bulk execute):', err);
