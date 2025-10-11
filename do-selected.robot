@@ -13,6 +13,7 @@ Resource    ./resources/variables.robot
 Kiírás konzolra paraméterekből
     [Documentation]    A REPO és BRANCH változók értékeinek kiírása.
     Log To Console     \n=== KIVÁLASZTOTT ROBOT ===
+    Set Global Variable    ${WORKFLOW_STATUS}    'STARTED'
     ${GIT_URL}=    Set Variable    ${GIT_URL_BASE}${REPO}.git
     Set Global Variable    ${GIT_URL}    ${GIT_URL}
     Log To Console     Repository: ${GIT_URL}
@@ -20,7 +21,7 @@ Kiírás konzolra paraméterekből
     Log To Console     =========================\n
 Letöltöttség ellenőrzése
     [Documentation]    Ellenőrzi, hogy a REPO és BRANCH ban megadott értékekhez létezik-e mappa.
-    Log To Console     \n=== LETÖLTÖTTSÉG ELLENŐRZÉSE ===
+    Log To Console     \n=== LETÖLTÖTTSÉG ELLENŐRZÉSE ===  ${WORKFLOW_STATUS}
     ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}    
     ${BRANCH_PATH}=   Set Variable    ${REPO_PATH}/${BRANCH}
     Set Global Variable    ${REPO_PATH}    ${REPO_PATH}
@@ -37,15 +38,16 @@ Letöltöttség ellenőrzése
         #visszatér a tesztből
         #todo verzió alapján újra letöltés
         Log To Console     \nMindkét könyvtár létezik! ✓
-        Set Global Variable    ${WORKFLOW_STATUS}    'DONE'
+        Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
     ELSE
+         Log To Console     Könyvtárak nem léteznek! ✗
         Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'    
     END
 
 Könyvtárak létrehozása
-    [Documentation]    Létrehozza a szükséges könyvtárakat, ha még nem léteznek.    
-    IF    $WORKFLOW_STATUS == 'MAKE_DIRS'
-
+    [Documentation]    Létrehozza a szükséges könyvtárakat, ha még nem léteznek.  
+    Log To Console     \n=== KÖNYVTÁRAK LÉTREHOZÁSA === ${WORKFLOW_STATUS}
+    IF    ${WORKFLOW_STATUS} == 'MAKE_DIRS'
         Log To Console     ======Könyvtár létrehozás===================\n
         #létrehozzuk a repository könyvtárat, ha nem létezik
         Create Directory    ${REPO_PATH}
@@ -66,14 +68,12 @@ Könyvtárak létrehozása
         Log To Console     TARGET_DIR = ${TARGET_DIR}
         
    END
-  
     
-
 Branch klónozása
     [Documentation]    A REPO és BRANCH változók alapján klónozza a megfelelő könyvtárat, ha még nincs letöltve.
     Log To Console    Branch klónozása WORKFLOW_STATUS = ${WORKFLOW_STATUS}    
     IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
-        ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+        ${TARGET_DIR}=    Set Global Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
         Log To Console     \nGit parancs: git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}
         ${result}=    Run Process    git    clone    -b    ${BRANCH}    --single-branch    ${GIT_URL}    ${TARGET_DIR}    shell=True
         Should Be Equal As Integers    ${result.rc}    0    Klónozás sikertelen: ${result.stderr}
@@ -86,6 +86,27 @@ Branch klónozása
         ${downloaded_robot_exists}=    Run Keyword And Return Status    OperatingSystem.Directory Should Exist    ${TARGET_DIR}
         IF    ${downloaded_robot_exists}
             Log To Console    A klónozás befejeződött, a könyvtár már létezik: ${TARGET_DIR} 
+            Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
+        ELSE
+            Log To Console    A klónozás nem sikerült, a könyvtár továbbra sem létezik: ${TARGET_DIR}
+            Set Global Variable    ${WORKFLOW_STATUS}    'CLONE_FAILED'
+            Fail    A klónozás nem sikerült, a könyvtár továbbra sem létezik: ${TARGET_DIR}
         END
     END
-  
+
+Klónozás sikeresség ellenőrzése
+   [Documentation]    A klónozás után ellenőrizzük, hogy létezik-e telepit.bat a most letöltött könyvtárban.
+   Log To Console     \n=== KLÓNOZÁS ELLENŐRZÉSE ===${WORKFLOW_STATUS}
+   IF    ${WORKFLOW_STATUS} == 'CLONED'
+        ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/telepito.bat
+        ${install_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${INSTALL_SCRIPT}
+        IF    ${install_script_exists}
+            Log To Console     A klónozás sikeres volt, a telepit.bat megtalálható: ${INSTALL_SCRIPT}
+        ELSE
+            Log To Console     A klónozás sikertelen volt, a telepit.bat nem található: ${INSTALL_SCRIPT}
+            Fail    A klónozás sikertelen volt, a telepit.bat nem található:\n ${INSTALL_SCRIPT}
+        END
+    END
+
+    Log To Console     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
+    Log To Console     WORKFLOW_STATUS = ${WORKFLOW_STATUS}
