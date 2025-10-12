@@ -148,5 +148,25 @@ Telepítés sikeresség ellenőrzése
         END
     END
     
+Robot futtatása
+  [Documentation]    Futtatjuk a start.bat fájlt, ha létezik.
+  Log To Console     \n=== ROBOT FUTTATÁSA, ha 'READY_TO_RUN' ===${WORKFLOW_STATUS}
+  IF    ${WORKFLOW_STATUS} == 'READY_TO_RUN'    
+      ${RUN_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+      Log To Console     Robot futtatása: ${RUN_SCRIPT}
+
+      # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
+      Log To Console     Robot script futtatása új ablakban (automatikus bezárással)...
+      ${run_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${RUN_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=300s
+      IF    ${run_result.rc} != 0    
+          Log To Console    Robot futtatás nem sikerült (timeout vagy hiba): ${run_result.stderr}
+          Fail    A robot futtatás sikertelen volt, a start.bat nem található:\n ${RUN_SCRIPT}
+      END
+
+      IF    ${run_result.rc} == 0    
+          Log To Console    Robot futtatás sikeresen befejeződött: ${RUN_SCRIPT}
+          Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
+      END    
+    END
     Log To Console     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log To Console     WORKFLOW_STATUS = ${WORKFLOW_STATUS}
