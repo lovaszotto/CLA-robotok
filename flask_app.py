@@ -6,6 +6,9 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+# Globális változók
+PYTHON_EXECUTABLE = 'C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe'
+
 def run_robot_with_params(repo: str, branch: str):
     """Futtat egy Robot Framework tesztet a megadott REPO/BRANCH paraméterekkel.
 
@@ -21,8 +24,7 @@ def run_robot_with_params(repo: str, branch: str):
     suite_path = 'do-selected.robot'
     
     # Elsőbbséget adunk a Python modulos futtatásnak
-    py_exe = 'C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe'
-    cmd = [py_exe, '-m', 'robot', '-d', results_dir, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
+    cmd = [PYTHON_EXECUTABLE, '-m', 'robot', '-d', results_dir, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
 
     try:
         print(f"[ROBOT] Futtatás indul: {repo}/{branch} → {results_dir}")
@@ -54,7 +56,7 @@ def get_repository_data():
         
         # Ha nincs fájl, futtatja a fetch_github_repos.py szkriptet
         result = subprocess.run([
-            'C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe', 
+            PYTHON_EXECUTABLE, 
             'fetch_github_repos.py', 'lovaszotto'
         ], capture_output=True, text=True, encoding='utf-8')
         
