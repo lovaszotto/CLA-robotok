@@ -38,7 +38,7 @@ Letöltöttség ellenőrzése
         #visszatér a tesztből
         #todo verzió alapján újra letöltés
         Log To Console     Mindkét könyvtár létezik! 
-        Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
+        Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
     ELSE
          Log To Console     Könyvtárak nem léteznek! 
         Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'    
