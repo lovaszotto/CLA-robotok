@@ -111,10 +111,11 @@ Telepítés futtatása
           ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/telepito.bat
           Log To Console     Telepítés indítása: ${INSTALL_SCRIPT}
         
-          # Rövidebb timeout és hibatűrő futtatás
-          ${install_result}=    Run Process    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
-          #Run Keyword If    ${install_result.rc} != 0    Log To Console    Telepítés nem sikerült (timeout vagy hiba), de folytatjuk: ${install_result.stderr}
-          #Run Keyword If    ${install_result.rc} == 0    Log To Console    Telepítés sikeresen befejeződött: ${INSTALL_SCRIPT}
+          # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
+          Log To Console     Telepítő script futtatása új ablakban (automatikus bezárással)...
+          ${install_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
+          Run Keyword If    ${install_result.rc} != 0    Log To Console    Telepítés nem sikerült (timeout vagy hiba), de folytatjuk: ${install_result.stderr}
+          Run Keyword If    ${install_result.rc} == 0    Log To Console    Telepítés sikeresen befejeződött: ${INSTALL_SCRIPT}
       END
      Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
 
