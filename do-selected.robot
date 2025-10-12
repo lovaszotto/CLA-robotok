@@ -157,7 +157,8 @@ Robot futtatása
 
       # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
       Log To Console     Robot script futtatása új ablakban (automatikus bezárással)...
-      ${run_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${RUN_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=300s
+      Log To Console   INSTALLED_ROBOTS:${INSTALLED_ROBOTS}
+      ${run_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${RUN_SCRIPT}    shell=True    cwd=${INSTALLED_ROBOTS}/${REPO}/${BRANCH}    timeout=300s
       IF    ${run_result.rc} != 0    
           Log To Console    Robot futtatás nem sikerült (timeout vagy hiba): ${run_result.stderr}
           Fail    A robot futtatás sikertelen volt, a start.bat nem található:\n ${RUN_SCRIPT}

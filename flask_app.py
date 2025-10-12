@@ -390,7 +390,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
 
 <!-- Keresés és szűrés -->
-<div class="row mb-4">
+<div class="row mb-4 align-items-center">
     <div class="col-md-4">
         <div class="input-group">
             <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
@@ -403,9 +403,9 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
             <input type="text" class="form-control" id="branchFilter" placeholder="Robot szűrése..." onkeyup="filterRepos()">
         </div>
     </div>
-    <div class="col-md-4">
-        <button class="btn btn-custom w-100" id="runSelectedBtn" onclick="runSelectedRobots()" disabled style="height: 38px;">
-            <i class="bi bi-play-fill"></i> Futáshoz hozzáad
+    <div class="col-md-4 d-flex align-items-center">
+        <button class="btn btn-custom w-100 d-flex align-items-center justify-content-center" id="runSelectedBtn" onclick="runSelectedRobots()" disabled style="height: 38px;">
+            <i class="bi bi-play-fill me-2"></i> Futáshoz hozzáad
         </button>
     </div>
 </div>
