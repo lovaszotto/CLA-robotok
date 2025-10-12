@@ -75,8 +75,12 @@ Branch klónozása
     IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
         ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
         Log To Console     \nGit parancs: git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}
-        ${result}=    Run Process    git    clone    -b    ${BRANCH}    --single-branch    ${GIT_URL}    ${TARGET_DIR}    shell=True
-        Should Be Equal As Integers    ${result.rc}    0    Klónozás sikertelen: ${result.stderr}
+        
+        # Git clone parancs futtatása felugró cmd ablakban
+        Log To Console     Git clone futtatása új ablakban (automatikus bezárással)...
+        ${result}=    Run Process    cmd    /c    start    /wait    cmd    /c    git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}    shell=True    timeout=300s
+        Run Keyword If    ${result.rc} != 0    Log To Console    Git clone nem sikerült (timeout vagy hiba), de folytatjuk: ${result.stderr}
+        Run Keyword If    ${result.rc} == 0    Log To Console    Git clone sikeresen befejeződött
         Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
      END
 
@@ -94,6 +98,7 @@ Klónozás sikeresség ellenőrzése
         ${install_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${INSTALL_SCRIPT}
         IF    ${install_script_exists}
             Log To Console     A klónozás sikeres volt, a telepit.bat megtalálható: ${INSTALL_SCRIPT}
+            Set Global Variable    ${WORKFLOW_STATUS}    'CLONED_OK'
         ELSE
             Log To Console     A klónozás sikertelen volt, a telepit.bat nem található:\n ${INSTALL_SCRIPT}
             Fail    A klónozás sikertelen volt, a telepit.bat nem található:\n ${INSTALL_SCRIPT}
@@ -102,8 +107,8 @@ Klónozás sikeresség ellenőrzése
 
 Telepítés futtatása
     [Documentation]    A klónozás után futtatjuk a telepit.bat fájlt.
-    Log To Console     \n=== TELEPÍTÉS FUTTATÁSA, ha 'CLONED' ===${WORKFLOW_STATUS}
-    IF    ${WORKFLOW_STATUS} == 'CLONED'
+    Log To Console     \n=== TELEPÍTÉS FUTTATÁSA, ha 'CLONED_OK' ===${WORKFLOW_STATUS}
+    IF    ${WORKFLOW_STATUS} == 'CLONED_OK'
          Log To Console   DOWNLOADED_ROBOTS:${DOWNLOADED_ROBOTS}
          Log To Console    REPO:${REPO}
          Log To Console    BRANCH:${BRANCH}
@@ -114,10 +119,34 @@ Telepítés futtatása
           # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
           Log To Console     Telepítő script futtatása új ablakban (automatikus bezárással)...
           ${install_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
-          Run Keyword If    ${install_result.rc} != 0    Log To Console    Telepítés nem sikerült (timeout vagy hiba), de folytatjuk: ${install_result.stderr}
-          Run Keyword If    ${install_result.rc} == 0    Log To Console    Telepítés sikeresen befejeződött: ${INSTALL_SCRIPT}
-      END
-     Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+          IF    ${install_result.rc} != 0    
+              Log To Console    Telepítés nem sikerült (timeout vagy hiba): ${install_result.stderr}
+              Fail    A telepítés sikertelen volt, a telepito.bat nem található:\n ${INSTALL_SCRIPT}
+          END
 
+          IF    ${install_result.rc} == 0    
+              Log To Console    Telepítés sikeresen befejeződött: ${INSTALL_SCRIPT}
+              Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+          END
+      END
+
+Telepítés sikeresség ellenőrzése
+   [Documentation]    A telepítés után ellenőrizzük, hogy létezik-e start.bat a most letöltött könyvtárban.
+   Log To Console     \n=== TELEPÍTÉS ELLENŐRZÉSE, ha 'SET_UP_OK' ===${WORKFLOW_STATUS}
+   IF    ${WORKFLOW_STATUS} == 'SET_UP_OK'
+
+        ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+        Log To Console     Ellenőrzés: start.bat létezik-e? ${INSTALL_SCRIPT}
+
+        ${install_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${INSTALL_SCRIPT}
+        IF    ${install_script_exists}
+            Log To Console     A klónozás sikeres volt, a telepit.bat megtalálható: ${INSTALL_SCRIPT}
+            Set Global Variable    ${WORKFLOW_STATUS}    'READY_TO_RUN'
+        ELSE
+            Log To Console     A klónozás sikertelen volt, a start.bat nem található:\n ${INSTALL_SCRIPT}
+            Fail    A telepítés sikertelen volt, a start.bat nem található:\n ${INSTALL_SCRIPT}
+        END
+    END
+    
     Log To Console     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log To Console     WORKFLOW_STATUS = ${WORKFLOW_STATUS}
