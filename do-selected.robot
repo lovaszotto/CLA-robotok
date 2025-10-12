@@ -100,5 +100,23 @@ Klónozás sikeresség ellenőrzése
         END
     END
 
+Telepítés futtatása
+    [Documentation]    A klónozás után futtatjuk a telepit.bat fájlt.
+    Log To Console     \n=== TELEPÍTÉS FUTTATÁSA, ha 'CLONED' ===${WORKFLOW_STATUS}
+    IF    ${WORKFLOW_STATUS} == 'CLONED'
+         Log To Console   DOWNLOADED_ROBOTS:${DOWNLOADED_ROBOTS}
+         Log To Console    REPO:${REPO}
+         Log To Console    BRANCH:${BRANCH}
+    
+          ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/telepito.bat
+          Log To Console     Telepítés indítása: ${INSTALL_SCRIPT}
+        
+          # Rövidebb timeout és hibatűrő futtatás
+          ${install_result}=    Run Process    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
+          #Run Keyword If    ${install_result.rc} != 0    Log To Console    Telepítés nem sikerült (timeout vagy hiba), de folytatjuk: ${install_result.stderr}
+          #Run Keyword If    ${install_result.rc} == 0    Log To Console    Telepítés sikeresen befejeződött: ${INSTALL_SCRIPT}
+      END
+     Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+
     Log To Console     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log To Console     WORKFLOW_STATUS = ${WORKFLOW_STATUS}

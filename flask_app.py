@@ -19,14 +19,14 @@ def run_robot_with_params(repo: str, branch: str):
     os.makedirs(results_dir, exist_ok=True)
 
     suite_path = 'do-selected.robot'
-    cmd = ['robot', '-d', results_dir, '-v', f'Repo:{repo}', '-v', f'Branch:{branch}', suite_path]
-
-    # A REPO/BRANCH változókat a meglévő teszt "REPO" és "BRANCH" nevű változóihoz igazítjuk
-    # Ha a teszt a nagybetűs neveket várja, akkor azt adjuk át
-    cmd = ['robot', '-d', results_dir, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
+    
+    # Elsőbbséget adunk a Python modulos futtatásnak
+    py_exe = 'C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe'
+    cmd = [py_exe, '-m', 'robot', '-d', results_dir, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
 
     try:
         print(f"[ROBOT] Futtatás indul: {repo}/{branch} → {results_dir}")
+        print(f"[ROBOT] Parancs: {' '.join(cmd)}")
         # Használjunk cp1252 vagy latin-1 kódolást Windows környezetben a UTF-8 hibák elkerülésére
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='cp1252', errors='ignore')
         print(f"[ROBOT] Kész: {repo}/{branch} (exit={result.returncode})")
@@ -36,18 +36,10 @@ def run_robot_with_params(repo: str, branch: str):
         if result.stderr:
             print("[ROBOT][STDERR]", result.stderr.strip())
         return result.returncode, results_dir, result.stdout, result.stderr
-    except FileNotFoundError:
-        # Ha a 'robot' parancs nem található, próbáljuk meg a python -m robot-ot a rendszer Pythonjával
-        py_exe = 'C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe'
-        alt_cmd = [py_exe, '-m', 'robot', '-d', results_dir, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
-        print(f"[ROBOT] 'robot' nem található, alternatív futtatás: {' '.join(alt_cmd)}")
-        result = subprocess.run(alt_cmd, capture_output=True, text=True, encoding='cp1252', errors='ignore')
-        print(f"[ROBOT] Kész (alternatív): {repo}/{branch} (exit={result.returncode})")
-        if result.stdout:
-            print("[ROBOT][STDOUT]", result.stdout.strip())
-        if result.stderr:
-            print("[ROBOT][STDERR]", result.stderr.strip())
-        return result.returncode, results_dir, result.stdout, result.stderr
+    except FileNotFoundError as e:
+        print(f"[ROBOT] FileNotFoundError: {e}")
+        print(f"[ROBOT] Python vagy robot modul nem található")
+        return 1, results_dir, '', f"Robot futtatási hiba: {e}"
     except Exception as e:
         print(f"[ROBOT] Hiba a futtatás közben: {e}")
         return 1, results_dir, '', str(e)
