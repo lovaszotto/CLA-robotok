@@ -19,7 +19,7 @@ if %errorlevel% neq 0 (
 
 :: Flask telepitettsegének ellenorzese
 echo [2/3] Flask csomag ellenorzese...
-C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe -c "import flask; print('Flask telepitve:', flask.__version__)"
+C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe -c "import importlib.metadata; print('Flask telepitve:', importlib.metadata.version('flask'))"
 if %errorlevel% neq 0 (
     echo Flask telepitese...
     C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe -m pip install flask

@@ -11,7 +11,7 @@ Resource    ./resources/variables.robot
 
 *** Test Cases ***
 Kiírás konzolra paraméterekből
-    [Documentation]    A REPO és BRANCH változók értékeinek kiírása.
+    [Documentation]    A kapott REPO és BRANCH változók értékeinek kiírása.
     Log To Console     \n=== KIVÁLASZTOTT ROBOT ===
     Set Global Variable    ${WORKFLOW_STATUS}    'STARTED'
     ${GIT_URL}=    Set Variable    ${GIT_URL_BASE}${REPO}.git
@@ -20,7 +20,7 @@ Kiírás konzolra paraméterekből
     Log To Console     Branch: ${BRANCH}
     Log To Console     =========================\n
 Letöltöttség ellenőrzése
-    [Documentation]    Ellenőrzi, hogy a REPO és BRANCH ban megadott értékekhez létezik-e mappa.
+    [Documentation]    Létezik-e mappa a .
     Log To Console     \n=== LETÖLTÖTTSÉG ELLENŐRZÉSE ===  ${WORKFLOW_STATUS}
     ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}    
     ${BRANCH_PATH}=   Set Variable    ${REPO_PATH}/${BRANCH}
@@ -46,9 +46,9 @@ Letöltöttség ellenőrzése
 
 Könyvtárak létrehozása
     [Documentation]    Létrehozza a szükséges könyvtárakat, ha még nem léteznek.  
-       Log To Console     \n=== KÖNYVTÁRAK LÉTREHOZÁSA, ha 'MAKE_DIRS' === ${WORKFLOW_STATUS}
+       #Log To Console     \n=== KÖNYVTÁRAK LÉTREHOZÁSA, ha 'MAKE_DIRS' === ${WORKFLOW_STATUS}
     IF    ${WORKFLOW_STATUS} == 'MAKE_DIRS'
-        Log To Console     ======Könyvtár létrehozás===================
+        Log To Console     ======Könyvtár létrehozás====${WORKFLOW_STATUS}
         #létrehozzuk a repository könyvtárat, ha nem létezik
         Create Directory    ${REPO_PATH}
         Log To Console     Létrehozva a repository könyvtár: ${REPO_PATH}
@@ -71,8 +71,9 @@ Könyvtárak létrehozása
     
 Branch klónozása
     [Documentation]    A REPO és BRANCH változók alapján klónozza a megfelelő könyvtárat, ha még nincs letöltve.
-    Log To Console    \nBranch klónozása WORKFLOW_STATUS, ha 'TO_BE_CLONE' = ${WORKFLOW_STATUS}    
+    #Log To Console    \nBranch klónozása WORKFLOW_STATUS, ha 'TO_BE_CLONE' = ${WORKFLOW_STATUS}    
     IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
+         Log To Console     ======KLONOZÁS GIT-BŐL=====${WORKFLOW_STATUS}
         ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
         Log To Console     \nGit parancs: git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}
         
@@ -85,10 +86,10 @@ Branch klónozása
      END
 
 Klónozás sikeresség ellenőrzése
-   [Documentation]    A klónozás után ellenőrizzük, hogy létezik-e telepit.bat a most letöltött könyvtárban.
-   Log To Console     \n=== KLÓNOZÁS ELLENŐRZÉSE, ha 'CLONED' ===${WORKFLOW_STATUS}
+   [Documentation]    A klónozás után ellenőrizzük, hogy létezik-e telepito.bat a most letöltött könyvtárban.
+   #Log To Console     \n=== KLÓNOZÁS ELLENŐRZÉSE, ha 'CLONED' ===${WORKFLOW_STATUS}
    IF    ${WORKFLOW_STATUS} == 'CLONED'
-       Log To Console   DOWNLOADED_ROBOTS:${DOWNLOADED_ROBOTS}
+       Log To Console     ======KLONOZÁS ELLENŐRZÉSE=====${WORKFLOW_STATUS}
        Log To Console    REPO:${REPO}
        Log To Console    BRANCH:${BRANCH}
 
@@ -107,67 +108,71 @@ Klónozás sikeresség ellenőrzése
 
 Telepítés futtatása
     [Documentation]    A klónozás után futtatjuk a telepit.bat fájlt.
-    Log To Console     \n=== TELEPÍTÉS FUTTATÁSA, ha 'CLONED_OK' ===${WORKFLOW_STATUS}
+    #Log To Console     \n=== TELEPÍTÉS FUTTATÁSA, ha 'CLONED_OK' ===${WORKFLOW_STATUS}
     IF    ${WORKFLOW_STATUS} == 'CLONED_OK'
-         Log To Console   DOWNLOADED_ROBOTS:${DOWNLOADED_ROBOTS}
-         Log To Console    REPO:${REPO}
-         Log To Console    BRANCH:${BRANCH}
-    
-          ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/telepito.bat
-          Log To Console     Telepítés indítása: ${INSTALL_SCRIPT}
-        
-          # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
-          Log To Console     Telepítő script futtatása új ablakban (automatikus bezárással)...
-          ${install_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
-          IF    ${install_result.rc} != 0    
-              Log To Console    Telepítés nem sikerült (timeout vagy hiba): ${install_result.stderr}
-              Fail    A telepítés sikertelen volt, a telepito.bat nem található:\n ${INSTALL_SCRIPT}
-          END
+           Log To Console     \n=== TELEPÍTÉS FUTTATÁSA===${WORKFLOW_STATUS}
+        Log To Console   DOWNLOADED_ROBOTS:${DOWNLOADED_ROBOTS}
+        Log To Console    REPO:${REPO}
+        Log To Console    BRANCH:${BRANCH}
 
-          IF    ${install_result.rc} == 0    
-              Log To Console    Telepítés sikeresen befejeződött: ${INSTALL_SCRIPT}
-              Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
-          END
+        ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/telepito.bat
+            Log To Console     Telepítés indítása: ${INSTALL_SCRIPT}
+            
+            # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
+            Log To Console     Telepítő script futtatása új ablakban (automatikus bezárással)...
+            ${install_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
+            IF    ${install_result.rc} != 0    
+                Log To Console    Telepítés nem sikerült (timeout vagy hiba): ${install_result.stderr}
+                Fail    A telepítés sikertelen volt, a telepito.bat nem található:\n ${INSTALL_SCRIPT}
+            END
+
+            IF    ${install_result.rc} == 0    
+                Log To Console    Telepítés sikeresen befejeződött: ${INSTALL_SCRIPT}
+                Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+            END
       END
 
 Telepítés sikeresség ellenőrzése
    [Documentation]    A telepítés után ellenőrizzük, hogy létezik-e start.bat a most letöltött könyvtárban.
-   Log To Console     \n=== TELEPÍTÉS ELLENŐRZÉSE, ha 'SET_UP_OK' ===${WORKFLOW_STATUS}
+   #Log To Console     \n=== TELEPÍTÉS ELLENŐRZÉSE, ha 'SET_UP_OK' ===${WORKFLOW_STATUS}
    IF    ${WORKFLOW_STATUS} == 'SET_UP_OK'
+        Log To Console     \n=== TELEPÍTÉS ELLENŐRZÉSE == ${WORKFLOW_STATUS}
+        ${START_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+        Log To Console     Ellenőrzés: start.bat létezik-e az INSTALLED_ROBOTS könyvtárban? ${START_SCRIPT}
 
-        ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
-        Log To Console     Ellenőrzés: start.bat létezik-e? ${INSTALL_SCRIPT}
-
-        ${install_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${INSTALL_SCRIPT}
-        IF    ${install_script_exists}
-            Log To Console     A klónozás sikeres volt, a telepit.bat megtalálható: ${INSTALL_SCRIPT}
+        ${start_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${START_SCRIPT}
+        IF    ${start_script_exists}
+            Log To Console     A telepítés sikeres volt, a start.bat megtalálható az INSTALLED_ROBOTS-ban: ${START_SCRIPT}
             Set Global Variable    ${WORKFLOW_STATUS}    'READY_TO_RUN'
         ELSE
-            Log To Console     A klónozás sikertelen volt, a start.bat nem található:\n ${INSTALL_SCRIPT}
-            Fail    A telepítés sikertelen volt, a start.bat nem található:\n ${INSTALL_SCRIPT}
+            Log To Console     A telepítés sikertelen volt, a start.bat nem található az INSTALLED_ROBOTS könyvtárban:\n ${START_SCRIPT}
+            Fail    A telepítés sikertelen volt, a start.bat nem található az INSTALLED_ROBOTS könyvtárban:\n ${START_SCRIPT}
         END
     END
     
 Robot futtatása
   [Documentation]    Futtatjuk a start.bat fájlt, ha létezik.
-  Log To Console     \n=== ROBOT FUTTATÁSA, ha 'READY_TO_RUN' ===${WORKFLOW_STATUS}
+  #Log To Console     \n=== ROBOT FUTTATÁSA, ha 'READY_TO_RUN' ===${WORKFLOW_STATUS}
   IF    ${WORKFLOW_STATUS} == 'READY_TO_RUN'    
+      Log To Console     \n=== ROBOT FUTTATÁSA== ${WORKFLOW_STATUS} ==
       ${RUN_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
-      Log To Console     Robot futtatása: ${RUN_SCRIPT}
+      Log To Console     Robot futtatása az INSTALLED_ROBOTS könyvtárból: ${RUN_SCRIPT}
 
-      # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
-      Log To Console     Robot script futtatása új ablakban (automatikus bezárással)...
-      Log To Console   INSTALLED_ROBOTS:${INSTALLED_ROBOTS}
-      ${run_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${RUN_SCRIPT}    shell=True    cwd=${INSTALLED_ROBOTS}/${REPO}/${BRANCH}    timeout=300s
-      IF    ${run_result.rc} != 0    
-          Log To Console    Robot futtatás nem sikerült (timeout vagy hiba): ${run_result.stderr}
-          Fail    A robot futtatás sikertelen volt, a start.bat nem található:\n ${RUN_SCRIPT}
+      # Külön szerver indítása - popup ablakban futtatás
+      Log To Console     ${REPO}/${BRANCH} alkalmazás indítása külön popup ablakban...
+      Log To Console     Robot script indítása: ${RUN_SCRIPT}
+      
+      # Popup ablakban futtatás - /k paraméter nyitva tartja az ablakot, /wait nélkül hogy ne várjon
+      ${run_result}=    Run Process    cmd    /c    start    cmd    /k    ${RUN_SCRIPT}    shell=True    cwd=${INSTALLED_ROBOTS}/${REPO}/${BRANCH}    timeout=10s
+      
+      IF    ${run_result.rc} == 0
+          Log To Console     ${REPO}/${BRANCH} alkalmazás sikeresen elindult popup ablakban
+      ELSE
+          Log To Console     ${REPO}/${BRANCH} alkalmazás indítása sikertelen: ${run_result.stderr}
       END
-
-      IF    ${run_result.rc} == 0    
-          Log To Console    Robot futtatás sikeresen befejeződött: ${RUN_SCRIPT}
-          Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
-      END    
+      
+      Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
+      Log To Console    Robot indítása befejezve, a szerver a háttérben fut tovább    
     END
     Log To Console     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log To Console     WORKFLOW_STATUS = ${WORKFLOW_STATUS}

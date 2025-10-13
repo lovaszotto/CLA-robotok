@@ -26,7 +26,7 @@ if %errorlevel% neq 0 (
 
 :: 3. Flask telepítettségének ellenőrzése
 echo [3/4] Függőségek ellenőrzése...
-C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe -c "import flask; print('Flask telepítve:', flask.__version__)"
+C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe -c "import importlib.metadata; print('Flask telepítve:', importlib.metadata.version('flask'))"
 if %errorlevel% neq 0 (
     echo Flask telepítése...
     C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe -m pip install flask
