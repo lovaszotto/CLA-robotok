@@ -9,6 +9,27 @@ app = Flask(__name__)
 # Globális változók
 PYTHON_EXECUTABLE = 'C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe'
 
+def get_downloaded_keys():
+    """Felderíti a results mappában a korábbi futások alapján, mely REPO/BRANCH párokhoz tartozik eredmény.
+    A results könyvtárban a mappa neve formátum: {safe_repo}__{safe_branch}__{timestamp}
+    ahol a safe_* értékekben a "/" karakterek "_"-ra vannak cserélve.
+    Visszaad: set(["{safe_repo}|{safe_branch}", ...])
+    """
+    keys = set()
+    base_dir = 'results'
+    try:
+        if os.path.isdir(base_dir):
+            for name in os.listdir(base_dir):
+                if '__' in name:
+                    parts = name.split('__')
+                    if len(parts) >= 2:
+                        safe_repo = parts[0]
+                        safe_branch = parts[1]
+                        keys.add(f"{safe_repo}|{safe_branch}")
+    except Exception as e:
+        print(f"[INFO] Nem sikerült a letöltött kulcsokat felderíteni: {e}")
+    return keys
+
 def run_robot_with_params(repo: str, branch: str):
     """Futtat egy Robot Framework tesztet a megadott REPO/BRANCH paraméterekkel.
 
@@ -107,9 +128,10 @@ def index():
     
     # HTML template beolvasása és renderelése
     html_template = get_html_template()
+    downloaded_keys = get_downloaded_keys()
     
     response = app.response_class(
-        render_template_string(html_template, repos=repos, datetime=datetime),
+        render_template_string(html_template, repos=repos, datetime=datetime, downloaded_keys=downloaded_keys),
         mimetype='text/html'
     )
     # Cache törlése fejlécekkel
@@ -295,7 +317,7 @@ def get_results():
 
 def get_html_template():
     """Visszaadja a HTML template-et a parse_repos.py alapján"""
-    
+
     return '''<!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -304,7 +326,7 @@ def get_html_template():
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Segíthetünk? - Robot Kezelő v2.1 - TÖRLÉS GOMBOKKAL - {{ datetime.now().strftime('%H:%M:%S') }}</title>
+<title>Segíthetünk? - Robot Kezelő v2.1</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 <style>
@@ -349,16 +371,14 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 .spinning { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 </style>
-</head><body>
-
+</head>
+<body>
 <div class="main-container">
 <div class="page-header">
 <div class="header-content">
 <h1><i class="bi bi-robot"></i> Segíthetünk?</h1>
 </div>
 </div>
-
-<!-- Tab Navigation -->
 <ul class="nav nav-tabs" id="mainTabs" role="tablist">
 <li class="nav-item" role="presentation">
 <button class="nav-link active" id="download-tab" data-bs-toggle="tab" data-bs-target="#download-pane" type="button" role="tab">
@@ -391,12 +411,8 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </button>
 </li>
 </ul>
-
-<!-- Tab Content -->
 <div class="tab-content" id="mainTabContent">
-<!-- Futtatható robotok tab -->
 <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
-
 <!-- Keresés és szűrés -->
 <div class="row mb-4 align-items-center">
     <div class="col-md-4">
@@ -417,7 +433,9 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
         </button>
     </div>
 </div>
-
+<div>
+<span><i class="bi bi-check-circle-fill text-success"></i> Branch név</span>
+</div>
 <!-- Repository kártyák -->
 <div class="row" id="repoContainer">
 {% for repo in repos %}
@@ -446,8 +464,16 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                            data-repo="{{ repo.name }}" 
                            data-branch="{{ branch }}"
                            onchange="updateRunButton()">
+                    {% set safe_repo = repo.name.replace('/', '_') %}
+                    {% set safe_branch = branch.replace('/', '_') %}
+                    {% set key = safe_repo ~ '|' ~ safe_branch %}
                     <label class="form-check-label ms-2" for="branch-{{ repo.name }}-{{ branch }}">
-                        {{ branch }}
+                        {% if key in downloaded_keys %}
+                            <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letöltve / van futási eredmény"></i>
+                        {% else %}
+                            <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Még nincs letöltve / nincs eredmény"></i>
+                        {% endif %}
+                        <i class="bi bi-check-circle-fill text-success me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Utolsó futás dátuma:"></i> {{ branch }}
                     </label>
                 </div>
                 {% endfor %}
@@ -462,8 +488,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 
 </div>
-
-<!-- Futtatás tab -->
 <div class="tab-pane fade" id="executable-pane" role="tabpanel">
 <div class="d-flex justify-content-between align-items-center mb-3">
 <h3 class="mb-0"><i class="bi bi-play-circle-fill text-success"></i> Kiválasztott Robotok Futtatása</h3>
@@ -480,8 +504,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>
 </div>
 </div>
-
-<!-- Információ tab -->
 <div class="tab-pane fade" id="info-pane" role="tabpanel">
 <h3><i class="bi bi-info-circle-fill text-info"></i> Rendszer Információk</h3>
 <div class="row">
@@ -518,8 +540,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 </div>
 </div>
-
-<!-- Beállítások tab -->
 <div class="tab-pane fade" id="settings-pane" role="tabpanel">
 <h3><i class="bi bi-gear-fill text-secondary"></i> Beállítások</h3>
 <div class="row">
@@ -581,8 +601,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 </div>
 </div>
-
-<!-- Eredmények tab -->
 <div class="tab-pane fade" id="results-pane" role="tabpanel">
 <div class="card">
 <div class="card-header text-white" style="background: linear-gradient(135deg, #dc3545, #c82333);">
@@ -613,8 +631,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </button>
 </div>
 </div>
-
-<!-- Eredmények táblázat -->
 <div class="table-responsive">
 <table class="table table-striped table-hover">
 <thead class="table-dark">
@@ -648,8 +664,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </tbody>
 </table>
 </div>
-
-<!-- Lapozás -->
 <div class="d-flex justify-content-between align-items-center mt-3">
 <div>
 <span class="text-muted" id="resultsInfo">Összesen: 0 eredmény</span>
@@ -663,8 +677,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 </div>
 </div>
-
-<!-- Kilépés tab -->
 <div class="tab-pane fade" id="exit-pane" role="tabpanel">
 <div class="text-center mt-5">
 <h3><i class="bi bi-box-arrow-right text-danger"></i> Kilépés</h3>
@@ -679,16 +691,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 </div>
 </div>
-
 </div>
 </div>
-
-</div>
-
 <!-- jQuery és Bootstrap JavaScript -->
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
 // Card-ok kezelése
 function filterRepos() {
@@ -1454,13 +1461,20 @@ document.addEventListener('DOMContentLoaded', function() {
             loadResults();
         });
     }
+
+    // Bootstrap tooltip inicializálás minden elemen, ahol data-bs-toggle="tooltip"
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        new bootstrap.Tooltip(tooltipTriggerEl);
+    });
 });
 
+// A branch név ikonját a HTML sablonban adjuk hozzá közvetlenül a label-ben
 </script>
-</body></html>'''
+</body>
+</html>'''
 
+# Alkalmazás indítása, ha közvetlenül futtatjuk a fájlt
 if __name__ == '__main__':
-    print("Flask szerver indítása...")
-    print("A weboldal elérhető lesz: http://localhost:5000")
-    # Reloader kikapcsolása, hogy a shutdown megbízható legyen
-    app.run(debug=True, host='0.0.0.0', port=5000, use_reloader=False)
+    # A debug állapotot kikapcsoljuk, port 5000-en indul
+    app.run(host='127.0.0.1', port=5000, debug=False)

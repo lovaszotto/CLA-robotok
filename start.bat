@@ -46,4 +46,3 @@ C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe flask_app.py
 :: Szerver leallitasa utan
 echo.
 echo Flask szerver leállt.
-pause
