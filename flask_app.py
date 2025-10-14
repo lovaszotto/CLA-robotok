@@ -108,9 +108,15 @@ def index():
     # HTML template beolvasása és renderelése
     html_template = get_html_template()
     
-    return render_template_string(html_template, 
-                                repos=repos, 
-                                datetime=datetime)
+    response = app.response_class(
+        render_template_string(html_template, repos=repos, datetime=datetime),
+        mimetype='text/html'
+    )
+    # Cache törlése fejlécekkel
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/api/refresh')
 def refresh_data():
@@ -298,7 +304,7 @@ def get_html_template():
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Segíthetünk? - Robot Kezelő v2.0 - CACHE CLEARED</title>
+<title>Segíthetünk? - Robot Kezelő v2.1 - TÖRLÉS GOMBOKKAL - {{ datetime.now().strftime('%H:%M:%S') }}</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 <style>
@@ -463,7 +469,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <h3 class="mb-0"><i class="bi bi-play-circle-fill text-success"></i> Kiválasztott Robotok Futtatása</h3>
 <div id="executionButtons" style="display: none;">
 <button class="btn btn-outline-secondary btn-lg me-2" onclick="clearSelection()">
-<i class="bi bi-trash"></i> Lista törlése
+<i class="bi bi-x-circle"></i> Összes törlése
 </button>
 <button class="btn btn-success btn-lg" onclick="executeAllRobots()">
 <i class="bi bi-play-fill"></i> Összes futtatása
@@ -746,6 +752,7 @@ function runSelectedRobots() {
 }
 
 function showSelectedRobots(robots) {
+    console.log('showSelectedRobots hívva', robots.length, 'robottal');
     const container = document.getElementById('selectedRobotsContainer');
     
     // Gombok megjelenítése a fejlécben
@@ -764,9 +771,14 @@ function showSelectedRobots(robots) {
                 <div class="card-body">
                     <h6><i class="bi bi-github"></i> ${robot.repo}</h6>
                     <p class="mb-2"><i class="bi bi-git"></i> <strong>Robot:</strong> ${robot.branch}</p>
-                    <button class="btn btn-outline-success btn-sm" onclick="executeRobot('${robot.repo}', '${robot.branch}')">
-                        <i class="bi bi-play"></i> Futtatás
-                    </button>
+                    <div class="d-flex" style="gap: 8px;">
+                        <button class="btn btn-outline-success btn-sm" onclick="executeRobot('${robot.repo}', '${robot.branch}')" title="Robot futtatása">
+                            <i class="bi bi-play"></i> Futtatás
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="removeRobotFromList('${robot.repo}', '${robot.branch}')" title="Eltávolítás a listából">
+                            <i class="bi bi-trash"></i> Törlés
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>`;
@@ -818,10 +830,41 @@ function executeRobot(repo, branch) {
             <small class="text-muted">(${currentTime})</small>
             <div class="mt-2">
                 <span class="badge bg-secondary">Végső státusz: ${statusText}</span>
+                <button class="btn btn-success btn-sm ms-2" onclick="markAsSuccessAndRemove('${repo}', '${branch}', this)" title="Sikeres befejezésként jelöl és eltávolít a listából">
+                    <i class="bi bi-check-circle"></i> Sikeres
+                </button>
             </div>
         `;
         const container = document.getElementById('selectedRobotsContainer');
         container.appendChild(msg);
+        
+        // Sikeres futás ellenőrzése különböző kritériumok alapján
+        console.log(`Debug: Return code érték: ${data.returncode} (típus: ${typeof data.returncode})`);
+        console.log(`Debug: Teljes szerver válasz:`, data);
+        
+        // Többfaktoros sikeres futás ellenőrzés
+        const isSuccessful = 
+            data.returncode === 0 || 
+            data.status === "ok" || 
+            data.status === "success" ||
+            (data.results_dir && !data.results_dir.includes('error'));
+            
+        if (isSuccessful) {
+            console.log(`Sikeres futás észlelve (többfaktoros): ${repo}/${branch} - eltávolítás a listából`);
+            removeRobotFromSelection(repo, branch);
+            setTimeout(() => {
+                msg.innerHTML += `
+                    <div class="mt-2">
+                        <small class="text-success">
+                            <i class="bi bi-check-circle"></i> Robot automatikusan eltávolítva a kiválasztottak közül
+                        </small>
+                    </div>
+                `;
+            }, 2000);
+        } else {
+            console.log(`Sikertelen futás: ${repo}/${branch} - returncode: ${data.returncode}, status: ${data.status}`);
+        }
+        
         setTimeout(() => msg.remove(), 10000);
     })
     .catch(err => {
@@ -924,6 +967,24 @@ function executeAllRobots() {
                             </div>
                         </div>
                     `;
+                    
+                    // Sikeres futás esetén törölje a robotot a kiválasztottak közül
+                    console.log(`Debug bulk: Return code érték: ${result.returncode} (típus: ${typeof result.returncode}) robot: ${robot.repo}/${robot.branch}`);
+                    if (result.returncode === 0) {
+                        console.log(`Sikeres tömeges futás észlelve: ${robot.repo}/${robot.branch} - eltávolítás a listából`);
+                        setTimeout(() => {
+                            removeRobotFromSelection(robot.repo, robot.branch);
+                            card.querySelector('.alert').innerHTML += `
+                                <div class="mt-2">
+                                    <small class="text-success">
+                                        <i class="bi bi-check-circle"></i> Robot automatikusan eltávolítva a kiválasztottak közül
+                                    </small>
+                                </div>
+                            `;
+                        }, 2000);
+                    } else {
+                        console.log(`Sikertelen tömeges futás: ${robot.repo}/${robot.branch} - returncode: ${result.returncode}`);
+                    }
                 }
             });
         }
@@ -964,6 +1025,119 @@ function executeAllRobots() {
             `;
         }
     });
+}
+
+function removeRobotFromSelection(repo, branch) {
+    // Keressük meg és törölük a checkbox-ot
+    console.log(`removeRobotFromSelection meghívva: ${repo}/${branch}`);
+    const selector = `input[data-repo="${repo}"][data-branch="${branch}"]`;
+    console.log(`Checkbox selector: ${selector}`);
+    const checkbox = document.querySelector(selector);
+    console.log(`Checkbox talált:`, checkbox);
+    
+    if (checkbox) {
+        checkbox.checked = false;
+        console.log(`Robot eltávolítva a kiválasztottak közül: ${repo}/${branch}`);
+        
+        // Frissítsük a futtatás gombot
+        updateRunButton();
+        
+        // Ha nincs több kiválasztott robot, frissítsük a kiválasztottak listáját
+        const selectedCheckboxes = document.querySelectorAll('.robot-checkbox:checked');
+        if (selectedCheckboxes.length === 0) {
+            // Gombok elrejtése
+            const executionButtons = document.getElementById('executionButtons');
+            if (executionButtons) {
+                executionButtons.style.display = 'none';
+            }
+            
+            const container = document.getElementById('selectedRobotsContainer');
+            container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>';
+        } else {
+            // Frissítsük a kiválasztottak listáját
+            updateSelectedRobotsList();
+        }
+    } else {
+        console.log(`HIBA: Checkbox nem található: ${selector}`);
+    }
+}
+
+function updateSelectedRobotsList() {
+    // Új lista generálása a jelenlegi kiválasztásokból
+    const checkboxes = document.querySelectorAll('.robot-checkbox:checked');
+    const selectedRobots = [];
+    
+    checkboxes.forEach(checkbox => {
+        selectedRobots.push({
+            repo: checkbox.getAttribute('data-repo'),
+            branch: checkbox.getAttribute('data-branch')
+        });
+    });
+    
+    if (selectedRobots.length > 0) {
+        showSelectedRobots(selectedRobots);
+    }
+}
+
+function markAsSuccessAndRemove(repo, branch, buttonElement) {
+    console.log(`Manuális sikeres jelölés: ${repo}/${branch}`);
+    
+    // Gomb módosítása jelzésként
+    buttonElement.innerHTML = '<i class="bi bi-check-circle-fill"></i> Eltávolítva';
+    buttonElement.className = 'btn btn-outline-success btn-sm ms-2';
+    buttonElement.disabled = true;
+    
+    // Robot eltávolítása a kiválasztottak közül
+    removeRobotFromSelection(repo, branch);
+    
+    // Vizuális visszajelzés hozzáadása
+    setTimeout(() => {
+        const alertDiv = buttonElement.closest('.alert');
+        if (alertDiv) {
+            alertDiv.innerHTML += `
+                <div class="mt-2">
+                    <small class="text-success">
+                        <i class="bi bi-check-circle"></i> Robot manuálisan sikeresnek jelölve és eltávolítva a listából
+                    </small>
+                </div>
+            `;
+        }
+    }, 500);
+}
+
+function removeRobotFromList(repo, branch) {
+    console.log(`Manuális eltávolítás kérése: ${repo}/${branch}`);
+    
+    // Megerősítő dialógus
+    if (confirm(`Biztos, hogy eltávolítja ezt a robotot a listából?\\n\\n${repo}/${branch}`)) {
+        // Robot eltávolítása a kiválasztottak közül
+        removeRobotFromSelection(repo, branch);
+        
+        // Vizuális visszajelzés
+        const container = document.getElementById('selectedRobotsContainer');
+        const currentTime = new Date().toLocaleString('hu-HU');
+        const msg = document.createElement('div');
+        msg.className = 'alert alert-warning mt-3';
+        msg.innerHTML = `
+            <i class="bi bi-info-circle"></i> Eltávolítva: <strong>${repo}/${branch}</strong> 
+            <small class="text-muted">(${currentTime})</small>
+            <div class="mt-2">
+                <span class="badge bg-warning">Manuálisan eltávolítva</span>
+            </div>
+        `;
+        container.appendChild(msg);
+        
+        // Üzenet automatikus eltávolítása 3 másodperc után
+        setTimeout(() => {
+            if (msg && msg.parentNode) {
+                msg.remove();
+            }
+        }, 3000);
+        
+        console.log(`Robot sikeresen eltávolítva: ${repo}/${branch}`);
+    } else {
+        console.log(`Eltávolítás megszakítva: ${repo}/${branch}`);
+    }
 }
 
 function clearSelection() {
