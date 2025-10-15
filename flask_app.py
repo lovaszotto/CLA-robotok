@@ -771,7 +771,7 @@ function showSelectedRobots(robots) {
     let html = '<h4><i class="bi bi-list-check"></i> Kiválasztott Robotok:</h4>';
     
     html += '<div class="row">';
-    robots.forEach((robot, index) => {
+        robots.forEach((robot) => {
         html += `
         <div class="col-md-6 mb-3">
             <div class="card">
@@ -780,10 +780,10 @@ function showSelectedRobots(robots) {
                     <p class="mb-2"><i class="bi bi-git"></i> <strong>Robot:</strong> ${robot.branch}</p>
                     <div class="d-flex" style="gap: 8px;">
                         <button class="btn btn-outline-success btn-sm" onclick="executeRobot('${robot.repo}', '${robot.branch}')" title="Robot futtatása">
-                            <i class="bi bi-play"></i> Futtatás
+                                <i class="bi bi-play"></i> Indítás
                         </button>
                         <button class="btn btn-outline-danger btn-sm" onclick="removeRobotFromList('${robot.repo}', '${robot.branch}')" title="Eltávolítás a listából">
-                            <i class="bi bi-trash"></i> Törlés
+                            <i class="bi bi-x-circle"></i> Mégsem
                         </button>
                     </div>
                 </div>
