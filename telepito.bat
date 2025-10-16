@@ -100,7 +100,6 @@ if exist "output.xml" copy "output.xml" "%TARGET_DIR%\"
 if exist "report.html" copy "report.html" "%TARGET_DIR%\"
 
 REM Konfiguracios fajlok masolasa
-copy "Duplikacio.config" "%TARGET_DIR%\"
 copy "TELEPITO_UTMUTATO.txt" "%TARGET_DIR%\"
 copy "start.bat" "%TARGET_DIR%\"
 
@@ -157,12 +156,6 @@ echo Fajlok sikeresen masolva.
 
 REM Ellenorizzuk es javitsuk a hianyzo fajlokat
 echo Hianyzo fajlok ellenorzese es potellepites...
-
-REM Fontos library fajlok ellenorzese
-if not exist "%TARGET_DIR%\libraries\duplikacio_config.py" (
-    echo duplikacio_config.py hianyzo, ujra letrehozas...
-    copy "libraries\duplikacio_config.py" "%TARGET_DIR%\libraries\"
-)
 
 if not exist "%TARGET_DIR%\libraries\DocxReader.py" (
     echo DocxReader.py hianyzo, ujra letrehozas...
@@ -244,14 +237,6 @@ echo REM Ellenorizzuk a virtualis kornyezet megletet >> start.bat
 echo if not exist "rf_env\Scripts\robot.exe" ^( >> start.bat
 echo     echo HIBA: Virtualis kornyezet nem talalhato! >> start.bat
 echo     echo Futtassa eloszor a telepito.bat fajlt! >> start.bat
-echo     pause >> start.bat
-echo     exit /b 1 >> start.bat
-echo ^) >> start.bat
-echo. >> start.bat
-echo echo Konfiguracio ellenorzese... >> start.bat
-echo if not exist "Duplikacio.config" ^( >> start.bat
-echo     echo HIBA: Duplikacio.config fajl nem talalhato! >> start.bat
-echo     echo Ellenorizze a konfiguracios fajlt! >> start.bat
 echo     pause >> start.bat
 echo     exit /b 1 >> start.bat
 echo ^) >> start.bat
