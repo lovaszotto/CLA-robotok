@@ -101,10 +101,19 @@ def index():
     for repo in repos:
         repo['branches'] = get_branches_for_repo(repo['name'])
     
-    # HTML template beolvasása és renderelése
-    html_template = get_html_template()
+    # Előre kiszámoljuk a letöltött és letölthető branch-eket repo szinten
     downloaded_keys = get_downloaded_keys()
-    
+    for repo in repos:
+        safe_repo = repo['name'].replace('/', '_')
+        repo['downloaded_branches'] = [
+            branch for branch in repo['branches']
+            if f"{safe_repo}|{branch.replace('/', '_')}" in downloaded_keys
+        ]
+        repo['available_branches'] = [
+            branch for branch in repo['branches']
+            if f"{safe_repo}|{branch.replace('/', '_')}" not in downloaded_keys
+        ]
+    html_template = get_html_template()
     response = app.response_class(
         render_template_string(html_template, repos=repos, datetime=datetime, downloaded_keys=downloaded_keys),
         mimetype='text/html'
@@ -328,7 +337,6 @@ def fetch_log():
     log_file = os.path.join(requested, 'log.html')
     if not os.path.exists(log_file):
         return jsonify({'error': f"log.html nem található a megadott mappában", 'dir': dir_param, 'log_file': log_file}), 404
-
     try:
         with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
             html = f.read()
@@ -438,6 +446,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </button>
 </li>
 <li class="nav-item" role="presentation">
+<button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab">
+<i class="bi bi-download"></i> Letölthető robotok
+</button>
+</li>
+<li class="nav-item" role="presentation">
 <button class="nav-link" id="executable-tab" data-bs-toggle="tab" data-bs-target="#executable-pane" type="button" role="tab">
 <i class="bi bi-play-circle"></i> Futtatás
 </button>
@@ -464,81 +477,140 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </li>
 </ul>
 <div class="tab-content" id="mainTabContent">
+<!-- Futtatható robotok TAB -->
 <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
-<!-- Keresés és szűrés -->
-<div class="row mb-4 align-items-center">
-    <div class="col-md-4">
-        <div class="input-group">
-            <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" id="repoSearch" placeholder="Repository keresése..." onkeyup="filterRepos()">
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="input-group">
-            <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
-            <input type="text" class="form-control" id="branchFilter" placeholder="Robot szűrése..." onkeyup="filterRepos()">
-        </div>
-    </div>
-    <div class="col-md-4 d-flex align-items-center">
-        <button class="btn btn-custom w-100 d-flex align-items-center justify-content-center" id="runSelectedBtn" onclick="runSelectedRobots()" disabled style="height: 38px;">
-            <i class="bi bi-play-fill me-2"></i> Futáshoz hozzáad
-        </button>
-    </div>
-</div>
-<div>
-<span><i class="bi bi-check-circle-fill text-success"></i> Branch név</span>
-</div>
-<!-- Repository kártyák -->
-<div class="row" id="repoContainer">
-{% for repo in repos %}
-<div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="{{ repo.name }}">
-    <div class="card repo-card h-100">
-        <div class="card-header text-white">
-            <h5 class="card-title mb-0">
-                <i class="bi bi-github"></i>
-                <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
-                    {{ repo.name }}
-                </a>
-            </h5>
-            {% if repo.updated_at %}
-            <small class="opacity-75">{{ repo.updated_at[:10] }}</small>
-            {% endif %}
-        </div>
-        <div class="card-body">
-            <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
-            
-            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
-            <div class="branches-container">
-                {% for branch in repo.branches %}
-                <div class="branch-checkbox">
-                    <input type="checkbox" class="form-check-input robot-checkbox" 
-                           id="branch-{{ repo.name }}-{{ branch }}" 
-                           data-repo="{{ repo.name }}" 
-                           data-branch="{{ branch }}"
-                           onchange="updateRunButton()">
-                    {% set safe_repo = repo.name.replace('/', '_') %}
-                    {% set safe_branch = branch.replace('/', '_') %}
-                    {% set key = safe_repo ~ '|' ~ safe_branch %}
-                    <label class="form-check-label ms-2" for="branch-{{ repo.name }}-{{ branch }}">
-                        {% if key in downloaded_keys %}
-                            <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letöltve / van futási eredmény"></i>
-                        {% else %}
-                            <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Még nincs letöltve / nincs eredmény"></i>
-                        {% endif %}
-                        <i class="bi bi-check-circle-fill text-success me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Utolsó futás dátuma:"></i> {{ branch }}
-                    </label>
-                </div>
-                {% endfor %}
-                {% if not repo.branches %}
-                <div class="text-muted">Nincs elérhető robot</div>
-                {% endif %}
+    <!-- Keresés és szűrés -->
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="repoSearch" placeholder="Repository keresése..." onkeyup="filterRepos()">
             </div>
         </div>
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
+                <input type="text" class="form-control" id="branchFilter" placeholder="Robot szűrése..." onkeyup="filterRepos()">
+            </div>
+        </div>
+        <div class="col-md-4 d-flex align-items-center">
+            <button class="btn btn-custom w-100 d-flex align-items-center justify-content-center" id="runSelectedBtn" onclick="runSelectedRobots()" disabled style="height: 38px;">
+                <i class="bi bi-play-fill me-2"></i> Futáshoz hozzáad
+            </button>
+        </div>
     </div>
+    <div>
+        <span><i class="bi bi-check-circle-fill text-success"></i> Branch név</span>
+    </div>
+    <!-- Repository kártyák -->
+    <div class="row" id="repoContainer">
+    {% for repo in repos %}
+        {% if repo.downloaded_branches|length > 0 %}
+        <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="{{ repo.name }}">
+            <div class="card repo-card h-100">
+                <div class="card-header text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-github"></i>
+                        <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
+                            {{ repo.name }}
+                        </a>
+                    </h5>
+                    {% if repo.updated_at %}
+                    <small class="opacity-75">{{ repo.updated_at[:10] }}</small>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
+                    <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
+                    <div class="branches-container">
+                        {% for branch in repo.downloaded_branches %}
+                            <div class="branch-checkbox">
+                                <input type="checkbox" class="form-check-input robot-checkbox" 
+                                       id="branch-{{ repo.name }}-{{ branch }}" 
+                                       data-repo="{{ repo.name }}" 
+                                       data-branch="{{ branch }}"
+                                       onchange="updateRunButton()">
+                                <label class="form-check-label ms-2" for="branch-{{ repo.name }}-{{ branch }}">
+                                    <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letöltve / van futási eredmény"></i>
+                                    <i class="bi bi-check-circle-fill text-success me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Utolsó futás dátuma:"></i> {{ branch }}
+                                </label>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+    </div>
+    
 </div>
-{% endfor %}
-</div>
-
+<!-- Letölthető robotok TAB -->
+<div class="tab-pane fade" id="available-pane" role="tabpanel">
+    <!-- Keresés és szűrés (ugyanaz, mint a másik tabon, de külön azonosítókkal, ha kell) -->
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="repoSearchAvailable" placeholder="Repository keresése..." onkeyup="filterReposAvailable()">
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
+                <input type="text" class="form-control" id="branchFilterAvailable" placeholder="Robot szűrése..." onkeyup="filterReposAvailable()">
+            </div>
+        </div>
+        <div class="col-md-4 d-flex align-items-center">
+            <button class="btn btn-custom w-100 d-flex align-items-center justify-content-center" id="downloadSelectedBtn" onclick="downloadSelectedRobots()" disabled style="height: 38px;">
+                <i class="bi bi-download me-2"></i> Letöltéshez hozzáad
+            </button>
+        </div>
+    </div>
+    <div>
+        <span><i class="bi bi-download text-secondary"></i> Branch név</span>
+    </div>
+    <!-- Repository kártyák -->
+    <div class="row" id="repoContainerAvailable">
+    {% for repo in repos %}
+        {% if repo.available_branches|length > 0 %}
+        <div class="col-lg-6 col-xl-4 mb-4 repo-item-available" data-repo-name="{{ repo.name }}">
+            <div class="card repo-card h-100">
+                <div class="card-header text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-github"></i>
+                        <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
+                            {{ repo.name }}
+                        </a>
+                    </h5>
+                    {% if repo.updated_at %}
+                    <small class="opacity-75">{{ repo.updated_at[:10] }}</small>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
+                    <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
+                    <div class="branches-container">
+                        {% for branch in repo.available_branches %}
+                            <div class="branch-checkbox">
+                                <input type="checkbox" class="form-check-input robot-checkbox-available" 
+                                       id="branch-available-{{ repo.name }}-{{ branch }}" 
+                                       data-repo="{{ repo.name }}" 
+                                       data-branch="{{ branch }}"
+                                       onchange="updateDownloadButton()">
+                                <label class="form-check-label ms-2" for="branch-available-{{ repo.name }}-{{ branch }}">
+                                    <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letölthető"></i>
+                                    <i class="bi bi-check-circle-fill text-success me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Branch"></i> {{ branch }}
+                                </label>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+    </div>
 </div>
 <div class="tab-pane fade" id="executable-pane" role="tabpanel">
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -767,6 +839,39 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+function downloadSelectedRobots() {
+    const checkboxes = document.querySelectorAll('.robot-checkbox-available:checked');
+    const selectedRobots = [];
+    checkboxes.forEach(checkbox => {
+        selectedRobots.push({
+            repo: checkbox.getAttribute('data-repo'),
+            branch: checkbox.getAttribute('data-branch')
+        });
+    });
+    if (selectedRobots.length > 0) {
+        showSelectedRobots(selectedRobots);
+        // Váltás a futtatás tab-ra
+        document.getElementById('executable-tab').click();
+    }
+}
+// Letölthető robotok tab: gomb engedélyezése, ha van kijelölt
+function updateDownloadButton() {
+    const checkboxes = document.querySelectorAll('.robot-checkbox-available:checked');
+    const btn = document.getElementById('downloadSelectedBtn');
+    if (btn) {
+        if (checkboxes.length > 0) {
+            btn.disabled = false;
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-custom');
+            btn.innerHTML = `<i class="bi bi-download me-2"></i> Letöltéshez hozzáad (${checkboxes.length})`;
+        } else {
+            btn.disabled = true;
+            btn.classList.remove('btn-custom');
+            btn.classList.add('btn-secondary');
+            btn.innerHTML = '<i class="bi bi-download me-2"></i> Letöltéshez hozzáad';
+        }
+    }
+}
 // Card-ok kezelése
 function filterRepos() {
     const searchTerm = document.getElementById('repoSearch').value.toLowerCase();
@@ -951,27 +1056,34 @@ function executeRobot(repo, branch) {
 }
 
 function executeAllRobots() {
-    const checkboxes = document.querySelectorAll('.robot-checkbox:checked');
+    // Mindkét tabról származó kiválasztott robotokat összegyűjtjük
+    const checkboxesRun = document.querySelectorAll('.robot-checkbox:checked');
+    const checkboxesDownload = document.querySelectorAll('.robot-checkbox-available:checked');
     const robots = [];
-    checkboxes.forEach(cb => {
+    checkboxesRun.forEach(cb => {
         robots.push({ repo: cb.getAttribute('data-repo'), branch: cb.getAttribute('data-branch') });
+    });
+    checkboxesDownload.forEach(cb => {
+        // Ne legyen duplikáció, ha valaki mindkét tabon kijelölte ugyanazt
+        const repo = cb.getAttribute('data-repo');
+        const branch = cb.getAttribute('data-branch');
+        if (!robots.some(r => r.repo === repo && r.branch === branch)) {
+            robots.push({ repo, branch });
+        }
     });
     if (robots.length === 0) {
         alert('Nincs kiválasztott robot.');
         return;
     }
-    
     // Ha csak egy robot van kiválasztva, egyedi futtatásként kezeljük
     if (robots.length === 1) {
         const robot = robots[0];
         executeRobot(robot.repo, robot.branch);
         return;
     }
-    
     // "Fut" státusz megjelenítése minden robotnak azonnal (többes futtatás esetén)
     const container = document.getElementById('selectedRobotsContainer');
     const currentTime = new Date().toLocaleString('hu-HU');
-    
     // Csoport fejléc
     const groupHeader = document.createElement('div');
     groupHeader.className = 'alert alert-info mt-3';
@@ -983,7 +1095,6 @@ function executeAllRobots() {
         </div>
     `;
     container.appendChild(groupHeader);
-    
     // Egyedi kártyák minden robothoz
     robots.forEach(robot => {
         const tempCard = document.createElement('div');
@@ -1006,7 +1117,6 @@ function executeAllRobots() {
         `;
         container.appendChild(tempCard);
     });
-    
     // Szervernek elküldjük a teljes listát
     fetch('/api/execute-bulk', {
         method: 'POST',
@@ -1016,13 +1126,11 @@ function executeAllRobots() {
     .then(r => r.json())
     .then(data => {
         console.log('Szerver válasz (bulk):', data);
-        
         // A csoport fejléc eltávolítása
         const groupHeader = container.querySelector('.alert-info');
         if (groupHeader) {
             groupHeader.remove();
         }
-        
         // Egyedi kártyák frissítése
         if (data.robots) {
             data.robots.forEach((result, index) => {
@@ -1033,7 +1141,6 @@ function executeAllRobots() {
                     const statusIcon = getStatusIcon(result.returncode);
                     const statusText = getStatusText(result.returncode);
                     const statusClass = getStatusClass(result.returncode);
-                    
                     card.className = 'col-12 mb-2';
                     card.innerHTML = `
                         <div class="alert ${statusClass} mt-3">
@@ -1044,7 +1151,6 @@ function executeAllRobots() {
                             </div>
                         </div>
                     `;
-                    
                     // Sikeres futás esetén törölje a robotot a kiválasztottak közül
                     console.log(`Debug bulk: Return code érték: ${result.returncode} (típus: ${typeof result.returncode}) robot: ${robot.repo}/${robot.branch}`);
                     if (result.returncode === 0) {
