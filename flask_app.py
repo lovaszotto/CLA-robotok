@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, send_from_directory
 import json
 import subprocess
 import os
@@ -39,16 +39,19 @@ def run_robot_with_params(repo: str, branch: str):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     safe_repo = (repo or 'unknown').replace('/', '_')
     safe_branch = (branch or 'unknown').replace('/', '_')
-    results_dir = os.path.join('results', f'{safe_repo}__{safe_branch}__{timestamp}')
-    os.makedirs(results_dir, exist_ok=True)
+    # relative directory name (returned to client)
+    results_dir_rel = f'{safe_repo}__{safe_branch}__{timestamp}'
+    # absolute path on disk used for execution
+    results_dir_abs = os.path.join('results', results_dir_rel)
+    os.makedirs(results_dir_abs, exist_ok=True)
 
     suite_path = 'do-selected.robot'
     
     # Elsőbbséget adunk a Python modulos futtatásnak
-    cmd = [PYTHON_EXECUTABLE, '-m', 'robot', '-d', results_dir, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
+    cmd = [PYTHON_EXECUTABLE, '-m', 'robot', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
 
     try:
-        print(f"[ROBOT] Futtatás indul: {repo}/{branch} → {results_dir}")
+        print(f"[ROBOT] Futtatás indul: {repo}/{branch} → {results_dir_abs}")
         print(f"[ROBOT] Parancs: {' '.join(cmd)}")
         # Használjunk cp1252 vagy latin-1 kódolást Windows környezetben a UTF-8 hibák elkerülésére
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='cp1252', errors='ignore')
@@ -58,14 +61,19 @@ def run_robot_with_params(repo: str, branch: str):
             print("[ROBOT][STDOUT]", result.stdout.strip())
         if result.stderr:
             print("[ROBOT][STDERR]", result.stderr.strip())
-        return result.returncode, results_dir, result.stdout, result.stderr
+
+        # Return the relative results dir (client will use /results/<dir>/ to access files)
+        return result.returncode, results_dir_rel, result.stdout, result.stderr
+
     except FileNotFoundError as e:
+        # Python executable or robot module not found
         print(f"[ROBOT] FileNotFoundError: {e}")
         print(f"[ROBOT] Python vagy robot modul nem található")
-        return 1, results_dir, '', f"Robot futtatási hiba: {e}"
+        return 1, results_dir_rel if 'results_dir_rel' in locals() else '', '', f"Robot futtatási hiba: {e}"
+
     except Exception as e:
         print(f"[ROBOT] Hiba a futtatás közben: {e}")
-        return 1, results_dir, '', str(e)
+        return 1, results_dir_rel if 'results_dir_rel' in locals() else '', '', str(e)
 
 def get_repository_data():
     """Lekéri a repository adatokat"""
@@ -314,6 +322,83 @@ def get_results():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/fetch-log')
+def fetch_log():
+    """Visszaadja a results/<safe_dir>/log.html tartalmát JSON-ben.
+
+    Biztonsági okokból csak a 'results' könyvtáron belüli fájlok olvashatók.
+    Paraméter: dir - a results könyvtárhoz képesti almappa (pl. 'repo__branch__timestamp')
+    Válasz: { 'html': "..." } vagy { 'error': '...' }
+    """
+    dir_param = (request.args.get('dir') or '').strip()
+    if not dir_param:
+        return jsonify({'error': 'Hiányzó dir paraméter'}), 400
+
+    base = os.path.abspath('results')
+
+    # Normalize dir_param to avoid creating paths like results/results... when the param
+    # already contains 'results' or is an absolute path.
+    if os.path.isabs(dir_param):
+        requested = os.path.abspath(dir_param)
+    else:
+        # If dir_param starts with 'results/' or 'results\\', strip that prefix
+        if dir_param.startswith('results' + os.sep) or dir_param.startswith('results' + '/'):
+            dir_rel = dir_param.split(os.sep, 1)[-1] if os.sep in dir_param else dir_param.split('/', 1)[-1]
+        else:
+            dir_rel = dir_param
+
+        requested = os.path.abspath(os.path.join(base, dir_rel))
+
+    try:
+        # Ellenőrizzük, hogy requested a base alkönyvtára-e
+        if os.path.commonpath([base, requested]) != base:
+            return jsonify({'error': 'Érvénytelen útvonal', 'dir': dir_param, 'requested': requested}), 400
+    except Exception:
+        return jsonify({'error': 'Érvénytelen útvonal', 'dir': dir_param, 'requested': requested}), 400
+
+    log_file = os.path.join(requested, 'log.html')
+    if not os.path.exists(log_file):
+        return jsonify({'error': f"log.html nem található a megadott mappában", 'dir': dir_param, 'log_file': log_file}), 404
+
+    try:
+        with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+            html = f.read()
+        return jsonify({'html': html})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/results/<path:subpath>')
+def serve_results(subpath):
+    """Serve files from the results directory securely.
+
+    If a directory is requested, try to serve its log.html. Otherwise, serve the specific file.
+    """
+    base = os.path.abspath('results')
+    requested = os.path.abspath(os.path.join(base, subpath))
+
+    try:
+        if os.path.commonpath([base, requested]) != base:
+            return jsonify({'error': 'Érvénytelen útvonal'}), 400
+    except Exception:
+        return jsonify({'error': 'Érvénytelen útvonal'}), 400
+
+    # If requested is a directory, serve log.html if present
+    if os.path.isdir(requested):
+        log_file = os.path.join(requested, 'log.html')
+        if os.path.exists(log_file):
+            return send_from_directory(requested, 'log.html')
+        return jsonify({'error': f'log.html nem található: {log_file}'}), 404
+
+    # Otherwise, serve the requested file if it exists
+    if os.path.exists(requested):
+        dir_name = os.path.dirname(requested)
+        file_name = os.path.basename(requested)
+        return send_from_directory(dir_name, file_name)
+
+    return jsonify({'error': f'Fájl nem található: {requested}'}), 404
 
 def get_html_template():
     """Visszaadja a HTML template-et a parse_repos.py alapján"""
@@ -605,6 +690,24 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="card">
 <div class="card-header text-white" style="background: linear-gradient(135deg, #dc3545, #c82333);">
 <h5 class="mb-0"><i class="bi bi-list-task"></i> Futási Eredmények</h5>
+</div>
+<!-- Modal for showing resultsDir -->
+<div class="modal fade" id="resultsModal" tabindex="-1" aria-labelledby="resultsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="resultsModalLabel">Eredmények</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <iframe id="resultsModalIframe" style="width:100%;height:60vh;border:0;" sandbox="allow-same-origin allow-forms"></iframe>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="resultsModalReturn" data-bs-dismiss="modal">Visszatérés</button>
+                <button type="button" class="btn btn-primary d-none" id="resultsModalOpenNew" title="Megnyitás új lapon">Megnyitás új lapon</button>
+            </div>
+        </div>
+    </div>
 </div>
 <div class="card-body">
 <!-- Keresés és szűrés -->
@@ -1427,7 +1530,100 @@ function viewDetails(resultId) {
 }
 
 function openResults(resultsDir) {
-    alert(`Eredmények megnyitása: ${resultsDir}`);
+    try {
+        const modalEl = document.getElementById('resultsModal');
+        const iframe = document.getElementById('resultsModalIframe');
+        if (!modalEl || !iframe) {
+            alert(resultsDir);
+            return;
+        }
+
+    // Megpróbáljuk a statikus URL-t használni, hogy a relatív assetek is működjenek
+    // A backendünk a /results/<dir>/log.html útvonalon szolgálja ki a fájlt
+    let dir = resultsDir || '';
+        // Eltávolítjuk a vezető 'results/' vagy 'results\' elemet, ha benne van
+        dir = dir.replace(/^results[\\/]+/, '');
+
+        // Encode each path segment to avoid encoding slashes (which breaks the route)
+        const segments = dir.split(/[\\/]+/).filter(Boolean);
+        const encoded = segments.map(s => encodeURIComponent(s)).join('/');
+        const staticUrl = `/results/${encoded}/log.html`;
+
+    console.log('openResults: requesting staticUrl=', staticUrl, 'original resultsDir=', resultsDir);
+
+        // Mutatjuk a modal-t azonnal és betöltünk egy rövid betöltés üzenetet,
+        // most a log fájl elérési útját is megjelenítve a felhasználónak.
+        const modal = new bootstrap.Modal(modalEl);
+        // Link látható szövegét dekódoljuk, hogy ne jelenjenek meg %-kódok (pl. %C3)
+        let visiblePath;
+        try {
+            visiblePath = decodeURIComponent(staticUrl);
+        } catch (e) {
+            visiblePath = staticUrl; // ha valamiért nem dekódolható, fallback
+        }
+        iframe.srcdoc = `
+            <div style="padding:20px;font-family:Arial,Helvetica,sans-serif">
+                Betöltés…<br>
+                <small style="color:#666;">Log: <a href="${staticUrl}" target="_blank" rel="noopener">${visiblePath}</a></small>
+            </div>`;
+        modal.show();
+
+        // Ellenőrizzük, hogy a fájl elérhető-e (200)
+        // Közben a modal footerben található "Megnyitás új lapon" gombot beállítjuk
+        const openBtn = document.getElementById('resultsModalOpenNew');
+        if (openBtn) {
+            openBtn.classList.add('d-none');
+            openBtn.onclick = () => { window.open(staticUrl, '_blank'); };
+        }
+
+        // Tároljuk el globálisan is, ha szükséges későbbi megnyitáshoz
+        window._lastResultsStaticUrl = staticUrl;
+
+        fetch(staticUrl, { method: 'GET' })
+            .then(async resp => {
+                if (resp.ok && resp.headers.get('content-type') && resp.headers.get('content-type').includes('text/html')) {
+                    // Ha jó, állítsuk be az iframe src-ét, így a relatív hivatkozások is betöltődnek
+                    iframe.src = staticUrl;
+                    console.log('openResults: loaded ok, set iframe.src');
+
+                    // Show the open-in-new-tab button
+                    if (openBtn) {
+                        openBtn.classList.remove('d-none');
+                    }
+
+                    // Try to open automatically in a new tab (may be blocked if not a user gesture)
+                    try {
+                        const newWin = window.open(staticUrl, '_blank');
+                        if (newWin) newWin.focus();
+                    } catch (e) {
+                        // ignore popup blockers
+                        console.warn('openResults: auto-open blocked or failed', e);
+                    }
+                } else {
+                    // Ha nem OK, próbáljuk kiolvasni JSON hibát, vagy mutassunk hibát
+                    let body = '';
+                    try {
+                        body = await resp.text();
+                    } catch (e) {
+                        console.error('openResults: failed to read response body', e);
+                    }
+                    try {
+                        const j = JSON.parse(body || '{}');
+                        iframe.srcdoc = `<div style="padding:20px;color:#a00">Hiba: ${j.error || 'Nem található'} (HTTP ${resp.status})</div>`;
+                    } catch (e) {
+                        iframe.srcdoc = `<div style="padding:20px;color:#a00">Nem sikerült betölteni a log.html (HTTP ${resp.status})</div>`;
+                    }
+                    console.warn('openResults: response not ok', resp.status, body);
+                }
+            })
+            .catch(err => {
+                console.error('Hiba a statikus log lekérésekor', err);
+                iframe.srcdoc = `<div style="padding:20px;color:#a00">Hiba a log betöltésekor: ${String(err)}</div>`;
+            });
+    } catch (e) {
+        console.error('openResults hiba:', e);
+        alert(resultsDir);
+    }
 }
 
 // Event listeners
