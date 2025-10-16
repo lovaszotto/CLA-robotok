@@ -1414,18 +1414,25 @@ function displayResults(results) {
                     ${result.results_dir ? `<small class="text-muted">${result.results_dir}</small>` : '-'}
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="viewDetails(${result.id})" title="Részletek">
-                        <i class="bi bi-eye"></i>
-                    </button>
                     ${result.results_dir ? `
-                        <button class="btn btn-sm btn-outline-success ms-1" onclick="openResults('${result.results_dir}')" title="Eredmények megnyitása">
-                            <i class="bi bi-folder-open"></i>
+                        <button class="btn btn-sm btn-success" onclick="openResults('${result.results_dir}')" title="Megnyitás új ablakban" data-bs-toggle="tooltip" data-bs-placement="top">
+                            <i class="bi bi-eye"></i>
                         </button>
-                    ` : ''}
+                    ` : `
+                        <button class="btn btn-sm btn-outline-secondary" onclick="viewDetails(${result.id})" title="Részletek" data-bs-toggle="tooltip" data-bs-placement="top">
+                            <i class="bi bi-eye"></i>
+                        </button>
+                    `}
                 </td>
             </tr>
         `;
     }).join('');
+
+    // Re-initialize Bootstrap tooltips for new elements
+    setTimeout(() => {
+        const tList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tList.forEach(function (el) { try { new bootstrap.Tooltip(el); } catch(e) {} });
+    }, 10);
 }
 
 function displayPagination(pagination) {
