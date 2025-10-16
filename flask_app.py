@@ -29,84 +29,13 @@ def get_downloaded_keys():
     except Exception as e:
         print(f"[INFO] Nem sikerült a letöltött kulcsokat felderíteni: {e}")
     return keys
-
-def run_robot_with_params(repo: str, branch: str):
-    """Futtat egy Robot Framework tesztet a megadott REPO/BRANCH paraméterekkel.
-
-    Visszatér: (returncode, results_dir, stdout, stderr)
-    """
-    # Kimeneti könyvtár létrehozása időbélyeggel, hogy a futások elkülönüljenek
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_repo = (repo or 'unknown').replace('/', '_')
-    safe_branch = (branch or 'unknown').replace('/', '_')
-    # relative directory name (returned to client)
-    results_dir_rel = f'{safe_repo}__{safe_branch}__{timestamp}'
-    # absolute path on disk used for execution
-    results_dir_abs = os.path.join('results', results_dir_rel)
-    os.makedirs(results_dir_abs, exist_ok=True)
-
-    suite_path = 'do-selected.robot'
-    
-    # Elsőbbséget adunk a Python modulos futtatásnak
-    cmd = [PYTHON_EXECUTABLE, '-m', 'robot', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
-
-    try:
-        print(f"[ROBOT] Futtatás indul: {repo}/{branch} → {results_dir_abs}")
-        print(f"[ROBOT] Parancs: {' '.join(cmd)}")
-        # Használjunk cp1252 vagy latin-1 kódolást Windows környezetben a UTF-8 hibák elkerülésére
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='cp1252', errors='ignore')
-        print(f"[ROBOT] Kész: {repo}/{branch} (exit={result.returncode})")
-        # Opcionális: rövid kimenet kiírása a konzolra
-        if result.stdout:
-            print("[ROBOT][STDOUT]", result.stdout.strip())
-        if result.stderr:
-            print("[ROBOT][STDERR]", result.stderr.strip())
-
-        # Return the relative results dir (client will use /results/<dir>/ to access files)
-        return result.returncode, results_dir_rel, result.stdout, result.stderr
-
-    except FileNotFoundError as e:
-        # Python executable or robot module not found
-        print(f"[ROBOT] FileNotFoundError: {e}")
-        print(f"[ROBOT] Python vagy robot modul nem található")
-        return 1, results_dir_rel if 'results_dir_rel' in locals() else '', '', f"Robot futtatási hiba: {e}"
-
-    except Exception as e:
-        print(f"[ROBOT] Hiba a futtatás közben: {e}")
-        return 1, results_dir_rel if 'results_dir_rel' in locals() else '', '', str(e)
-
-def get_repository_data():
-    """Lekéri a repository adatokat"""
-    try:
-        # Először próbálja meg beolvasni a meglévő fájlt
-        if os.path.exists('repos_response.json'):
-            with open('repos_response.json', 'r', encoding='utf-8') as f:
-                return json.load(f)
-        
-        # Ha nincs fájl, futtatja a fetch_github_repos.py szkriptet
-        result = subprocess.run([
-            PYTHON_EXECUTABLE, 
-            'fetch_github_repos.py', 'lovaszotto'
-        ], capture_output=True, text=True, encoding='utf-8')
-        
-        if result.returncode == 0:
-            # Beolvassa a frissen létrehozott fájlt
-            with open('repos_response.json', 'r', encoding='utf-8') as f:
-                return json.load(f)
-        else:
-            print(f"Hiba a repository adatok lekérésében: {result.stderr}")
-            return []
-    except Exception as e:
-        print(f"Kivétel a repository adatok lekérésében: {e}")
-        return []
-
 def get_branches_for_repo(repo_name):
-    """Lekéri egy repository branch-eit"""
+    """Lekéri egy repository branch-eit a git ls-remote segítségével."""
     try:
-        # Git parancs futtatása a branch-ek lekéréséhez
-        result = subprocess.run(['git', 'ls-remote', '--heads', f'https://github.com/lovaszotto/{repo_name}'], 
-                              capture_output=True, text=True, encoding='utf-8')
-        
+        result = subprocess.run(
+            ['git', 'ls-remote', '--heads', f'https://github.com/lovaszotto/{repo_name}'],
+            capture_output=True, text=True, encoding='utf-8', timeout=30
+        )
         if result.returncode == 0:
             branches = []
             for line in result.stdout.strip().split('\n'):
@@ -123,6 +52,44 @@ def get_branches_for_repo(repo_name):
     except Exception as e:
         print(f"Hiba a branch-ek lekérésében: {e}")
         return []
+
+def get_repository_data():
+    """Lekéri a repository adatokat lokálisan tárolt JSON fájlból vagy üres listát ad vissza.
+
+    Eredetileg ez a függvény egy külső szkriptet hívhatott, de itt tartósan egyszerűsítjük:
+    ha létezik a 'repos_response.json', beolvassuk, egyébként üres listát adunk.
+    """
+    try:
+        if os.path.exists('repos_response.json'):
+            with open('repos_response.json', 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return []
+    except Exception as e:
+        print(f"Kivétel a repository adatok lekérésében: {e}")
+        return []
+
+
+def run_robot_with_params(repo: str, branch: str):
+    """Indítja el a Robot Framework futtatást a megadott repo/branch paraméterekkel.
+
+    Visszatér: (returncode, results_dir_rel, stdout, stderr)
+    """
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_repo = (repo or 'unknown').replace('/', '_')
+    safe_branch = (branch or 'unknown').replace('/', '_')
+    results_dir_rel = f'{safe_repo}__{safe_branch}__{timestamp}'
+    results_dir_abs = os.path.join('results', results_dir_rel)
+    os.makedirs(results_dir_abs, exist_ok=True)
+
+    suite_path = 'do-selected.robot'
+    cmd = [PYTHON_EXECUTABLE, '-m', 'robot', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='cp1252', errors='ignore')
+        return result.returncode, results_dir_rel, result.stdout, result.stderr
+    except FileNotFoundError as e:
+        return 1, results_dir_rel, '', f'FileNotFoundError: {e}'
+    except Exception as e:
+        return 1, results_dir_rel, '', str(e)
 
 @app.route('/')
 def index():
@@ -1359,6 +1326,22 @@ document.addEventListener('DOMContentLoaded', function() {
     updateRunButton();
 });
 
+// Close the external results window when 'Visszatérés' is clicked in the modal
+document.addEventListener('DOMContentLoaded', function() {
+    const returnBtn = document.getElementById('resultsModalReturn');
+    if (returnBtn) {
+        returnBtn.addEventListener('click', function() {
+            try {
+                if (window._lastResultsWindow && !window._lastResultsWindow.closed) {
+                    window._lastResultsWindow.close();
+                }
+            } catch (e) {
+                console.warn('Nem sikerült bezárni a külső ablakot:', e);
+            }
+        });
+    }
+});
+
 // Checkbox változásokra figyelés
 document.addEventListener('change', function(e) {
     if (e.target.classList.contains('robot-checkbox')) {
@@ -1551,6 +1534,19 @@ function openResults(resultsDir) {
 
     console.log('openResults: requesting staticUrl=', staticUrl, 'original resultsDir=', resultsDir);
 
+        // Ha korábban megnyitott eredményablak létezik, zárjuk be azonnal (ne kérdezzünk)
+        try {
+            if (window._lastResultsWindow && !window._lastResultsWindow.closed) {
+                window._lastResultsWindow.close();
+            }
+        } catch (e) { /* ignore */ }
+
+        // Próbáljuk meg szinkron módon megnyitni a logot — ha sikerül, NE mutassuk a modalt (azonnal bezárjuk a kérdést)
+        try {
+            const immediate = window.open(staticUrl, '_blank');
+            if (immediate) { window._lastResultsWindow = immediate; try { immediate.focus(); } catch(e){}; return; }
+        } catch (e) { /* popup blocker or other */ }
+
         // Mutatjuk a modal-t azonnal és betöltünk egy rövid betöltés üzenetet,
         // most a log fájl elérési útját is megjelenítve a felhasználónak.
         const modal = new bootstrap.Modal(modalEl);
@@ -1573,7 +1569,12 @@ function openResults(resultsDir) {
         const openBtn = document.getElementById('resultsModalOpenNew');
         if (openBtn) {
             openBtn.classList.add('d-none');
-            openBtn.onclick = () => { window.open(staticUrl, '_blank'); };
+            openBtn.onclick = () => {
+                const w = window.open(staticUrl, '_blank');
+                window._lastResultsWindow = w;
+                try { if (w) w.focus(); } catch(e) {}
+                try { if (w) modal.hide(); } catch(e) { console.warn('Nem sikerült elrejteni a modalt:', e); }
+            };
         }
 
         // Tároljuk el globálisan is, ha szükséges későbbi megnyitáshoz
@@ -1594,7 +1595,11 @@ function openResults(resultsDir) {
                     // Try to open automatically in a new tab (may be blocked if not a user gesture)
                     try {
                         const newWin = window.open(staticUrl, '_blank');
-                        if (newWin) newWin.focus();
+                        if (newWin) {
+                            window._lastResultsWindow = newWin;
+                            try { newWin.focus(); } catch(e) {}
+                            try { modal.hide(); } catch(e) { console.warn('Nem sikerült elrejteni a modalt:', e); }
+                        }
                     } catch (e) {
                         // ignore popup blockers
                         console.warn('openResults: auto-open blocked or failed', e);
