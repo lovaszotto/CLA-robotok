@@ -16,11 +16,18 @@ ${REPO_PATH}      ${EMPTY}
 ${BRANCH}    CPS-Mezo-ellenor
 ${BRANCH_PATH}    ${EMPTY}
 
+#developer módban csak letöltjük a robotokat, de nem telepítjük
+${SANDBOX_MODE}         True
+${SANDBOX_ROBOTS}       c:/Users/oLovasz/MyRobotFramework/SandboxRobots/
+
 # A robotok letöltési könyvtárai
 ${DOWNLOADED_ROBOTS}    c:/Users/oLovasz/MyRobotFramework/TestDownloadedRobots/
 
 # A telepítési könyvtárai
 ${INSTALLED_ROBOTS}     c:/Users/oLovasz/MyRobotFramework/TestInstalledRobots/
+
+# A kuka könyvtár helye
+${TRASH_DIR}            c:/Users/oLovasz/MyRobotFramework/Trash/
 
 # Python executable változó (Robot Framework környezetben)
 ${PYTHON_EXEC}        C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe

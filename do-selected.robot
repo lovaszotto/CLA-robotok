@@ -18,11 +18,19 @@ Kiírás konzolra paraméterekből
     Set Global Variable    ${GIT_URL}    ${GIT_URL}
     Log To Console     Repository: ${GIT_URL}
     Log To Console     Branch: ${BRANCH}
+    #trash könyvtár létrehozása, ha nem létezik
+    Create Directory    ${TRASH_DIR}
     Log To Console     =========================\n
+
 Letöltöttség ellenőrzése
     [Documentation]    Létezik-e mappa a .
     Log To Console     \n=== LETÖLTÖTTSÉG ELLENŐRZÉSE ===  ${WORKFLOW_STATUS}
-    ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}    
+    IF        ${SANDBOX_MODE} == True
+         ${REPO_PATH}=     Set Variable    ${SANDBOX_ROBOTS}/${REPO}
+    ELSE
+         ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}/${REPO} 
+    END
+      
     ${BRANCH_PATH}=   Set Variable    ${REPO_PATH}/${BRANCH}
     Set Global Variable    ${REPO_PATH}    ${REPO_PATH}
     Set Global Variable    ${BRANCH_PATH}    ${BRANCH_PATH}
@@ -30,7 +38,6 @@ Letöltöttség ellenőrzése
     Log To Console     Full Repository: ${REPO_PATH}
     Log To Console     Full Branch: ${BRANCH_PATH}
     #könyvtár létezésének ellenőrzése
-    Set Global Variable    ${WORKFLOW_STATUS}    STARTED
     ${downloaded_repo_exists}=     Run Keyword And Return Status    OperatingSystem.Directory Should Exist     ${REPO_PATH}
     ${downloaded_robot_exists}=    Run Keyword And Return Status    OperatingSystem.Directory Should Exist    ${BRANCH_PATH}
     
@@ -38,7 +45,15 @@ Letöltöttség ellenőrzése
         #visszatér a tesztből
         #todo verzió alapján újra letöltés
         Log To Console     Mindkét könyvtár létezik! 
-        Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+      
+        #töröljük a sandbox tartalmát és újratelepítjük
+        IF    ${SANDBOX_MODE} == True
+            Log To Console     Sandbox módban vagyunk, töröljük a könyvtárt:${REPO_PATH}
+            Move Directory    ${BRANCH_PATH}         ${TRASH_DIR}        
+            Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'
+        ELSE
+          Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+        END
     ELSE
          Log To Console     Könyvtárak nem léteznek! 
         Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'    
@@ -74,7 +89,13 @@ Branch klónozása
     #Log To Console    \nBranch klónozása WORKFLOW_STATUS, ha 'TO_BE_CLONE' = ${WORKFLOW_STATUS}    
     IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
          Log To Console     ======KLONOZÁS GIT-BŐL=====${WORKFLOW_STATUS}
-        ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+         IF    ${SANDBOX_MODE} == True
+             ${TARGET_DIR}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}
+        ELSE
+             ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+         END
+         
+        #${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
         Log To Console     \nGit parancs: git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}
         
         # Git clone parancs futtatása felugró cmd ablakban
@@ -82,7 +103,11 @@ Branch klónozása
         ${result}=    Run Process    cmd    /c    start    /wait    cmd    /c    git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}    shell=True    timeout=300s
         Run Keyword If    ${result.rc} != 0    Log To Console    Git clone nem sikerült (timeout vagy hiba), de folytatjuk: ${result.stderr}
         Run Keyword If    ${result.rc} == 0    Log To Console    Git clone sikeresen befejeződött
-        Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
+           IF    ${SANDBOX_MODE} == True
+                Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
+           ELSE
+                Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
+            END
      END
 
 Klónozás sikeresség ellenőrzése

@@ -499,9 +499,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
             </button>
         </div>
     </div>
-    <div>
-        <span><i class="bi bi-check-circle-fill text-success"></i> Branch név</span>
-    </div>
+    <!-- Branch név label eltávolítva -->
     <!-- Repository kártyák -->
     <div class="row" id="repoContainer">
     {% for repo in repos %}
@@ -567,9 +565,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
             </button>
         </div>
     </div>
-    <div>
-        <span><i class="bi bi-download text-secondary"></i> Branch név</span>
-    </div>
+    <!-- Branch név label eltávolítva -->
     <!-- Repository kártyák -->
     <div class="row" id="repoContainerAvailable">
     {% for repo in repos %}
