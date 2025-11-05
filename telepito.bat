@@ -1,21 +1,21 @@
 @echo off
 REM =====================================================
-REM  IKK02 FORMAI ELLENORZO RENDSZER - TELEPITO v2.0
-REM  Robot Framework alapu automatizált dokumentum
-REM  formálellenőrzés és plágium detektálás
+REM  CLA-SSISTANT TELEPITO v3.0
+REM  GitHub Repository kezelő Robot Framework rendszer
+REM  Automatizált Git műveletek és repository kezelés
 REM =====================================================
 setlocal EnableDelayedExpansion
 
 echo.
 echo =====================================================
-echo   IKK02 FORMAI ELLENORZO RENDSZER TELEPITO v2.0
+echo   CLA-SSISTANT TELEPITO v3.0
 echo   
 echo   Funkcionalitas:
-echo   - Automatikus DOCX formai ellenorzes
-echo   - Robot Framework tesztvezerlese  
-echo   - Excel export es riportkeszites
+echo   - GitHub repository letoltes es kezeles
+echo   - Robot Framework automatizacio  
+echo   - Git parancsok vezerles
 echo   - Web interfesz tamogatas
-echo   - Email ertesitesek (Outlook COM)
+echo   - Repository lista lekeres API-val
 echo =====================================================
 echo.
 
@@ -82,10 +82,12 @@ if not exist "%TARGET_DIR%" (
 echo.
 echo Fajlok masolasa...
 
-REM Szukseges robot fajlok masolasa
+REM CLA-ssistant robot fajlok masolasa
 
-REM Újabb robot és segédfájlok másolása, ha léteznek
-if exist "CLA-Developer.robot" copy "CLA-Developer.robot" "%TARGET_DIR%\"
+REM Fo robot fajl masolasa
+copy "CLA-ssistant_main.robot" "%TARGET_DIR%\"
+
+REM Python segédfájlok másolása
 if exist "do-selected.robot" copy "do-selected.robot" "%TARGET_DIR%\"
 if exist "fetch_github_repos.py" copy "fetch_github_repos.py" "%TARGET_DIR%\"
 if exist "flask_app.py" copy "flask_app.py" "%TARGET_DIR%\"
@@ -98,23 +100,16 @@ if exist "stop.bat" copy "stop.bat" "%TARGET_DIR%\"
 if exist "log.html" copy "log.html" "%TARGET_DIR%\"
 if exist "output.xml" copy "output.xml" "%TARGET_DIR%\"
 if exist "report.html" copy "report.html" "%TARGET_DIR%\"
+if exist "PIPE" copy "PIPE" "%TARGET_DIR%\"
 
 REM Konfiguracios fajlok masolasa
-copy "TELEPITO_UTMUTATO.txt" "%TARGET_DIR%\"
-copy "start.bat" "%TARGET_DIR%\"
+if exist "start.bat" copy "start.bat" "%TARGET_DIR%\"
 
 REM Markdown dokumentacio fajlok masolasa
-copy "README.md" "%TARGET_DIR%\"
-copy "DOKUMENTACIO.md" "%TARGET_DIR%\"
-copy "TECHNIKAI_ATTEKINTES.md" "%TARGET_DIR%\"
-copy "GYORS_REFERENCIA.md" "%TARGET_DIR%\"
-copy "KONZOL_KOMPATIBILITAS.md" "%TARGET_DIR%\"
-copy "WEBES_INDITASI_UTMUTATO.md" "%TARGET_DIR%\"
+if exist "README.md" copy "README.md" "%TARGET_DIR%\"
 
-REM További fájlok másolása
-copy "_VERSION.rtf" "%TARGET_DIR%\"
-copy "Szóismétlések.xlsx" "%TARGET_DIR%\"
-copy "ToDo.xlsx" "%TARGET_DIR%\"
+REM Setup script masolasa
+if exist "Setup-CLAssistant.bat" copy "Setup-CLAssistant.bat" "%TARGET_DIR%\"
 
 REM Libraries mappa masolasa
 if exist "libraries" (
@@ -128,54 +123,44 @@ if exist "resources" (
     xcopy "resources" "%TARGET_DIR%\resources" /E /I /Y
 )
 
-REM Test mappa masolasa
-if exist "test" (
-    echo Teszt konyvtar masolasa...
-    xcopy "test" "%TARGET_DIR%\test" /E /I /Y
+REM Tests mappa masolasa
+if exist "tests" (
+    echo Tests konyvtar masolasa...
+    xcopy "tests" "%TARGET_DIR%\tests" /E /I /Y
 )
 
-REM Web mappa masolasa (webes indításhoz)
-if exist "web" (
-    echo Web konyvtar masolasa...
-    xcopy "web" "%TARGET_DIR%\web" /E /I /Y
+REM Results mappa masolasa (ha van eredmeny)
+if exist "results" (
+    echo Results konyvtar masolasa...
+    xcopy "results" "%TARGET_DIR%\results" /E /I /Y
 )
 
-REM Sablonok mappa masolasa
-if exist "sablonok" (
-    echo Sablonok konyvtar masolasa...
-    xcopy "sablonok" "%TARGET_DIR%\sablonok" /E /I /Y
-)
-
-REM SqlCommands mappa masolasa
-if exist "SqlCommands" (
-    echo SqlCommands konyvtar masolasa...
-    xcopy "SqlCommands" "%TARGET_DIR%\SqlCommands" /E /I /Y
-)
+REM __pycache__ mappa kihagyasa (Python cache fajlok)
 
 echo Fajlok sikeresen masolva.
 
-REM Ellenorizzuk es javitsuk a hianyzo fajlokat
-echo Hianyzo fajlok ellenorzese es potellepites...
+REM CLA-ssistant specifikus fajlok ellenorzese
+echo CLA-ssistant fajlok ellenorzese...
 
-if not exist "%TARGET_DIR%\libraries\DocxReader.py" (
-    echo DocxReader.py hianyzo, ujra letrehozas...
-    copy "libraries\DocxReader.py" "%TARGET_DIR%\libraries\"
+if not exist "%TARGET_DIR%\CLA-ssistant_main.robot" (
+    echo CLA-ssistant_main.robot hianyzo, ujra letrehozas...
+    copy "CLA-ssistant_main.robot" "%TARGET_DIR%\"
 )
 
-if not exist "%TARGET_DIR%\libraries\web_server.py" (
-    echo web_server.py hianyzo, ujra letrehozas...
-    copy "libraries\web_server.py" "%TARGET_DIR%\libraries\"
+if not exist "%TARGET_DIR%\fetch_github_repos.py" (
+    echo fetch_github_repos.py hianyzo, ujra letrehozas...
+    copy "fetch_github_repos.py" "%TARGET_DIR%\"
 )
 
-REM Results es output konyvtarak letrehozasa
+if not exist "%TARGET_DIR%\parse_repos.py" (
+    echo parse_repos.py hianyzo, ujra letrehozas...
+    copy "parse_repos.py" "%TARGET_DIR%\"
+)
+
+REM Results konyvtar letrehozasa
 if not exist "%TARGET_DIR%\results" (
     echo Results konyvtar letrehozasa...
     mkdir "%TARGET_DIR%\results"
-)
-
-if not exist "%TARGET_DIR%\results\docx_dump" (
-    echo DOCX dump konyvtar letrehozasa...
-    mkdir "%TARGET_DIR%\results\docx_dump"
 )
 
 echo.
@@ -199,18 +184,15 @@ if not exist "rf_env" (
 echo.
 
 REM Virtualis kornyezet aktivalasa es csomagok telepitese
-echo Csomagok telepitese...
+echo CLA-ssistant csomagok telepitese...
 REM rf_env\Scripts\activate (nem szükséges, pip elérési út miatt)
 rf_env\Scripts\pip.exe install --upgrade pip
 rf_env\Scripts\pip.exe install robotframework
-rf_env\Scripts\pip.exe install robotframework-databaselibrary
-rf_env\Scripts\pip.exe install openpyxl
-rf_env\Scripts\pip.exe install python-docx
-rf_env\Scripts\pip.exe install pywin32
-rf_env\Scripts\pip.exe install lxml
-rf_env\Scripts\pip.exe install flask
-rf_env\Scripts\pip.exe install pillow
+rf_env\Scripts\pip.exe install robotframework-seleniumlibrary
 rf_env\Scripts\pip.exe install requests
+rf_env\Scripts\pip.exe install flask
+rf_env\Scripts\pip.exe install selenium
+rf_env\Scripts\pip.exe install webdriver-manager
 
 if errorlevel 1 (
     echo HIBA: Csomagok telepitese sikertelen!
@@ -247,10 +229,10 @@ echo     echo Results konyvtar letrehozasa... >> start.bat
 echo     mkdir "results" >> start.bat
 echo ^) >> start.bat
 echo. >> start.bat
-echo echo Robot Framework teszt futtatasa... >> start.bat
-echo echo Formai ellenorzes futtatasa ^(PLG-00-main.robot^)... >> start.bat
+echo Robot Framework teszt futtatasa... >> start.bat
+echo CLA-ssistant futtatasa ^(CLA-ssistant_main.robot^)... >> start.bat
 echo. >> start.bat
-echo rf_env\Scripts\robot.exe --outputdir results PLG-00-main.robot >> start.bat
+echo rf_env\Scripts\robot.exe --outputdir results CLA-ssistant_main.robot >> start.bat
 echo. >> start.bat
 echo if errorlevel 1 ^( >> start.bat
 echo     echo HIBA: A teszt futtatasa sikertelen! >> start.bat
@@ -271,59 +253,60 @@ echo exit >> start.bat
 
 echo.
 echo =========================================
-echo TELEPITES SIKERES!
+echo CLA-SSISTANT TELEPITES SIKERES!
 echo.
 echo Telepitesi hely: %TARGET_DIR%
 echo.
 echo Telepitett komponensek:
-echo - Robot Framework (tesztvezerlesi keretrendszer)
-echo - Database Library (adatbazis kezeles)
-echo - OpenPyXL (Excel export es kezeles)
-echo - Python-docx (DOCX olvasas es iras)
-echo - PyWin32 (Windows COM objektumok - email kuldes)
-echo - LXML (XML/HTML feldolgozo)
+echo - Robot Framework (automatizalasi keretrendszer)
+echo - Selenium Library (weboldal automatizalas)
+echo - Requests (HTTP API kliensek)
 echo - Flask (webes szerver)
-echo - Pillow (kepfeldolgozo)
-echo - Requests (HTTP kliens)
-echo - Teljes projekt fajlok (robot, libraries, resources)
-echo - Web interfesz (robot_runner.html)
-echo - Sablonok es dokumentacio
+echo - Selenium WebDriver (bongeszo vezerlese)
+echo - WebDriver Manager (driver automatikus kezeles)
+echo - CLA-ssistant robot fajlok
+echo - GitHub API Python scriptek
+echo - Repository kezelo eszkozok
 echo - start.bat futtato script
 echo.
 echo Hasznalat:
 echo 1. Konzol modu: Menjen a telepitesi konyvtarba: %TARGET_DIR%
 echo    Es futtassa: start.bat
-echo 2. Webes modu: Nyissa meg: web\robot_runner.html
-echo    Vagy futtassa: rf_env\Scripts\python.exe libraries\web_server.py
+echo 2. Python script modu: 
+echo    rf_env\Scripts\python.exe fetch_github_repos.py lovaszotto
+echo    rf_env\Scripts\python.exe parse_repos.py
 echo.
 echo Konfiguracio: 
-echo - Duplikacio.config fajl szerkesztese (email, mappak)
-echo - Sablonok: sablonok\ konyvtar
-echo - Tesztfajlok: test\ konyvtar
+echo - GitHub repository tulajdonos: lovaszotto
+echo - Fo robot fajl: CLA-ssistant_main.robot
+echo - Python segédfájlok: fetch_github_repos.py, parse_repos.py
 echo - Eredmenyek: results\ konyvtar
-echo - Dokumentacio: README.md, DOKUMENTACIO.md
+echo - Dokumentacio: README.md
 echo.
-echo Webes inditas: WEBES_INDITASI_UTMUTATO.md
+echo Repository kezeles: CLA-ssistant_main.robot
 echo =========================================
 echo.
-echo webserver.bat fajl letrehozasa webes inditashoz...
+echo github_api.bat fajl letrehozasa GitHub API inditashoz...
 
-REM webserver.bat fajl letrehozasa
-echo @echo off > webserver.bat
-echo REM ========================================= >> webserver.bat
-echo REM  FORMAI ELLENORZO RENDSZER - WEB SZERVER >> webserver.bat
-echo REM ========================================= >> webserver.bat
-echo echo. >> webserver.bat
-echo echo ========================================= >> webserver.bat
-echo echo   WEBES ROBOT FRAMEWORK INDITO >> webserver.bat
-echo echo   Flask szerver port: 5000 >> webserver.bat
-echo echo ========================================= >> webserver.bat
-echo echo. >> webserver.bat
-echo. >> webserver.bat
-echo echo Web szerver inditasa... >> webserver.bat
-echo echo Nyissa meg a bongeszoben: http://localhost:5000 >> webserver.bat
-echo echo Vagy nyissa meg a web\robot_runner.html fajlt >> webserver.bat
-echo echo. >> webserver.bat
-echo rf_env\Scripts\python.exe libraries\web_server.py >> webserver.bat
+REM github_api.bat fajl letrehozasa
+echo @echo off > github_api.bat
+echo REM ========================================= >> github_api.bat
+echo REM  CLA-SSISTANT - GITHUB API KEZELO >> github_api.bat
+echo REM ========================================= >> github_api.bat
+echo echo. >> github_api.bat
+echo echo ========================================= >> github_api.bat
+echo echo   GITHUB REPOSITORY LISTA LEKERES >> github_api.bat
+echo echo   API Owner: lovaszotto >> github_api.bat
+echo echo ========================================= >> github_api.bat
+echo echo. >> github_api.bat
+echo. >> github_api.bat
+echo echo GitHub repository lista lekerese... >> github_api.bat
+echo rf_env\Scripts\python.exe fetch_github_repos.py lovaszotto >> github_api.bat
+echo echo. >> github_api.bat
+echo echo Repository-k es branch-ek feldolgozasa... >> github_api.bat
+echo rf_env\Scripts\python.exe parse_repos.py >> github_api.bat
+echo echo. >> github_api.bat
+echo echo Eredmeny HTML generalva: repository_branches_table.html >> github_api.bat
+echo pause >> github_api.bat
 
 
