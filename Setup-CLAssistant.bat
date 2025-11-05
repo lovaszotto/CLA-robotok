@@ -94,8 +94,12 @@ echo   - Branch: CLA-ssistant
 echo   - Cel konyvtar: %claRobotsPath%
 echo.
 
+REM Letrehozzuk a cel konyvtarakat
+mkdir "%claRobotsPath%" >nul 2>&1
+mkdir "%claRobotsPath%\CLA-ssistant" >nul 2>&1
+
 cd /d "%myRobotPath%\DownloadedRobots"
-git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git CLA-robotok-temp 2>&1
+git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git "%claRobotsPath%\CLA-ssistant" 2>&1
 if errorlevel 1 (
     echo   HIBA: Nem sikerult letolteni a projektet!
     echo   Lehetseges okok:
@@ -106,19 +110,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo   - Projekt sikeresen letoltve
-
-echo   - Konyvtar struktura rendezese...
-REM Letrehozzuk a cel konyvtarakat
-mkdir "%claRobotsPath%" >nul 2>&1
-mkdir "%claRobotsPath%\CLA-ssistant" >nul 2>&1
-
-REM Mozgatjuk a fajlokat a CLA-ssistant almappaba
-echo   - Fajlok mozgatasa CLA-ssistant almappaba...
-xcopy "CLA-robotok-temp\*.*" "%claRobotsPath%\CLA-ssistant\" /E /I /Y >nul 2>&1
-
-REM Ideiglenes konyvtar torlese
-rd /s /q "CLA-robotok-temp" >nul 2>&1
+echo   - Projekt sikeresen letoltve kozvetlenul a CLA-ssistant konyvtarba
 
 echo   - Ellenorzés: telepito.bat keresése...
 if exist "%claRobotsPath%\CLA-ssistant\telepito.bat" (
