@@ -2,12 +2,34 @@ from flask import Flask, render_template_string, jsonify, request, send_from_dir
 import json
 import subprocess
 import os
+import sys
 from datetime import datetime
 
 app = Flask(__name__)
 
-# Globális változók
-PYTHON_EXECUTABLE = 'C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe'
+# Globális változók - dinamikus Python executable meghatározása
+def get_python_executable():
+    """Meghatározza a megfelelő Python executable útvonalát.
+    
+    Prioritási sorrend:
+    1. Virtuális környezet (rf_env\\Scripts\\python.exe)
+    2. Aktuális Python interpreter (sys.executable)
+    3. Rendszer PATH-ban található python
+    """
+    # 1. Virtuális környezet ellenőrzése
+    venv_python = os.path.join('rf_env', 'Scripts', 'python.exe')
+    if os.path.exists(venv_python):
+        return os.path.abspath(venv_python)
+    
+    # 2. Aktuális Python interpreter
+    if sys.executable:
+        return sys.executable
+    
+    # 3. Fallback - rendszer python
+    return 'python'
+
+PYTHON_EXECUTABLE = get_python_executable()
+print(f"[INFO] Használt Python executable: {PYTHON_EXECUTABLE}")
 
 def get_downloaded_keys():
     """Felderíti a results mappában a korábbi futások alapján, mely REPO/BRANCH párokhoz tartozik eredmény.
@@ -140,14 +162,17 @@ def api_execute():
     data = request.get_json(silent=True) or {}
     repo = (data.get('repo') or '').strip()
     branch = (data.get('branch') or '').strip()
-    print(f"EXECUTE REQUEST: {repo}/{branch}")
+    print(f"[EXECUTE] Futtatás kérés: {repo}/{branch}")
     # Tényleges futtatás indítása Robot Framework-kel
     if not repo or not branch:
+        print(f"[EXECUTE] HIBA: Hiányzó paraméterek - repo: '{repo}', branch: '{branch}'")
         return jsonify({"status": "error", "message": "Hiányzó repo vagy branch"}), 400
     
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
     rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
     status = "success" if rc == 0 else "failed"
+    print(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
     
     # Eredmény tárolása
     result_entry = {
@@ -161,6 +186,9 @@ def api_execute():
         'type': 'single'
     }
     execution_results.append(result_entry)
+    print(f"[EXECUTE] Eredmény hozzáadva: ID={result_entry['id']}, összes eredmény: {len(execution_results)}")
+    save_execution_results()  # Mentés fájlba
+    print(f"[EXECUTE] Eredmény elmentve fájlba")
     
     return jsonify({
         "status": "ok" if rc == 0 else "fail",
@@ -213,6 +241,11 @@ def api_execute_bulk():
                 "status": "error",
                 "message": "Hiányzó repo vagy branch"
             })
+    
+    # Bulk futtatás után mentés
+    if printed:
+        save_execution_results()
+    
     return jsonify({"status": "ok", "count": len(printed), "robots": printed})
 
 @app.route('/favicon.ico')
@@ -232,14 +265,51 @@ def shutdown():
     return jsonify({"status": "shutting down"})
 
 # Globális eredmények tárolás
-execution_results = []
+RESULTS_FILE = 'execution_results.json'
+
+def load_execution_results():
+    """Betölti az execution_results-okat fájlból."""
+    try:
+        if os.path.exists(RESULTS_FILE):
+            with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
+                results = json.load(f)
+                print(f"[INFO] {len(results)} korábbi futási eredmény betöltve")
+                return results
+    except Exception as e:
+        print(f"[WARNING] Hiba az eredmények betöltésénél: {e}")
+    return []
+
+def save_execution_results():
+    """Elmenti az execution_results-okat fájlba."""
+    try:
+        with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(execution_results, f, ensure_ascii=False, indent=2)
+        print(f"[INFO] {len(execution_results)} futási eredmény elmentve")
+    except Exception as e:
+        print(f"[WARNING] Hiba az eredmények mentésénél: {e}")
+
+# Eredmények betöltése alkalmazás indításkor
+execution_results = load_execution_results()
 
 @app.route('/api/clear-results', methods=['POST'])
 def clear_results():
     """Törli az összes tárolt futási eredményt"""
     global execution_results
     execution_results = []
+    save_execution_results()  # Üres lista mentése
     return jsonify({"status": "success", "message": "Eredmények törölve"})
+
+@app.route('/api/debug/results')
+def debug_results():
+    """Debug endpoint az eredmények állapotának ellenőrzésére"""
+    return jsonify({
+        "current_dir": os.getcwd(),
+        "results_file_path": os.path.abspath(RESULTS_FILE),
+        "results_file_exists": os.path.exists(RESULTS_FILE),
+        "execution_results_count": len(execution_results),
+        "execution_results_sample": execution_results[:3] if execution_results else [],
+        "python_executable": PYTHON_EXECUTABLE
+    })
 
 @app.route('/api/results', methods=['GET'])
 def get_results():
@@ -1043,11 +1113,18 @@ function executeRobot(repo, branch) {
             console.log(`Sikertelen futás: ${repo}/${branch} - returncode: ${data.returncode}, status: ${data.status}`);
         }
         
+        // Eredmények lista frissítése a futtatás után
+        console.log('Eredmények lista frissítése...');
+        loadResults();
+        
         setTimeout(() => msg.remove(), 10000);
     })
     .catch(err => {
         console.error('Hiba (execute):', err);
         alert('Hiba történt a szerver hívása közben.');
+        
+        // Hiba esetén is frissítsük az eredményeket
+        loadResults();
     });
 }
 
@@ -1167,6 +1244,10 @@ function executeAllRobots() {
                 }
             });
         }
+        
+        // Eredmények lista frissítése a tömeges futtatás után
+        console.log('Eredmények lista frissítése (bulk után)...');
+        loadResults();
     })
     .catch(err => {
         console.error('Tömeges futtatás hiba:', err);
@@ -1203,6 +1284,10 @@ function executeAllRobots() {
                 </div>
             `;
         }
+        
+        // Hiba esetén is frissítsük az eredményeket
+        console.log('Eredmények lista frissítése (bulk hiba után)...');
+        loadResults();
     });
 }
 

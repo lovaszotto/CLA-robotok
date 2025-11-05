@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "timestamp": "2025-11-05 15:29:07",
+    "repo": "test-repo",
+    "branch": "test-branch",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "test_results",
+    "type": "test"
+  }
+]

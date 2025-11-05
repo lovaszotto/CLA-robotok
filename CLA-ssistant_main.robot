@@ -4,6 +4,10 @@ Library           OperatingSystem
 Library           SeleniumLibrary
 Library           Process
 Library           BuiltIn
+Library           libraries/PythonUtils.py
+Resource          resources/variables.robot
+Resource          resources/setup.robot
+Suite Setup       Initialize Python Environment
 Suite Teardown    Log To Console    Git parancsok végrehajtva    
 
 *** Test Cases ***
@@ -29,7 +33,7 @@ Robot letöltése a központi nyilvántartásból
     #Log To Console    Repository lista lekérése Git parancsokkal...
     
     # GitHub API hívás a repository lista lekéréséhez Python script-tel UTF-8 kódolással
-    ${result}=    Run Process    python    fetch_github_repos.py    lovaszotto    shell=True
+    ${result}=    Run Process    ${PYTHON_EXEC}    fetch_github_repos.py    lovaszotto    shell=True
     Log To Console    GitHub API válasz státusz: ${result.rc}
     
     # Ha a Python script sikeres volt
@@ -39,7 +43,7 @@ Robot letöltése a központi nyilvántartásból
         
         # JSON feldolgozás Python script-tel - repository-k és branch-ek listázása
         Log To Console    Repository-k és branch-ek lekérése...
-        ${python_result}=    Run Process    python    parse_repos.py    shell=True    timeout=120s
+        ${python_result}=    Run Process    ${PYTHON_EXEC}    parse_repos.py    shell=True    timeout=120s
         Log To Console    ${python_result.stdout}
         
         IF    '${python_result.stderr}' != ''

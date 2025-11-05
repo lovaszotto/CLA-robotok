@@ -21,16 +21,17 @@ ${SANDBOX_MODE}         ${False}
 ${SANDBOX_ROBOTS}       c:/Users/oLovasz/MyRobotFramework/SandboxRobots/
 
 # A robotok letöltési könyvtárai
-${DOWNLOADED_ROBOTS}    c:/Users/oLovasz/MyRobotFramework/TestDownloadedRobots/
+${DOWNLOADED_ROBOTS}    c:/Users/oLovasz/MyRobotFramework/DownloadedRobots/
 
 # A telepítési könyvtárai
-${INSTALLED_ROBOTS}     c:/Users/oLovasz/MyRobotFramework/TestInstalledRobots/
+${INSTALLED_ROBOTS}     c:/Users/oLovasz/MyRobotFramework/InstalledRobots/
 
 # A kuka könyvtár helye
 ${TRASH_DIR}            c:/Users/oLovasz/MyRobotFramework/Trash/
 
-# Python executable változó (Robot Framework környezetben)
-${PYTHON_EXEC}        C:/Users/oLovasz/AppData/Local/Programs/Python/Python313/python.exe
+# Python executable változó (dinamikusan meghatározva)
+# Prioritási sorrend: 1. rf_env virtuális környezet, 2. rendszer python
+${PYTHON_EXEC}        ${EMPTY}
 
 # Állapot jelző státusz (dinamikusan állítjuk be)
 ${WORKFLOW_STATUS}         ${EMPTY}
