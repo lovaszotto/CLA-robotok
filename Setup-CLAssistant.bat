@@ -67,21 +67,12 @@ echo.
 REM CLA-robotok konyvtar ellenorzese es letrehozasa
 set "claRobotsPath=%myRobotPath%\DownloadedRobots\CLA-robotok"
 echo [4/7] %claRobotsPath% konyvtar ellenorzese...
-if not exist "%claRobotsPath%" (
-    echo   - CLA-robotok konyvtar letrehozasa...
-    mkdir "%claRobotsPath%" >nul 2>&1
-    if errorlevel 1 (
-        echo   HIBA: Nem sikerult letrehozni a CLA-robotok konyvtarat!
-        pause
-        exit /b 1
-    )
-    echo   - CLA-robotok konyvtar sikeresen letrehozva
-) else (
+if exist "%claRobotsPath%" (
     echo   - CLA-robotok konyvtar mar letezik
     echo   - Meglevo tartalom torlese...
     rd /s /q "%claRobotsPath%" >nul 2>&1
-    mkdir "%claRobotsPath%" >nul 2>&1
 )
+echo   - CLA-robotok konyvtar kesz a letoltesre
 echo.
 
 REM Git ellenorzese
@@ -104,17 +95,25 @@ echo   - Cel konyvtar: %claRobotsPath%
 echo.
 
 cd /d "%myRobotPath%\DownloadedRobots"
-git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git >nul 2>&1
+git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git CLA-robotok 2>&1
 if errorlevel 1 (
     echo   HIBA: Nem sikerult letolteni a projektet!
     echo   Lehetseges okok:
     echo   - Nincs internetkapcsolat
     echo   - A repository nem elerheto
     echo   - Nincs jogosultsag a repository-hoz
+    echo   - A branch nem letezik
     pause
     exit /b 1
 )
 echo   - Projekt sikeresen letoltve
+echo   - Ellenorzés: telepito.bat keresése...
+if exist "%claRobotsPath%\telepito.bat" (
+    echo   - telepito.bat megtalálva a fő könyvtárban
+) else (
+    echo   - FIGYELEM: telepito.bat nem található!
+    echo   - Repository tartalom ellenőrzése szükséges
+)
 echo.
 
 REM telepito.bat futtatasa
