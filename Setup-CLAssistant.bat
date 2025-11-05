@@ -95,7 +95,7 @@ echo   - Cel konyvtar: %claRobotsPath%
 echo.
 
 cd /d "%myRobotPath%\DownloadedRobots"
-git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git CLA-robotok 2>&1
+git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git CLA-robotok-temp 2>&1
 if errorlevel 1 (
     echo   HIBA: Nem sikerult letolteni a projektet!
     echo   Lehetseges okok:
@@ -107,9 +107,22 @@ if errorlevel 1 (
     exit /b 1
 )
 echo   - Projekt sikeresen letoltve
+
+echo   - Konyvtar struktura rendezese...
+REM Letrehozzuk a cel konyvtarakat
+mkdir "%claRobotsPath%" >nul 2>&1
+mkdir "%claRobotsPath%\CLA-ssistant" >nul 2>&1
+
+REM Mozgatjuk a fajlokat a CLA-ssistant almappaba
+echo   - Fajlok mozgatasa CLA-ssistant almappaba...
+xcopy "CLA-robotok-temp\*.*" "%claRobotsPath%\CLA-ssistant\" /E /I /Y >nul 2>&1
+
+REM Ideiglenes konyvtar torlese
+rd /s /q "CLA-robotok-temp" >nul 2>&1
+
 echo   - Ellenorzés: telepito.bat keresése...
-if exist "%claRobotsPath%\telepito.bat" (
-    echo   - telepito.bat megtalálva a fő könyvtárban
+if exist "%claRobotsPath%\CLA-ssistant\telepito.bat" (
+    echo   - telepito.bat megtalálva a CLA-ssistant könyvtárban
 ) else (
     echo   - FIGYELEM: telepito.bat nem található!
     echo   - Repository tartalom ellenőrzése szükséges
@@ -118,12 +131,12 @@ echo.
 
 REM telepito.bat futtatasa
 echo [7/7] telepito.bat script futtatasa...
-set "telepitoPath=%claRobotsPath%\telepito.bat"
+set "telepitoPath=%claRobotsPath%\CLA-ssistant\telepito.bat"
 if exist "%telepitoPath%" (
     echo   - telepito.bat megtalalva: %telepitoPath%
     echo   - Script inditasa...
     echo.
-    cd /d "%claRobotsPath%"
+    cd /d "%claRobotsPath%\CLA-ssistant"
     call "%telepitoPath%"
     if errorlevel 1 (
         echo.
@@ -145,23 +158,23 @@ echo       Setup befejezve sikeresen!
 echo ========================================
 echo.
 echo A CLA-robotok projekt telepitve lett ide:
-echo %claRobotsPath%
+echo %claRobotsPath%\CLA-ssistant
 echo.
 
 REM start.bat automatikus inditasa
 echo [BONUS] start.bat automatikus inditasa...
-set "startBatPath=%claRobotsPath%\start.bat"
+set "startBatPath=%claRobotsPath%\CLA-ssistant\start.bat"
 if exist "%startBatPath%" (
     echo   - start.bat megtalalva: %startBatPath%
     echo   - CLA-ssistant robot automatikus inditasa...
     echo.
-    cd /d "%claRobotsPath%"
+    cd /d "%claRobotsPath%\CLA-ssistant"
     call "%startBatPath%"
     echo.
     echo   - Robot Framework futtatasa befejezve
 ) else (
     echo   FIGYELMEZETES: start.bat nem talalhato!
-    echo   Manualis inditashoz menjen ide: %claRobotsPath%
+    echo   Manualis inditashoz menjen ide: %claRobotsPath%\CLA-ssistant
 )
 
 echo.
