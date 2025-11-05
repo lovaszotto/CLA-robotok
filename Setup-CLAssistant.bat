@@ -148,6 +148,25 @@ echo.
 echo A CLA-robotok projekt telepitve lett ide:
 echo %claRobotsPath%
 echo.
-echo Nyomjon meg egy billentyut a kilepes...
-pause >nul
+
+REM start.bat automatikus inditasa
+echo [BONUS] start.bat automatikus inditasa...
+set "startBatPath=%claRobotsPath%\start.bat"
+if exist "%startBatPath%" (
+    echo   - start.bat megtalalva: %startBatPath%
+    echo   - CLA-ssistant robot automatikus inditasa...
+    echo.
+    cd /d "%claRobotsPath%"
+    call "%startBatPath%"
+    echo.
+    echo   - Robot Framework futtatasa befejezve
+) else (
+    echo   FIGYELMEZETES: start.bat nem talalhato!
+    echo   Manualis inditashoz menjen ide: %claRobotsPath%
+)
+
+echo.
+echo ========================================
+echo    Setup es robot futtatas kesz!
+echo ========================================
 exit /b 0
