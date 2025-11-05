@@ -200,56 +200,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo.
-echo start.bat fajl letrehozasa...
-
-REM start.bat fajl letrehozasa
-echo @echo off > start.bat
-echo REM ========================================= >> start.bat
-echo REM  FORMAI ELLENORZO RENDSZER FUTTATAS >> start.bat
-echo REM ========================================= >> start.bat
-echo echo. >> start.bat
-echo echo ========================================= >> start.bat
-echo echo   FORMAI ELLENORZO RENDSZER >> start.bat
-echo echo   Main robot futtatas >> start.bat
-echo echo ========================================= >> start.bat
-echo echo. >> start.bat
-echo. >> start.bat
-echo REM Ellenorizzuk a virtualis kornyezet megletet >> start.bat
-echo if not exist "rf_env\Scripts\robot.exe" ^( >> start.bat
-echo     echo HIBA: Virtualis kornyezet nem talalhato! >> start.bat
-echo     echo Futtassa eloszor a telepito.bat fajlt! >> start.bat
-echo     pause >> start.bat
-echo     exit /b 1 >> start.bat
-echo ^) >> start.bat
-echo. >> start.bat
-echo REM Results konyvtar letrehozasa ha nem letezik >> start.bat
-echo if not exist "results" ^( >> start.bat
-echo     echo Results konyvtar letrehozasa... >> start.bat
-echo     mkdir "results" >> start.bat
-echo ^) >> start.bat
-echo. >> start.bat
-echo Robot Framework teszt futtatasa... >> start.bat
-echo CLA-ssistant futtatasa ^(CLA-ssistant_main.robot^)... >> start.bat
-echo. >> start.bat
-echo rf_env\Scripts\robot.exe --outputdir results CLA-ssistant_main.robot >> start.bat
-echo. >> start.bat
-echo if errorlevel 1 ^( >> start.bat
-echo     echo HIBA: A teszt futtatasa sikertelen! >> start.bat
-echo     echo Ellenorizze a results\log.html fajlt a reszletekert. >> start.bat
-echo ^) else ^( >> start.bat
-echo     echo. >> start.bat
-echo     echo ========================================= >> start.bat
-echo     echo TESZT SIKERESEN BEFEJEZODOTT! >> start.bat
-echo     echo. >> start.bat
-echo     echo Eredmenyek: >> start.bat
-echo     echo - Log: results\log.html >> start.bat
-echo     echo - Report: results\report.html >> start.bat
-echo     echo - Email elkuldve a konfiguralt cimre >> start.bat
-echo     echo ========================================= >> start.bat
-echo ^) >> start.bat
-echo. >> start.bat
-echo exit >> start.bat
 
 echo.
 echo =========================================
