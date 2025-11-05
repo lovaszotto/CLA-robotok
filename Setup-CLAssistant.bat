@@ -64,15 +64,16 @@ for %%d in (%subDirs%) do (
 )
 echo.
 
-REM CLA-robotok konyvtar ellenorzese es letrehozasa
-set "claRobotsPath=%myRobotPath%\DownloadedRobots\CLA-robotok"
+REM CLA-robotok/CLA-ssistant konyvtar ellenorzese es letrehozasa
+set "claRobotsPath=%myRobotPath%\DownloadedRobots\CLA-robotok\CLA-ssistant"
 echo [4/7] %claRobotsPath% konyvtar ellenorzese...
-if exist "%claRobotsPath%" (
+set "parentPath=%myRobotPath%\DownloadedRobots\CLA-robotok"
+if exist "%parentPath%" (
     echo   - CLA-robotok konyvtar mar letezik
     echo   - Meglevo tartalom torlese...
-    rd /s /q "%claRobotsPath%" >nul 2>&1
+    rd /s /q "%parentPath%" >nul 2>&1
 )
-echo   - CLA-robotok konyvtar kesz a letoltesre
+echo   - CLA-robotok/CLA-ssistant konyvtar kesz a letoltesre
 echo.
 
 REM Git ellenorzese
@@ -95,11 +96,11 @@ echo   - Cel konyvtar: %claRobotsPath%
 echo.
 
 REM Letrehozzuk a cel konyvtarakat
+mkdir "%myRobotPath%\DownloadedRobots\CLA-robotok" >nul 2>&1
 mkdir "%claRobotsPath%" >nul 2>&1
-mkdir "%claRobotsPath%\CLA-ssistant" >nul 2>&1
 
 cd /d "%myRobotPath%\DownloadedRobots"
-git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git "%claRobotsPath%\CLA-ssistant" 2>&1
+git clone -b CLA-ssistant https://github.com/lovaszotto/CLA-robotok.git "%claRobotsPath%" 2>&1
 if errorlevel 1 (
     echo   HIBA: Nem sikerult letolteni a projektet!
     echo   Lehetseges okok:
@@ -113,7 +114,7 @@ if errorlevel 1 (
 echo   - Projekt sikeresen letoltve kozvetlenul a CLA-ssistant konyvtarba
 
 echo   - Ellenorzés: telepito.bat keresése...
-if exist "%claRobotsPath%\CLA-ssistant\telepito.bat" (
+if exist "%claRobotsPath%\telepito.bat" (
     echo   - telepito.bat megtalálva a CLA-ssistant könyvtárban
 ) else (
     echo   - FIGYELEM: telepito.bat nem található!
@@ -123,12 +124,12 @@ echo.
 
 REM telepito.bat futtatasa
 echo [7/7] telepito.bat script futtatasa...
-set "telepitoPath=%claRobotsPath%\CLA-ssistant\telepito.bat"
+set "telepitoPath=%claRobotsPath%\telepito.bat"
 if exist "%telepitoPath%" (
     echo   - telepito.bat megtalalva: %telepitoPath%
     echo   - Script inditasa...
     echo.
-    cd /d "%claRobotsPath%\CLA-ssistant"
+    cd /d "%claRobotsPath%"
     call "%telepitoPath%"
     if errorlevel 1 (
         echo.
@@ -150,24 +151,8 @@ echo       Setup befejezve sikeresen!
 echo ========================================
 echo.
 echo A CLA-robotok projekt telepitve lett ide:
-echo %claRobotsPath%\CLA-ssistant
+echo %claRobotsPath%
 echo.
-
-REM start.bat automatikus inditasa
-echo [BONUS] start.bat automatikus inditasa...
-set "startBatPath=%claRobotsPath%\CLA-ssistant\start.bat"
-if exist "%startBatPath%" (
-    echo   - start.bat megtalalva: %startBatPath%
-    echo   - CLA-ssistant robot automatikus inditasa...
-    echo.
-    cd /d "%claRobotsPath%\CLA-ssistant"
-    call "%startBatPath%"
-    echo.
-    echo   - Robot Framework futtatasa befejezve
-) else (
-    echo   FIGYELMEZETES: start.bat nem talalhato!
-    echo   Manualis inditashoz menjen ide: %claRobotsPath%\CLA-ssistant
-)
 
 echo.
 echo ========================================

@@ -8,8 +8,13 @@ echo.
 :: Konyvtar valtas a script helyere
 cd /d "%~dp0"
 
+:: Aktualis konyvtar kiirasa
+echo Aktualis munkakonyvtar: %CD%
+echo.
+
 :: Virtualis kornyezet ellenorzese
 echo [1/3] Virtualis kornyezet ellenorzese...
+
 if not exist "rf_env\Scripts\python.exe" (
     echo HIBA: Virtualis kornyezet nem talalhato!
     echo Futtassa eloszor a telepito.bat fajlt!

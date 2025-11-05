@@ -259,4 +259,22 @@ echo echo. >> github_api.bat
 echo echo Eredmeny HTML generalva: repository_branches_table.html >> github_api.bat
 echo pause >> github_api.bat
 
+echo.
+echo =========================================
+echo TELEPITES BEFEJEZVE - start.bat INDITAS
+echo =========================================
+echo.
+
+REM start.bat automatikus inditasa
+if exist "start.bat" (
+    echo start.bat megtalalva, automatikus inditas...
+    echo CLA-ssistant Flask szerver inditasa...
+    echo.
+    call "start.bat"
+) else (
+    echo FIGYELMEZETES: start.bat nem talalhato!
+    echo Manualis inditashoz futtassa: start.bat
+    pause
+)
+
 
