@@ -1014,6 +1014,31 @@ function filterRepos() {
     });
 }
 
+function filterReposAvailable() {
+    const searchTerm = document.getElementById('repoSearchAvailable').value.toLowerCase();
+    const branchFilter = document.getElementById('branchFilterAvailable').value.toLowerCase();
+    const repoItems = document.querySelectorAll('.repo-item-available');
+    
+    repoItems.forEach(item => {
+        const repoName = item.getAttribute('data-repo-name').toLowerCase();
+        const branches = item.querySelectorAll('.branch-checkbox label');
+        let hasMatchingBranch = false;
+        
+        branches.forEach(branch => {
+            const branchName = branch.textContent.toLowerCase().trim();
+            if (branchName.includes(branchFilter)) {
+                hasMatchingBranch = true;
+            }
+        });
+        
+        if (repoName.includes(searchTerm) && (branchFilter === '' || hasMatchingBranch)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
 function updateRunButton() {
     const checkboxes = document.querySelectorAll('.robot-checkbox:checked');
     const btn = document.getElementById('runSelectedBtn');
