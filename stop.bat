@@ -16,7 +16,6 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5000') do (
 )
 
 echo.
-echo Flask szerver leállítva!
+echo Flask szerver leállt!
 echo Minden port felszabadítva.
 echo.
-pause

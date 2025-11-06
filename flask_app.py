@@ -817,13 +817,15 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                        data-repo="{{ repo.name }}" 
                                        data-branch="{{ branch }}"
                                        onchange="updateRunButton()">
+                                <div class="d-flex align-items-center me-2">
                                     <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: {{ repo.pushed_at_formatted }}"></i>
-                                <i class="bi bi-trash text-danger me-2" 
-                                   style="cursor: pointer;" 
-                                   onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"
-                                   data-bs-toggle="tooltip" 
-                                   data-bs-placement="top" 
-                                   title="Eltávolítás a futtathatók közül"></i>
+                                    <i class="bi bi-trash text-danger me-1" 
+                                       style="cursor: pointer;" 
+                                       onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"
+                                       data-bs-toggle="tooltip" 
+                                       data-bs-placement="top" 
+                                       title="Eltávolítás a futtathatók közül"></i>
+                                </div>
                                 <span>{{ branch }}</span>
                             </div>
                         {% endfor %}
@@ -1372,14 +1374,19 @@ function executeRobot(repo, branch) {
         console.log('Eredmények lista frissítése...');
         loadResults();
         
+        // Futtatható robotok lista frissítése a futtatás után (ha telepítés történt)
+        console.log('Futtatható robotok lista frissítése...');
+        refreshRunnableRobots();
+        
         setTimeout(() => msg.remove(), 10000);
     })
     .catch(err => {
         console.error('Hiba (execute):', err);
         alert('Hiba történt a szerver hívása közben.');
         
-        // Hiba esetén is frissítsük az eredményeket
+        // Hiba esetén is frissítsük az eredményeket és a futtatható listát
         loadResults();
+        refreshRunnableRobots();
     });
 }
 
@@ -2125,6 +2132,93 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
 });
+
+// Futtatható robotok lista frissítése (újra lekéri és frissíti a DOM-ot)
+function refreshRunnableRobots() {
+    fetch('/api/refresh')
+        .then(r => r.json())
+        .then(repos => {
+            // Frissítsük a "Futtatható robotok" tab tartalmát
+            updateRunnableRobotsTab(repos);
+        })
+        .catch(err => {
+            console.warn('Futtatható robotok frissítése sikertelen:', err);
+        });
+}
+
+// Futtatható robotok tab tartalmának frissítése
+function updateRunnableRobotsTab(repos) {
+    const container = document.getElementById('repoContainer');
+    if (!container) return;
+
+    // Új tartalom építése
+    let html = '';
+    repos.forEach(repo => {
+        if (repo.branches && repo.branches.length > 0) {
+            // Itt egyszerűsítve csak azokat vesszük, amelyek már telepítve vannak
+            // (a szervertől jött adatok már tartalmazzák ezt a logikát)
+            html += `
+                <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="${repo.name}">
+                    <div class="card repo-card h-100">
+                        <div class="card-header text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-github"></i>
+                                <a href="${repo.html_url}" target="_blank" class="text-white text-decoration-none">
+                                    ${repo.name}
+                                </a>
+                            </h5>
+                            ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">${repo.description || 'Nincs leírás'}</p>
+                            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
+                            <div class="branches-container">
+            `;
+            
+            // Itt csak a példa kedvéért minden branch-et hozzáadunk
+            // A tényleges logika a szerverben van (downloaded_branches)
+            repo.branches.forEach(branch => {
+                html += `
+                    <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
+                        <input type="checkbox" class="form-check-input robot-checkbox me-2" 
+                               id="branch-${repo.name}-${branch}" 
+                               data-repo="${repo.name}" 
+                               data-branch="${branch}"
+                               onchange="updateRunButton()">
+                        <div class="d-flex align-items-center me-2">
+                            <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: ${repo.pushed_at_formatted || ''}"></i>
+                            <i class="bi bi-trash text-danger me-1" 
+                               style="cursor: pointer;" 
+                               onclick="deleteRunnableBranch('${repo.name}', '${branch}')"
+                               data-bs-toggle="tooltip" 
+                               data-bs-placement="top" 
+                               title="Eltávolítás a futtathatók közül"></i>
+                        </div>
+                        <span>${branch}</span>
+                    </div>
+                `;
+            });
+            
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    container.innerHTML = html;
+    
+    // Tooltipek újrainicializálása
+    const tooltipTriggerList = [].slice.call(container.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        try { new bootstrap.Tooltip(tooltipTriggerEl); } catch(e) {}
+    });
+    
+    // Konzisztencia ellenőrzés futtatása az új tartalmon
+    try { reconcileRunnableWithInstalled(); } catch(e) {}
+}
 
 // Eltávolítja a felületről azokat a futtathatónak jelölt elemeket,
 // amelyek nincsenek az Installed/SANDBOX könyvtárban start.bat-tal

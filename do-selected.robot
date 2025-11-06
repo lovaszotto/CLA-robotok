@@ -22,41 +22,54 @@ Kiírás konzolra paraméterekből
     Create Directory    ${TRASH_DIR}
     Log To Console     =========================\n
 
-Letöltöttség ellenőrzése
-    [Documentation]    Létezik-e mappa a .
-    Log To Console     \n=== LETÖLTÖTTSÉG ELLENŐRZÉSE ===  ${WORKFLOW_STATUS}
-    IF        ${SANDBOX_MODE} == True
-         ${REPO_PATH}=     Set Variable    ${SANDBOX_ROBOTS}/${REPO}
-    ELSE
-         ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}/${REPO} 
-    END
-      
-    ${BRANCH_PATH}=   Set Variable    ${REPO_PATH}/${BRANCH}
-    Set Global Variable    ${REPO_PATH}    ${REPO_PATH}
-    Set Global Variable    ${BRANCH_PATH}    ${BRANCH_PATH}
-
-    Log To Console     Full Repository: ${REPO_PATH}
-    Log To Console     Full Branch: ${BRANCH_PATH}
-    #könyvtár létezésének ellenőrzése
-    ${downloaded_repo_exists}=     Run Keyword And Return Status    OperatingSystem.Directory Should Exist     ${REPO_PATH}
-    ${downloaded_robot_exists}=    Run Keyword And Return Status    OperatingSystem.Directory Should Exist    ${BRANCH_PATH}
+Telepítettség és letöltöttség ellenőrzése
+    [Documentation]    Ellenőrzi, hogy a robot már telepítve van-e (start.bat létezik), vagy csak letöltve
+    Log To Console     \n=== TELEPÍTETTSÉG ÉS LETÖLTÖTTSÉG ELLENŐRZÉSE ===  ${WORKFLOW_STATUS}
     
-    IF     ${downloaded_repo_exists} and ${downloaded_robot_exists}
-        #visszatér a tesztből
-        #todo verzió alapján újra letöltés
-        Log To Console     Mindkét könyvtár létezik! 
-      
-        #töröljük a sandbox tartalmát és újratelepítjük
-        IF    ${SANDBOX_MODE} == True
-            Log To Console     Sandbox módban vagyunk, töröljük a könyvtárt:${REPO_PATH}
-            Move Directory    ${BRANCH_PATH}         ${TRASH_DIR}        
-            Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'
-        ELSE
-          Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
-        END
+    # Telepített robot ellenőrzése (start.bat létezik-e)
+    ${START_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+    ${start_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${START_SCRIPT}
+    
+    IF    ${start_script_exists}
+        Log To Console     Robot már telepítve van: ${START_SCRIPT}
+        Set Global Variable    ${WORKFLOW_STATUS}    'READY_TO_RUN'
     ELSE
-         Log To Console     Könyvtárak nem léteznek! 
-        Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'    
+        Log To Console     Robot nincs telepítve, ellenőrizzük a letöltöttséget...
+        
+        # Letöltött robot ellenőrzése
+        IF        ${SANDBOX_MODE} == True
+             ${REPO_PATH}=     Set Variable    ${SANDBOX_ROBOTS}/${REPO}
+        ELSE
+             ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}/${REPO} 
+        END
+          
+        ${BRANCH_PATH}=   Set Variable    ${REPO_PATH}/${BRANCH}
+        Set Global Variable    ${REPO_PATH}    ${REPO_PATH}
+        Set Global Variable    ${BRANCH_PATH}    ${BRANCH_PATH}
+
+        Log To Console     Full Repository: ${REPO_PATH}
+        Log To Console     Full Branch: ${BRANCH_PATH}
+        #könyvtár létezésének ellenőrzése
+        ${downloaded_repo_exists}=     Run Keyword And Return Status    OperatingSystem.Directory Should Exist     ${REPO_PATH}
+        ${downloaded_robot_exists}=    Run Keyword And Return Status    OperatingSystem.Directory Should Exist    ${BRANCH_PATH}
+        
+        IF     ${downloaded_repo_exists} and ${downloaded_robot_exists}
+            #visszatér a tesztből
+            #todo verzió alapján újra letöltés
+            Log To Console     Mindkét könyvtár létezik! 
+          
+            #töröljük a sandbox tartalmát és újratelepítjük
+            IF    ${SANDBOX_MODE} == True
+                Log To Console     Sandbox módban vagyunk, töröljük a könyvtárt:${REPO_PATH}
+                Move Directory    ${BRANCH_PATH}         ${TRASH_DIR}        
+                Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'
+            ELSE
+              Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+            END
+        ELSE
+             Log To Console     Könyvtárak nem léteznek! 
+            Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'    
+        END
     END
 
 Könyvtárak létrehozása
