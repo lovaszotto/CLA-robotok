@@ -2151,73 +2151,81 @@ function updateRunnableRobotsTab(repos) {
     const container = document.getElementById('repoContainer');
     if (!container) return;
 
-    // Új tartalom építése
-    let html = '';
-    repos.forEach(repo => {
-        if (repo.branches && repo.branches.length > 0) {
-            // Itt egyszerűsítve csak azokat vesszük, amelyek már telepítve vannak
-            // (a szervertől jött adatok már tartalmazzák ezt a logikát)
-            html += `
-                <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="${repo.name}">
-                    <div class="card repo-card h-100">
-                        <div class="card-header text-white">
-                            <h5 class="card-title mb-0">
-                                <i class="bi bi-github"></i>
-                                <a href="${repo.html_url}" target="_blank" class="text-white text-decoration-none">
-                                    ${repo.name}
-                                </a>
-                            </h5>
-                            ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
-                        </div>
-                        <div class="card-body">
-                            <p class="card-text">${repo.description || 'Nincs leírás'}</p>
-                            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
-                            <div class="branches-container">
-            `;
+    // Lekérdezzük a ténylegesen telepített kulcsokat
+    fetch('/api/debug/installed')
+        .then(r => r.json())
+        .then(installedData => {
+            const installedSet = new Set(installedData.installed_keys || []);
             
-            // Itt csak a példa kedvéért minden branch-et hozzáadunk
-            // A tényleges logika a szerverben van (downloaded_branches)
-            repo.branches.forEach(branch => {
-                html += `
-                    <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
-                        <input type="checkbox" class="form-check-input robot-checkbox me-2" 
-                               id="branch-${repo.name}-${branch}" 
-                               data-repo="${repo.name}" 
-                               data-branch="${branch}"
-                               onchange="updateRunButton()">
-                        <div class="d-flex align-items-center me-2">
-                            <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: ${repo.pushed_at_formatted || ''}"></i>
-                            <i class="bi bi-trash text-danger me-1" 
-                               style="cursor: pointer;" 
-                               onclick="deleteRunnableBranch('${repo.name}', '${branch}')"
-                               data-bs-toggle="tooltip" 
-                               data-bs-placement="top" 
-                               title="Eltávolítás a futtathatók közül"></i>
-                        </div>
-                        <span>${branch}</span>
-                    </div>
-                `;
-            });
-            
-            html += `
+            // Új tartalom építése - csak a telepített robotokkal
+            let html = '';
+            repos.forEach(repo => {
+                const installedBranches = repo.branches ? repo.branches.filter(branch => 
+                    installedSet.has(`${repo.name}|${branch}`)
+                ) : [];
+                
+                if (installedBranches.length > 0) {
+                    html += `
+                        <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="${repo.name}">
+                            <div class="card repo-card h-100">
+                                <div class="card-header text-white">
+                                    <h5 class="card-title mb-0">
+                                        <i class="bi bi-github"></i>
+                                        <a href="${repo.html_url}" target="_blank" class="text-white text-decoration-none">
+                                            ${repo.name}
+                                        </a>
+                                    </h5>
+                                    ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">${repo.description || 'Nincs leírás'}</p>
+                                    <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
+                                    <div class="branches-container">
+                    `;
+                    
+                    // Csak a telepített branch-ek
+                    installedBranches.forEach(branch => {
+                        html += `
+                            <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
+                                <input type="checkbox" class="form-check-input robot-checkbox me-2" 
+                                       id="branch-${repo.name}-${branch}" 
+                                       data-repo="${repo.name}" 
+                                       data-branch="${branch}"
+                                       onchange="updateRunButton()">
+                                <div class="d-flex align-items-center me-2">
+                                    <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: ${repo.pushed_at_formatted || ''}"></i>
+                                    <i class="bi bi-trash text-danger me-1" 
+                                       style="cursor: pointer;" 
+                                       onclick="deleteRunnableBranch('${repo.name}', '${branch}')"
+                                       data-bs-toggle="tooltip" 
+                                       data-bs-placement="top" 
+                                       title="Eltávolítás a futtathatók közül"></i>
+                                </div>
+                                <span>${branch}</span>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            `;
-        }
-    });
-    
-    container.innerHTML = html;
-    
-    // Tooltipek újrainicializálása
-    const tooltipTriggerList = [].slice.call(container.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-        try { new bootstrap.Tooltip(tooltipTriggerEl); } catch(e) {}
-    });
-    
-    // Konzisztencia ellenőrzés futtatása az új tartalmon
-    try { reconcileRunnableWithInstalled(); } catch(e) {}
+                    `;
+                }
+            });
+            
+            container.innerHTML = html;
+            
+            // Tooltipek újrainicializálása
+            const tooltipTriggerList = [].slice.call(container.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+                try { new bootstrap.Tooltip(tooltipTriggerEl); } catch(e) {}
+            });
+        })
+        .catch(err => {
+            console.warn('Nem sikerült lekérni a telepített kulcsokat:', err);
+        });
 }
 
 // Eltávolítja a felületről azokat a futtathatónak jelölt elemeket,

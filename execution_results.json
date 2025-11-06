@@ -98,5 +98,25 @@
     "returncode": 0,
     "results_dir": "SzotarRobi__Szó-kikérdező__20251106_151946",
     "type": "single"
+  },
+  {
+    "id": 11,
+    "timestamp": "2025-11-06 15:40:31",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251106_154031",
+    "type": "single"
+  },
+  {
+    "id": 12,
+    "timestamp": "2025-11-06 15:45:45",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251106_154545",
+    "type": "single"
   }
 ]
