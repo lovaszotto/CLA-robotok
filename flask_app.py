@@ -90,8 +90,8 @@ def get_branches_for_repo(repo_name):
                     parts = line.split('\t')
                     if len(parts) >= 2:
                         branch_name = parts[1].replace('refs/heads/', '')
-                        # Kizárjuk a main branch-et
-                        if branch_name != 'main':
+                        # Kizárjuk a main és master branch-eket
+                        if branch_name not in ['main', 'master']:
                             branches.append(branch_name)
             return branches
         else:
