@@ -4,6 +4,8 @@ import subprocess
 import os
 import sys
 from datetime import datetime
+import shutil
+import re
 
 app = Flask(__name__)
 
@@ -56,12 +58,96 @@ def get_sandbox_mode():
     # Alapértelmezett: False (nem sandbox mode)
     return False
 
-def get_downloaded_keys():
-    """Felderíti a results mappában a korábbi futások alapján, mely REPO/BRANCH párokhoz tartozik eredmény.
-    A results könyvtárban a mappa neve formátum: {safe_repo}__{safe_branch}__{timestamp}
-    ahol a safe_* értékekben a "/" karakterek "_"-ra vannak cserélve.
-    Visszaad: set(["{safe_repo}|{safe_branch}", ...])
+# --- Segédfüggvények az InstalledRobots elérési út és könyvtár törléséhez ---
+def get_robot_variable(var_name: str) -> str:
+    """Beolvassa a resources/variables.robot fájlból a megadott változó értékét.
+
+    Példa: get_robot_variable('INSTALLED_ROBOTS') -> 'c:/.../InstalledRobots/'
     """
+    try:
+        variables_file = os.path.join('resources', 'variables.robot')
+        if not os.path.exists(variables_file):
+            return ''
+        with open(variables_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                # Robot Framework változó sorok: ${NAME}    value
+                m = re.match(r"^\s*\$\{" + re.escape(var_name) + r"\}\s+(.+?)\s*$", line)
+                if m:
+                    return m.group(1).strip()
+    except Exception as e:
+        print(f"[WARNING] Hiba a(z) {var_name} beolvasásakor: {e}")
+    return ''
+
+def _normalize_dir_from_vars(var_name: str) -> str:
+    """Visszaadja a variables.robot-ból olvasott könyvtár abszolút, normált útvonalát."""
+    path = get_robot_variable(var_name)
+    if not path:
+        return ''
+    path = os.path.expandvars(os.path.expanduser(path))
+    return os.path.normpath(path)
+
+def get_installed_robots_dir() -> str:
+    """Visszaadja, honnan számoljuk a 'futtatható' robotokat.
+
+    - SANDBOX_MODE == True esetén a SANDBOX_ROBOTS mappát használjuk
+    - különben az INSTALLED_ROBOTS mappát
+    """
+    try:
+        if get_sandbox_mode():
+            return _normalize_dir_from_vars('SANDBOX_ROBOTS')
+    except Exception:
+        pass
+    return _normalize_dir_from_vars('INSTALLED_ROBOTS')
+
+def get_downloaded_robots_dir() -> str:
+    """DownloadedRobots bázis könyvtár."""
+    return _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
+
+def _on_rm_error(func, path, exc_info):
+    """Read-only fájlok törlése Windows alatt: jogosultság állítása és újrapróbálás."""
+    try:
+        import stat
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass
+
+def _delete_robot_directory(base_dir: str, repo_name: str, branch_name: str):
+    """Töröl egy megadott base/<repo>/<branch> könyvtárat biztonságos ellenőrzésekkel."""
+    if not base_dir:
+        return False, 'Bázis könyvtár nem érhető el.'
+
+    target = os.path.normpath(os.path.join(base_dir, repo_name, branch_name))
+
+    # Biztonsági ellenőrzés
+    try:
+        base_common = os.path.commonpath([base_dir])
+        target_common = os.path.commonpath([base_dir, target])
+        if base_common != target_common:
+            return False, f'Biztonsági okból a törlés megakadályozva: célszámított út nincs a base alatt: {target}'
+    except Exception:
+        if not os.path.abspath(target).startswith(os.path.abspath(base_dir)):
+            return False, f'Biztonsági okból a törlés megakadályozva (prefix ellenőrzés): {target}'
+
+    if not os.path.exists(target):
+        return False, f'Könyvtár nem létezik: {target}'
+
+    try:
+        shutil.rmtree(target, onerror=_on_rm_error)
+        return True, f'Törölve: {target}'
+    except Exception as e:
+        return False, f'Törlés sikertelen: {target} - {e}'
+
+def delete_installed_robot_directory(repo_name: str, branch_name: str):
+    """Törli a telepített robot könyvtárát: InstalledRobots/<repo>/<branch>."""
+    return _delete_robot_directory(get_installed_robots_dir(), repo_name, branch_name)
+
+def delete_downloaded_robot_directory(repo_name: str, branch_name: str):
+    """Törli a letöltött robot könyvtárát: DownloadedRobots/<repo>/<branch>."""
+    return _delete_robot_directory(get_downloaded_robots_dir(), repo_name, branch_name)
+
+def get_downloaded_keys():
+    """KORÁBBI MŰKÖDÉS (results alapján) – megtartva kompatibilitás miatt, de nem használjuk a listázáshoz."""
     keys = set()
     base_dir = 'results'
     try:
@@ -74,7 +160,33 @@ def get_downloaded_keys():
                         safe_branch = parts[1]
                         keys.add(f"{safe_repo}|{safe_branch}")
     except Exception as e:
-        print(f"[INFO] Nem sikerült a letöltött kulcsokat felderíteni: {e}")
+        print(f"[INFO] Nem sikerült a results alapú kulcsokat felderíteni: {e}")
+    return keys
+
+def get_installed_keys():
+    """Felderíti az InstalledRobots mappában az elérhető (telepített) REPO/BRANCH párokat.
+
+    Struktúra: InstalledRobots/<repo>/<branch>/
+    Visszaad: set(["<repo>|<branch>", ...])
+    """
+    keys = set()
+    base_dir = get_installed_robots_dir()
+    try:
+        if base_dir and os.path.isdir(base_dir):
+            for repo_name in os.listdir(base_dir):
+                repo_path = os.path.join(base_dir, repo_name)
+                if not os.path.isdir(repo_path):
+                    continue
+                for branch_name in os.listdir(repo_path):
+                    branch_path = os.path.join(repo_path, branch_name)
+                    if not os.path.isdir(branch_path):
+                        continue
+                    # Csak akkor tekintjük futtathatónak, ha van start.bat (ready to run)
+                    start_script = os.path.join(branch_path, 'start.bat')
+                    if os.path.isfile(start_script):
+                        keys.add(f"{repo_name}|{branch_name}")
+    except Exception as e:
+        print(f"[INFO] Nem sikerült a telepített kulcsokat felderíteni: {e}")
     return keys
 def get_branches_for_repo(repo_name):
     """Lekéri egy repository branch-eit a git ls-remote segítségével."""
@@ -159,21 +271,22 @@ def index():
 
         repo['branches'] = get_branches_for_repo(repo['name'])
     
-    # Előre kiszámoljuk a letöltött és letölthető branch-eket repo szinten
-    downloaded_keys = get_downloaded_keys()
+    # Előre kiszámoljuk a futtatható (telepített) és letölthető branch-eket repo szinten
+    installed_keys = get_installed_keys()
     for repo in repos:
         safe_repo = repo['name'].replace('/', '_')
+        # Megjegyzés: az InstalledRobots-ban a mappanevek a tényleges repo/branch neveket tartalmazzák
         repo['downloaded_branches'] = [
             branch for branch in repo['branches']
-            if f"{safe_repo}|{branch.replace('/', '_')}" in downloaded_keys
+            if f"{repo['name']}|{branch}" in installed_keys
         ]
         repo['available_branches'] = [
             branch for branch in repo['branches']
-            if f"{safe_repo}|{branch.replace('/', '_')}" not in downloaded_keys
+            if f"{repo['name']}|{branch}" not in installed_keys
         ]
     html_template = get_html_template()
     response = app.response_class(
-        render_template_string(html_template, repos=repos, datetime=datetime, downloaded_keys=downloaded_keys),
+        render_template_string(html_template, repos=repos, datetime=datetime, downloaded_keys=installed_keys),
         mimetype='text/html'
     )
     # Cache törlése fejlécekkel
@@ -346,13 +459,23 @@ def delete_runnable_branch():
         if not repo_name or not branch_name:
             return jsonify({'success': False, 'error': 'Repository és branch név szükséges'})
         
-        # Itt implementálhatjuk a tényleges törlés logikát
-        # Például törölhetjük a downloaded_keys-ből vagy egy fájlból
+        # Telepített robot könyvtár törlése az InstalledRobots alól
+        deleted_installed, info_inst = delete_installed_robot_directory(repo_name, branch_name)
+        status_inst = 'törölve' if deleted_installed else 'nem található, nincs mit törölni'
+        print(f"[DELETE] InstalledRobots: {repo_name}/{branch_name}: {status_inst}. {info_inst}")
+
+        # Letöltött robot könyvtár törlése a DownloadedRobots alól
+        deleted_downloaded, info_down = delete_downloaded_robot_directory(repo_name, branch_name)
+        status_down = 'törölve' if deleted_downloaded else 'nem található, nincs mit törölni'
+        print(f"[DELETE] DownloadedRobots: {repo_name}/{branch_name}: {status_down}. {info_down}")
         
-        # Egyelőre egyszerűen visszajelzünk, hogy sikeres volt
-        print(f"[DELETE] Branch {repo_name}/{branch_name} eltávolítva a futtathatók közül")
-        
-        return jsonify({'success': True, 'message': f'Branch {repo_name}/{branch_name} eltávolítva'})
+        return jsonify({
+            'success': True,
+            'message': f'Branch {repo_name}/{branch_name} eltávolítva',
+            'deleted': deleted_installed,  # visszafelé kompatibilitás
+            'deleted_installed': deleted_installed,
+            'deleted_downloaded': deleted_downloaded
+        })
         
     except Exception as e:
         print(f"Hiba a branch törlésében: {e}")
@@ -368,6 +491,18 @@ def debug_results():
         "execution_results_count": len(execution_results),
         "execution_results_sample": execution_results[:3] if execution_results else [],
         "python_executable": PYTHON_EXECUTABLE
+    })
+
+@app.route('/api/debug/installed')
+def debug_installed():
+    """Debug endpoint: mutatja a 'futtatható' robotok forrását és kulcsait."""
+    base_inst = get_installed_robots_dir()
+    keys = sorted(list(get_installed_keys()))
+    return jsonify({
+        'sandbox_mode': get_sandbox_mode(),
+        'installed_base_dir': base_inst,
+        'installed_count': len(keys),
+        'installed_keys': keys[:100]  # levágjuk, ha sok lenne
     })
 
 @app.route('/api/results', methods=['GET'])
@@ -1982,8 +2117,48 @@ document.addEventListener('DOMContentLoaded', function() {
     tooltipTriggerList.forEach(function (tooltipTriggerEl) {
         new bootstrap.Tooltip(tooltipTriggerEl);
     });
+
+    // Konzisztencia-ellenőrzés: csak azok maradjanak a "Futtatható" listában,
+    // amelyek ténylegesen telepítve vannak (és van start.bat)
+    try { reconcileRunnableWithInstalled(); } catch(e) {
+        console.warn('reconcileRunnableWithInstalled hívás sikertelen', e);
+    }
     
 });
+
+// Eltávolítja a felületről azokat a futtathatónak jelölt elemeket,
+// amelyek nincsenek az Installed/SANDBOX könyvtárban start.bat-tal
+function reconcileRunnableWithInstalled() {
+    fetch('/api/debug/installed')
+        .then(r => {
+            if (!r.ok) throw new Error('installed debug endpoint not available');
+            return r.json();
+        })
+        .then(data => {
+            const set = new Set((data.installed_keys || []));
+            const repoItems = document.querySelectorAll('.repo-item');
+            repoItems.forEach(repoEl => {
+                const repoName = repoEl.getAttribute('data-repo-name');
+                const branches = repoEl.querySelectorAll('.branch-checkbox input.robot-checkbox');
+                branches.forEach(inp => {
+                    const r = inp.getAttribute('data-repo');
+                    const b = inp.getAttribute('data-branch');
+                    if (!set.has(`${r}|${b}`)) {
+                        const wrapper = inp.closest('.branch-checkbox');
+                        if (wrapper) wrapper.remove();
+                    }
+                });
+                // Ha nem maradt branch, az egész kártyát is eltávolítjuk
+                if (repoEl.querySelectorAll('.branch-checkbox').length === 0) {
+                    repoEl.remove();
+                }
+            });
+        })
+        .catch(err => {
+            // Ha nincs debug endpoint (régi szerver fut), nem csinálunk semmit
+            console.info('Installed debug endpoint nem elérhető vagy hiba történt:', err.message);
+        });
+}
 
 function deleteBranchFromRunnable(repoName, branchName) {
     fetch('/delete_runnable_branch', {
