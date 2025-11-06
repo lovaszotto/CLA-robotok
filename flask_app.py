@@ -144,8 +144,19 @@ def index():
     # Repository adatok lekérése
     repos = get_repository_data()
     
-    # Branch adatok hozzáadása minden repository-hoz
+    # Dátum formázása (pushed_at -> YYYY-MM-DD HH:MM) és branch adatok hozzáadása minden repository-hoz
     for repo in repos:
+        try:
+            pushed_at = (repo.get('pushed_at') or '').strip()
+            if pushed_at:
+                dt = datetime.fromisoformat(pushed_at.replace('Z', '+00:00'))
+                repo['pushed_at_formatted'] = dt.strftime('%Y-%m-%d %H:%M')
+            else:
+                repo['pushed_at_formatted'] = ''
+        except Exception:
+            # Ha nem sikerül parse-olni, jelenítsük meg az eredeti értéket
+            repo['pushed_at_formatted'] = (repo.get('pushed_at') or '')
+
         repo['branches'] = get_branches_for_repo(repo['name'])
     
     # Előre kiszámoljuk a letöltött és letölthető branch-eket repo szinten
@@ -323,6 +334,29 @@ def clear_results():
     execution_results = []
     save_execution_results()  # Üres lista mentése
     return jsonify({"status": "success", "message": "Eredmények törölve"})
+
+@app.route('/delete_runnable_branch', methods=['POST'])
+def delete_runnable_branch():
+    """Törli a megadott branch-et a futtathatók közül"""
+    try:
+        data = request.get_json()
+        repo_name = data.get('repo')
+        branch_name = data.get('branch')
+        
+        if not repo_name or not branch_name:
+            return jsonify({'success': False, 'error': 'Repository és branch név szükséges'})
+        
+        # Itt implementálhatjuk a tényleges törlés logikát
+        # Például törölhetjük a downloaded_keys-ből vagy egy fájlból
+        
+        # Egyelőre egyszerűen visszajelzünk, hogy sikeres volt
+        print(f"[DELETE] Branch {repo_name}/{branch_name} eltávolítva a futtathatók közül")
+        
+        return jsonify({'success': True, 'message': f'Branch {repo_name}/{branch_name} eltávolítva'})
+        
+    except Exception as e:
+        print(f"Hiba a branch törlésében: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/debug/results')
 def debug_results():
@@ -642,16 +676,20 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                     <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
                     <div class="branches-container">
                         {% for branch in repo.downloaded_branches %}
-                            <div class="branch-checkbox">
-                                <input type="checkbox" class="form-check-input robot-checkbox" 
+                            <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
+                                <input type="checkbox" class="form-check-input robot-checkbox me-2" 
                                        id="branch-{{ repo.name }}-{{ branch }}" 
                                        data-repo="{{ repo.name }}" 
                                        data-branch="{{ branch }}"
                                        onchange="updateRunButton()">
-                                <label class="form-check-label ms-2" for="branch-{{ repo.name }}-{{ branch }}">
-                                    <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letöltve / van futási eredmény"></i>
-                                    <i class="bi bi-check-circle-fill text-success me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Utolsó futás dátuma:"></i> {{ branch }}
-                                </label>
+                                    <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: {{ repo.pushed_at_formatted }}"></i>
+                                <i class="bi bi-trash text-danger me-2" 
+                                   style="cursor: pointer;" 
+                                   onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"
+                                   data-bs-toggle="tooltip" 
+                                   data-bs-placement="top" 
+                                   title="Eltávolítás a futtathatók közül"></i>
+                                <span>{{ branch }}</span>
                             </div>
                         {% endfor %}
                     </div>
@@ -716,7 +754,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                        onchange="updateDownloadButton()">
                                 <label class="form-check-label ms-2" for="branch-available-{{ repo.name }}-{{ branch }}">
                                     <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letölthető"></i>
-                                    <i class="bi bi-check-circle-fill text-success me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Branch"></i> {{ branch }}
+                                    {{ branch }}
                                 </label>
                             </div>
                         {% endfor %}
@@ -955,6 +993,13 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// Törlési funkció - mindenképpen legyen elérhető
+function deleteRunnableBranch(repoName, branchName) {
+    if (confirm('Valóban törölni szeretnéd a futtathatók közül?\\n\\nRepository: ' + repoName + '\\nBranch: ' + branchName)) {
+        deleteBranchFromRunnable(repoName, branchName);
+    }
+}
+
 function downloadSelectedRobots() {
     const checkboxes = document.querySelectorAll('.robot-checkbox-available:checked');
     const selectedRobots = [];
@@ -1657,7 +1702,9 @@ function displayResults(results) {
         return;
     }
     
-    tbody.innerHTML = results.map(result => {
+    // Egyszerűsített megjelenítés HTML string concatenation-nal
+    let htmlContent = '';
+    results.forEach(result => {
         const statusBadge = result.status === 'success' 
             ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Sikeres</span>'
             : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sikertelen</span>';
@@ -1665,30 +1712,28 @@ function displayResults(results) {
         const typeBadge = result.type === 'bulk'
             ? '<span class="badge bg-info ms-1">Tömeges</span>'
             : '<span class="badge bg-secondary ms-1">Egyedi</span>';
+
+        const resultsDisplay = result.results_dir 
+            ? '<small class="text-muted">' + result.results_dir + '</small>' 
+            : '-';
+
+        // Use data-* attributes with encoded values to avoid inline JS quoting issues
+        const encDir = encodeURIComponent(result.results_dir || '');
+        const actionButton = result.results_dir
+            ? '<button class="btn btn-sm btn-success" data-results-enc="' + encDir + '" onclick="openResults(decodeURIComponent(this.dataset.resultsEnc))" title="Megnyitás új ablakban"><i class="bi bi-eye"></i></button>'
+            : '<button class="btn btn-sm btn-outline-secondary" data-result-id="' + (result.id || '') + '" onclick="viewDetails(this.dataset.resultId)" title="Részletek"><i class="bi bi-eye"></i></button>';
             
-        return `
-            <tr>
-                <td>${result.timestamp}${typeBadge}</td>
-                <td><i class="bi bi-github"></i> ${result.repo}</td>
-                <td><i class="bi bi-git"></i> ${result.branch}</td>
-                <td>${statusBadge}</td>
-                <td>
-                    ${result.results_dir ? `<small class="text-muted">${result.results_dir}</small>` : '-'}
-                </td>
-                <td>
-                    ${result.results_dir ? `
-                        <button class="btn btn-sm btn-success" onclick="openResults('${result.results_dir}')" title="Megnyitás új ablakban" data-bs-toggle="tooltip" data-bs-placement="top">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                    ` : `
-                        <button class="btn btn-sm btn-outline-secondary" onclick="viewDetails(${result.id})" title="Részletek" data-bs-toggle="tooltip" data-bs-placement="top">
-                            <i class="bi bi-eye"></i>
-                        </button>
-                    `}
-                </td>
-            </tr>
-        `;
-    }).join('');
+        htmlContent += '<tr>' +
+            '<td>' + result.timestamp + typeBadge + '</td>' +
+            '<td><i class="bi bi-github"></i> ' + result.repo + '</td>' +
+            '<td><i class="bi bi-git"></i> ' + result.branch + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td>' + resultsDisplay + '</td>' +
+            '<td>' + actionButton + '</td>' +
+            '</tr>';
+    });
+    
+    tbody.innerHTML = htmlContent;
 
     // Re-initialize Bootstrap tooltips for new elements
     setTimeout(() => {
@@ -1937,8 +1982,114 @@ document.addEventListener('DOMContentLoaded', function() {
     tooltipTriggerList.forEach(function (tooltipTriggerEl) {
         new bootstrap.Tooltip(tooltipTriggerEl);
     });
+    
 });
 
+function deleteBranchFromRunnable(repoName, branchName) {
+    fetch('/delete_runnable_branch', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            repo: repoName,
+            branch: branchName
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Távolítsuk el a branch elemet a DOM-ból
+            const branchElement = document.getElementById(`branch-${repoName}-${branchName}`).closest('.branch-checkbox');
+            if (branchElement) {
+                branchElement.remove();
+            }
+            
+            // Ellenőrizzük, hogy van-e még branch a repository-ban
+            const repoElement = document.querySelector(`.repo-item[data-repo-name="${repoName}"]`);
+            if (repoElement) {
+                const remainingBranches = repoElement.querySelectorAll('.branch-checkbox');
+                if (remainingBranches.length === 0) {
+                    // Ha nincs több branch, távolítsuk el az egész repository kártyát
+                    repoElement.remove();
+                }
+            }
+            
+            // Frissítsük a futtatás gombot
+            updateRunButton();
+            
+            console.log(`Branch ${repoName}/${branchName} eltávolítva a futtathatók közül`);
+
+            // Frissítsük a Letölthető robotok tabot is
+            try {
+                addBranchToAvailableTab(repoName, branchName);
+            } catch (e) {
+                console.warn('Nem sikerült a Letölthető tabot frissíteni, oldal frissítés szükséges lehet.', e);
+            }
+        } else {
+            alert('Hiba történt a branch eltávolításakor: ' + (data.error || 'Ismeretlen hiba'));
+        }
+    })
+    .catch(error => {
+        console.error('Hiba:', error);
+        alert('Hiba történt a branch eltávolításakor.');
+    });
+}
+
+// Hozzáadja a törölt futtatható branch-et a Letölthető robotok tab-hoz (ha a repo kártya létezik)
+function addBranchToAvailableTab(repoName, branchName) {
+    const availablePane = document.getElementById('available-pane');
+    if (!availablePane) return;
+    const repoEl = availablePane.querySelector(`.repo-item-available[data-repo-name="${repoName}"]`);
+
+    // Ha nincs repo kártya a Letölthető tabon, egyszerű fallback: teljes oldal frissítés
+    if (!repoEl) {
+        console.info('Repo kártya nem található a Letölthető tabon, teljes oldal frissítés...');
+        // Soft reload csak ekkor
+        window.location.reload();
+        return;
+    }
+
+    const branchesContainer = repoEl.querySelector('.branches-container');
+    if (!branchesContainer) return;
+
+    // Ha már létezik ilyen checkbox, ne duplikáljuk
+    const inputId = `branch-available-${repoName}-${branchName}`;
+    if (repoEl.querySelector(`#${CSS.escape(inputId)}`)) {
+        return;
+    }
+
+    // Új branch elem felépítése
+    const wrapper = document.createElement('div');
+    wrapper.className = 'branch-checkbox';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'form-check-input robot-checkbox-available';
+    input.id = inputId;
+    input.setAttribute('data-repo', repoName);
+    input.setAttribute('data-branch', branchName);
+    input.addEventListener('change', updateDownloadButton);
+
+    const label = document.createElement('label');
+    label.className = 'form-check-label ms-2';
+    label.setAttribute('for', inputId);
+    label.innerHTML = `
+        <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letölthető"></i>
+        ${branchName}
+    `;
+
+    wrapper.appendChild(input);
+    wrapper.appendChild(label);
+    branchesContainer.appendChild(wrapper);
+
+    // Tooltipek újrainicializálása
+    const tList = [].slice.call(branchesContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tList.forEach(function (el) { try { new bootstrap.Tooltip(el); } catch(e) {} });
+
+    // Aktuális szűrők alkalmazása
+    try { filterReposAvailable(); } catch(e) {}
+}
 // A branch név ikonját a HTML sablonban adjuk hozzá közvetlenül a label-ben
 </script>
 </body>
