@@ -17,8 +17,8 @@ ${BRANCH}    CPS-Mezo-ellenor
 ${BRANCH_PATH}    ${EMPTY}
 
 #developer módban csak letöltjük a robotokat, de nem telepítjük
-${SANDBOX_MODE}         ${True}
-${SANDBOX_ROBOTS}       c:/Users/oLovasz/MyRobotFramework/SandboxRobots/
+${SANDBOX_MODE}         ${False}
+${SANDBOX_ROBOTS}       c:/Users\oLovasz\MyRobotFramework\SandboxRobots/
 
 # A robotok letöltési könyvtárai
 ${DOWNLOADED_ROBOTS}    c:/Users/oLovasz/MyRobotFramework/DownloadedRobots/

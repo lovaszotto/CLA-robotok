@@ -477,7 +477,28 @@ def get_html_template():
     is_sandbox = get_sandbox_mode()
     page_title = "Fejlesztői mód" if is_sandbox else "Segíthetünk?"
     
-    return '''<!DOCTYPE html>
+    # Színséma beállítása SANDBOX_MODE alapján
+    if is_sandbox:
+        # Fejlesztői mód: piros színvilág
+        primary_color = "#dc3545"
+        secondary_color = "#e74c3c" 
+        tertiary_color = "#f1aeb5"
+        dark_color = "#c82333"
+        light_color = "#f8d7da"
+        hover_color = "#b02a37"
+        rgba_color = "220, 53, 69"
+    else:
+        # Normál mód: kék színvilág
+        primary_color = "#0d6efd"
+        secondary_color = "#3b82f6"
+        tertiary_color = "#93c5fd"
+        dark_color = "#0056b3"
+        light_color = "#e7f3ff"
+        hover_color = "#004085"
+        rgba_color = "13, 110, 253"
+    
+    # CSS template létrehozása a dinamikus színekkel  
+    css_template = '''<!DOCTYPE html>
 <html lang="hu">
 <head>
 <meta charset="UTF-8">
@@ -491,19 +512,19 @@ def get_html_template():
 <style>
 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: white; min-height: 100vh; }
 .main-container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
-.page-header { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; padding: 30px; display: flex; align-items: center; justify-content: space-between; }
+.page-header { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%); color: white; padding: 30px; display: flex; align-items: center; justify-content: space-between; }
 .page-header .header-content { display: flex; flex-direction: column; align-items: center; flex: 1; }
 .page-header h1 { margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
-.nav-tabs { border-bottom: 3px solid #dc3545; background: #f8f9fa; }
+.nav-tabs { border-bottom: 3px solid {primary_color}; background: #f8f9fa; }
 .nav-tabs .nav-link { color: #495057; border: none; padding: 15px 25px; font-weight: 600; border-radius: 0; }
-.nav-tabs .nav-link.active { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; border-bottom: 3px solid #dc3545; }
-.nav-tabs .nav-link:hover { background: linear-gradient(135deg, #f1aeb5 0%, #f8d7da 100%); color: #dc3545; }
+.nav-tabs .nav-link.active { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%); color: white; border-bottom: 3px solid {primary_color}; }
+.nav-tabs .nav-link:hover { background: linear-gradient(135deg, {tertiary_color} 0%, {light_color} 100%); color: {primary_color}; }
 .tab-content { padding: 30px; }
 .card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
 .actions { text-align: center; margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }
-.btn-custom { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
-.btn-custom:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, #b02a37 0%, #dc3545 50%, #f1aeb5 100%); }
+.btn-custom { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
+.btn-custom:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, {hover_color} 0%, {primary_color} 50%, {tertiary_color} 100%); }
 .repo-card { 
     transition: all 0.3s ease; 
     border: 2px solid transparent; 
@@ -512,20 +533,20 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 .repo-card:hover { 
     transform: translateY(-5px); 
     box-shadow: 0 8px 25px rgba(220,53,69,0.25) !important; 
-    border-color: #dc3545; 
+    border-color: {primary_color}; 
 }
 .repo-card .card-header { 
-    background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #c82333 100%) !important; 
+    background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {dark_color} 100%) !important; 
     color: white !important;
 }
 .repo-card .card-title a:hover { text-decoration: underline !important; }
 .branches-container { max-height: 300px; overflow-y: auto; }
 .branch-checkbox { padding: 8px 12px; margin: 2px 0; border-radius: 6px; transition: background-color 0.2s; }
 .branch-checkbox:hover { background-color: #f8f9fa; }
-.branch-checkbox input:checked + label { font-weight: bold; color: #dc3545; }
-#repoSearch:focus, #branchFilter:focus { border-color: #dc3545; box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25); }
+.branch-checkbox input:checked + label { font-weight: bold; color: {primary_color}; }
+#repoSearch:focus, #branchFilter:focus { border-color: {primary_color}; box-shadow: 0 0 0 0.2rem rgba({rgba_color}, 0.25); }
 .input-group-text.bg-primary { background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%) !important; }
-.input-group-text.bg-success { background: linear-gradient(135deg, #dc3545 0%, #e74c3c 50%, #f1aeb5 100%) !important; }
+.input-group-text.bg-success { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%) !important; }
 .hidden { display: none !important; }
 .spinning { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -728,7 +749,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="row">
 <div class="col-md-6">
 <div class="card">
-<div class="card-header text-white" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+<div class="card-header text-white" style="background: linear-gradient(135deg, {primary_color}, {dark_color});">
 <h5><i class="bi bi-laptop"></i> Rendszer</h5>
 </div>
 <div class="card-body">
@@ -822,7 +843,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 <div class="tab-pane fade" id="results-pane" role="tabpanel">
 <div class="card">
-<div class="card-header text-white" style="background: linear-gradient(135deg, #dc3545, #c82333);">
+<div class="card-header text-white" style="background: linear-gradient(135deg, {primary_color}, {dark_color});">
 <h5 class="mb-0"><i class="bi bi-list-task"></i> Futási Eredmények</h5>
 </div>
 <!-- Modal for showing resultsDir -->
@@ -1897,6 +1918,17 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 </body>
 </html>'''
+    
+    # Dinamikus színek behelyettesítése a template-ben
+    css_template = css_template.replace('{primary_color}', primary_color)
+    css_template = css_template.replace('{secondary_color}', secondary_color)
+    css_template = css_template.replace('{tertiary_color}', tertiary_color)
+    css_template = css_template.replace('{dark_color}', dark_color)
+    css_template = css_template.replace('{light_color}', light_color)
+    css_template = css_template.replace('{hover_color}', hover_color)
+    css_template = css_template.replace('{rgba_color}', rgba_color)
+    
+    return css_template
 
 # Alkalmazás indítása, ha közvetlenül futtatjuk a fájlt
 if __name__ == '__main__':
