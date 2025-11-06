@@ -31,6 +31,31 @@ def get_python_executable():
 PYTHON_EXECUTABLE = get_python_executable()
 print(f"[INFO] Használt Python executable: {PYTHON_EXECUTABLE}")
 
+def get_sandbox_mode():
+    """Beolvassa a SANDBOX_MODE értékét a variables.robot fájlból.
+    
+    Returns:
+        bool: True ha sandbox mode, False egyébként
+    """
+    try:
+        variables_file = os.path.join('resources', 'variables.robot')
+        if os.path.exists(variables_file):
+            with open(variables_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                # Keresés a SANDBOX_MODE sorban
+                for line in content.split('\n'):
+                    if line.strip().startswith('${SANDBOX_MODE}'):
+                        # Kivonjuk a True/False értéket
+                        if '${True}' in line:
+                            return True
+                        elif '${False}' in line:
+                            return False
+    except Exception as e:
+        print(f"[WARNING] Hiba a SANDBOX_MODE beolvasásakor: {e}")
+    
+    # Alapértelmezett: False (nem sandbox mode)
+    return False
+
 def get_downloaded_keys():
     """Felderíti a results mappában a korábbi futások alapján, mely REPO/BRANCH párokhoz tartozik eredmény.
     A results könyvtárban a mappa neve formátum: {safe_repo}__{safe_branch}__{timestamp}
@@ -448,6 +473,10 @@ def serve_results(subpath):
 def get_html_template():
     """Visszaadja a HTML template-et a parse_repos.py alapján"""
 
+    # SANDBOX_MODE ellenőrzése
+    is_sandbox = get_sandbox_mode()
+    page_title = "Fejlesztői mód" if is_sandbox else "Segíthetünk?"
+    
     return '''<!DOCTYPE html>
 <html lang="hu">
 <head>
@@ -456,7 +485,7 @@ def get_html_template():
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Segíthetünk? - Robot Kezelő v2.1</title>
+<title>''' + page_title + ''' - Robot Kezelő v2.1</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 <style>
@@ -506,7 +535,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="main-container">
 <div class="page-header">
 <div class="header-content">
-<h1><i class="bi bi-robot"></i> Segíthetünk?</h1>
+<h1><i class="bi bi-robot"></i> ''' + page_title + '''</h1>
 </div>
 </div>
 <ul class="nav nav-tabs" id="mainTabs" role="tablist">

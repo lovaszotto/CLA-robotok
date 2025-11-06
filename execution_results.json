@@ -8,5 +8,25 @@
     "returncode": 0,
     "results_dir": "test_results",
     "type": "test"
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-11-06 02:52:50",
+    "repo": "CLA-robotok",
+    "branch": "CLA-Developer",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "CLA-robotok__CLA-Developer__20251106_025250",
+    "type": "single"
+  },
+  {
+    "id": 3,
+    "timestamp": "2025-11-06 03:05:05",
+    "repo": "CLA-robotok",
+    "branch": "CLA-Developer",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "CLA-robotok__CLA-Developer__20251106_030505",
+    "type": "single"
   }
 ]
