@@ -1224,6 +1224,9 @@ function removeRobotFromExecutionList(repo, branch) {
         
         const container = document.getElementById('selectedRobotsContainer');
         container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Letölthető robotok" tab-on a futtatáshoz.</div>';
+        
+        // Tab számok frissítése
+        updateTabCounts();
     }
 }
 
@@ -1343,6 +1346,9 @@ function showSelectedRobots(robots) {
     html += '</div>';
     
     container.innerHTML = html;
+    
+    // Tab számok frissítése
+    updateTabCounts();
 }
 
 function executeRobot(repo, branch) {
@@ -1730,6 +1736,9 @@ function clearSelection() {
     
     const container = document.getElementById('selectedRobotsContainer');
     container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>';
+    
+    // Tab számok frissítése
+    updateTabCounts();
 }
 
 function saveSettings() {
@@ -1821,10 +1830,39 @@ function cancelExit() {
     }
 }
 
+// Tab-ok robotszámainak frissítése
+function updateTabCounts() {
+    try {
+        // Futtatható robotok számának frissítése
+        const runnableRobots = document.querySelectorAll('#repoContainer .robot-checkbox').length;
+        const downloadTab = document.getElementById('download-tab');
+        if (downloadTab) {
+            downloadTab.innerHTML = '<i class="bi bi-robot"></i> Futtatható robotok (' + runnableRobots + ')';
+        }
+
+        // Letölthető robotok számának frissítése
+        const availableRobots = document.querySelectorAll('#repoContainerAvailable .robot-checkbox-available').length;
+        const availableTab = document.getElementById('available-tab');
+        if (availableTab) {
+            availableTab.innerHTML = '<i class="bi bi-download"></i> Letölthető robotok (' + availableRobots + ')';
+        }
+
+        // Futtatás tab robotok számának frissítése
+        const selectedRobots = getSelectedRobots().length;
+        const executableTab = document.getElementById('executable-tab');
+        if (executableTab) {
+            executableTab.innerHTML = '<i class="bi bi-play-circle"></i> Futtatás (' + selectedRobots + ')';
+        }
+    } catch (error) {
+        console.warn('Tab számok frissítése sikertelen:', error);
+    }
+}
+
 // Oldal betöltésekor
 document.addEventListener('DOMContentLoaded', function() {
     loadSettings();
     updateRunButton();
+    updateTabCounts();
 });
 
 // Close the external results window when 'Visszatérés' is clicked in the modal
@@ -2274,6 +2312,9 @@ function updateRunnableRobotsTab(repos) {
             tooltipTriggerList.forEach(function (tooltipTriggerEl) {
                 try { new bootstrap.Tooltip(tooltipTriggerEl); } catch(e) {}
             });
+            
+            // Tab számok frissítése
+            updateTabCounts();
         })
         .catch(err => {
             console.warn('Nem sikerült lekérni a telepített kulcsokat:', err);
@@ -2398,7 +2439,7 @@ function addBranchToAvailableTab(repoName, branchName) {
     input.id = inputId;
     input.setAttribute('data-repo', repoName);
     input.setAttribute('data-branch', branchName);
-    input.addEventListener('change', updateDownloadButton);
+    input.addEventListener('change', function() { handleAvailableRobotToggle(this); });
 
     const label = document.createElement('label');
     label.className = 'form-check-label ms-2';
@@ -2418,6 +2459,9 @@ function addBranchToAvailableTab(repoName, branchName) {
 
     // Aktuális szűrők alkalmazása
     try { filterReposAvailable(); } catch(e) {}
+    
+    // Tab számok frissítése
+    updateTabCounts();
 }
 // A branch név ikonját a HTML sablonban adjuk hozzá közvetlenül a label-ben
 </script>
