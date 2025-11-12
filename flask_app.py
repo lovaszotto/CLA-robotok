@@ -1,13 +1,17 @@
-from flask import Flask, render_template_string, jsonify, request, send_from_directory
+from flask import Flask, render_template_string, jsonify, request, send_from_directory, session
 import json
 import subprocess
 import os
 import sys
 from datetime import datetime
+import threading
+import time
 import shutil
 import re
 
 app = Flask(__name__)
+# Secret key szükséges a Flask session használatához
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-cla-ssistant-secret-key')
 
 # Globális változók - dinamikus Python executable meghatározása
 def get_python_executable():
@@ -34,28 +38,34 @@ PYTHON_EXECUTABLE = get_python_executable()
 print(f"[INFO] Használt Python executable: {PYTHON_EXECUTABLE}")
 
 def get_sandbox_mode():
-    """Beolvassa a SANDBOX_MODE értékét a variables.robot fájlból.
-    
-    Returns:
-        bool: True ha sandbox mode, False egyébként
+    """Visszaadja a SANDBOX_MODE aktuális értékét.
+
+    Elsődlegesen a Flask session-ben tárolt értéket használjuk (csak aktuális böngésző session-re érvényes),
+    ennek hiányában a resources/variables.robot fájlban lévő alapértéket olvassuk be.
     """
+    # 1) Session elsőbbséget élvez (nem perzisztens fájlba)
+    if 'sandbox_mode' in session:
+        try:
+            return bool(session['sandbox_mode'])
+        except Exception:
+            pass
+
+    # 2) Fallback: variables.robot alapérték
     try:
         variables_file = os.path.join('resources', 'variables.robot')
         if os.path.exists(variables_file):
             with open(variables_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                # Keresés a SANDBOX_MODE sorban
                 for line in content.split('\n'):
                     if line.strip().startswith('${SANDBOX_MODE}'):
-                        # Kivonjuk a True/False értéket
                         if '${True}' in line:
                             return True
                         elif '${False}' in line:
                             return False
     except Exception as e:
         print(f"[WARNING] Hiba a SANDBOX_MODE beolvasásakor: {e}")
-    
-    # Alapértelmezett: False (nem sandbox mode)
+
+    # 3) Végső alapértelmezés
     return False
 
 # --- Segédfüggvények az InstalledRobots elérési út és könyvtár törléséhez ---
@@ -413,6 +423,32 @@ def shutdown():
     func()
     return jsonify({"status": "shutting down"})
 
+@app.route('/api/restart', methods=['POST'])
+def api_restart():
+    """Újraindítja az alkalmazást: elindítja a start.bat-ot és leállítja a jelenlegi szervert.
+
+    A folyamatot háttérben időzítve indítjuk, hogy az HTTP válasz visszaadható legyen.
+    """
+    try:
+        def _do_restart():
+            try:
+                bat_path = os.path.abspath('start.bat')
+                workdir = os.path.dirname(bat_path)
+                if os.path.exists(bat_path):
+                    # Windows: nyit egy új cmd ablakot és futtatja a start.bat-ot
+                    subprocess.Popen(['cmd', '/c', 'start', '""', bat_path], cwd=workdir)
+                else:
+                    print('[WARNING] start.bat nem található:', bat_path)
+            finally:
+                # Biztosan leállítjuk a jelenlegi folyamatot
+                os._exit(0)
+
+        # Kis késleltetés, hogy a kliens megkaphassa a választ
+        threading.Timer(0.5, _do_restart).start()
+        return jsonify({"status": "restarting"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Globális eredmények tárolás
 RESULTS_FILE = 'execution_results.json'
 
@@ -560,6 +596,58 @@ def get_results():
                 'pages': (total + per_page - 1) // per_page
             }
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/set_sandbox_mode', methods=['POST'])
+def set_sandbox_mode():
+    """Beállítja a SANDBOX_MODE értékét az aktuális session-re és szinkronizálja a variables.robot fájlt.
+
+    - Session-ben: csak a jelenlegi böngésző session-re érvényes.
+    - Fájlban: a resources/variables.robot ${SANDBOX_MODE} sorát ${True}/${False} értékre állítjuk.
+    """
+    try:
+        data = request.get_json() or {}
+        enabled = bool(data.get('enabled', False))
+
+        # Session frissítése
+        session['sandbox_mode'] = enabled
+
+        # Fájl szinkronizálása
+        variables_file = os.path.join('resources', 'variables.robot')
+        if not os.path.exists(variables_file):
+            return jsonify({'success': False, 'error': 'Variables.robot fájl nem található'}), 404
+
+        with open(variables_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        import re
+        new_value = '${True}' if enabled else '${False}'
+        modified = False
+        for i, line in enumerate(lines):
+            if line.strip().startswith('${SANDBOX_MODE}'):
+                # Cseréljük le az értéket, az eredeti formázást megtartva, de a példában fix 9 szóköz van
+                lines[i] = re.sub(r'\$\{SANDBOX_MODE\}\s+.*$', f'${{SANDBOX_MODE}}         {new_value}', line)
+                modified = True
+                break
+
+        if not modified:
+            return jsonify({'success': False, 'error': 'SANDBOX_MODE változó nem található a variables.robot fájlban'}), 404
+
+        with open(variables_file, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+        # Nem indítjuk újra a szervert itt; a kliens oldali UI teljes oldalt frissít
+        return jsonify({'success': True, 'enabled': enabled})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/get_sandbox_mode', methods=['GET'])
+def get_sandbox_mode_api():
+    """Visszaadja a jelenlegi SANDBOX_MODE értékét"""
+    try:
+        enabled = get_sandbox_mode()
+        return jsonify({'enabled': enabled})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1009,6 +1097,10 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="form-check mb-3">
 <input class="form-check-input" type="checkbox" id="generateReport" checked>
 <label class="form-check-label" for="generateReport">Jelentés generálása</label>
+</div>
+<div class="form-check mb-3">
+<input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
+<label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
 </div>
 <button class="btn btn-warning" onclick="resetSettings()">
 <i class="bi bi-arrow-clockwise"></i> Alapértelmezett
@@ -1749,6 +1841,7 @@ function saveSettings() {
         executionMode: document.getElementById('executionMode').value,
         timeout: document.getElementById('timeout').value,
         generateReport: document.getElementById('generateReport').checked
+        // sandboxMode-ot NEM mentjük localStorage-ba, mindig a backend a forrás
     };
     
     localStorage.setItem('robotManagerSettings', JSON.stringify(settings));
@@ -1762,6 +1855,10 @@ function resetSettings() {
     document.getElementById('executionMode').value = 'sequential';
     document.getElementById('timeout').value = '300';
     document.getElementById('generateReport').checked = true;
+    document.getElementById('sandboxMode').checked = false;
+    
+    // Sandbox mode visszaállítása a backend-en is
+    updateSandboxMode();
     
     localStorage.removeItem('robotManagerSettings');
     alert('Beállítások visszaállítva!');
@@ -1777,7 +1874,96 @@ function loadSettings() {
         document.getElementById('executionMode').value = settings.executionMode || 'sequential';
         document.getElementById('timeout').value = settings.timeout || '300';
         document.getElementById('generateReport').checked = settings.generateReport !== undefined ? settings.generateReport : true;
+        // sandboxMode-ot NEM töltjük a localStorage-ből, mindig a backend a forrás
     }
+    
+    // Sandbox mode betöltése a backend-ről (ez a mindig aktuális állapot)
+    loadCurrentSandboxMode();
+}
+
+// Sandbox Mode kezelés
+function updateSandboxMode() {
+    const isEnabled = document.getElementById('sandboxMode').checked;
+    
+    fetch('/api/set_sandbox_mode', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            enabled: isEnabled
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Frissítjük a robotok listáját, mivel a forrás megváltozhatott
+            updateTabCounts();
+            refreshRunnableRobots();
+            
+            // Visszajelzés a felhasználónak
+            showToast(isEnabled ? 'Sandbox mód bekapcsolva' : 'Sandbox mód kikapcsolva', 'success');
+            // Teljes oldal frissítés a konzisztenst nézetért (nincs szerver újraindítás)
+            setTimeout(() => { window.location.reload(); }, 800);
+        } else {
+            // Hiba esetén visszaállítjuk a checkbox-ot
+            document.getElementById('sandboxMode').checked = !isEnabled;
+            showToast('Hiba történt a beállítás mentése során', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Hiba:', error);
+        // Hiba esetén visszaállítjuk a checkbox-ot
+        document.getElementById('sandboxMode').checked = !isEnabled;
+        showToast('Hiba történt a beállítás mentése során', 'error');
+    });
+}
+
+function loadCurrentSandboxMode() {
+    fetch('/api/get_sandbox_mode')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('sandboxMode').checked = data.enabled;
+        })
+        .catch(error => {
+            console.error('Hiba a sandbox mode betöltése során:', error);
+        });
+}
+
+// Toast értesítések megjelenítése
+function showToast(message, type = 'info') {
+    const toastClass = type === 'success' ? 'text-bg-success' : 
+                      type === 'error' ? 'text-bg-danger' : 
+                      type === 'warning' ? 'text-bg-warning' : 'text-bg-info';
+                      
+    const toastHtml = `
+        <div class="toast ${toastClass}" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="3000">
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    // Toast container létrehozása, ha még nem létezik
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '1055';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Toast hozzáadása és megjelenítése
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toast = toastContainer.lastElementChild;
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    // Automatikus törlés a toast eltűnése után
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
 }
 
 // Státusz segédfüggvények
