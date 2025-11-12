@@ -138,5 +138,25 @@
     "returncode": 0,
     "results_dir": "SzotarRobi__Szó-kikérdező__20251112_081313",
     "type": "single"
+  },
+  {
+    "id": 15,
+    "timestamp": "2025-11-12 08:41:07",
+    "repo": "IKK-Robotok",
+    "branch": "IKK03_Web-ellenőrzés",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "IKK-Robotok__IKK03_Web-ellenőrzés__20251112_084107",
+    "type": "single"
+  },
+  {
+    "id": 16,
+    "timestamp": "2025-11-12 09:54:48",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251112_095448",
+    "type": "single"
   }
 ]

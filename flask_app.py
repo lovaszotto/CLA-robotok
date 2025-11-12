@@ -260,6 +260,83 @@ def run_robot_with_params(repo: str, branch: str):
     except Exception as e:
         return 1, results_dir_rel, '', str(e)
 
+def install_robot_with_params(repo: str, branch: str):
+    """Letölti és telepíti a robotot a megadott repo/branch alapján, de nem futtatja.
+    Visszatér: (returncode, results_dir_rel, stdout, stderr)
+    """
+    import json
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_repo = (repo or 'unknown').replace('/', '_')
+    safe_branch = (branch or 'unknown').replace('/', '_')
+    # 1. Könyvtárak létrehozása (repo és branch szint)
+    if get_sandbox_mode():
+        base_dir = _normalize_dir_from_vars('SANDBOX_ROBOTS')
+        if not base_dir:
+            base_dir = os.path.join(os.getcwd(), 'SandboxRobots')
+    else:
+        base_dir = _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
+        if not base_dir:
+            base_dir = os.path.join(os.getcwd(), 'DownloadedRobots')
+    repo_dir = os.path.join(base_dir, safe_repo)
+    branch_dir = os.path.join(repo_dir, safe_branch)
+    os.makedirs(repo_dir, exist_ok=True)
+    os.makedirs(branch_dir, exist_ok=True)
+
+    # 2. Git repo URL kinyerése a repos_response.json-ból
+    repo_url = None
+    try:
+        with open('repos_response.json', 'r', encoding='utf-8') as f:
+            repos = json.load(f)
+            for r in repos:
+                if r.get('name', '').lower() == repo.lower():
+                    repo_url = r.get('clone_url')
+                    break
+    except Exception as e:
+        return 1, '', '', f'Hiba a repos_response.json olvasásakor: {e}'
+    if not repo_url:
+        return 1, '', '', f'Nem található repo URL: {repo}'
+
+    # 3. Klónozás, ha nincs meg a branch könyvtárban .git
+    try:
+        if not os.path.exists(os.path.join(branch_dir, '.git')):
+            clone_cmd = [
+                'git', 'clone', '--branch', branch, '--single-branch', repo_url, branch_dir
+            ]
+            result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=120)
+            if result.returncode != 0:
+                return 1, '', result.stdout, result.stderr
+        else:
+            pull_cmd = ['git', '-C', branch_dir, 'pull']
+            result = subprocess.run(pull_cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                return 1, '', result.stdout, result.stderr
+    except Exception as e:
+        return 1, '', '', f'Git klónozás/pull hiba: {e}'
+
+    if get_sandbox_mode():
+        # Csak klónozás SANDBOX módban, nincs telepito.bat, nincs start.bat ellenőrzés
+        return 0, branch_dir, 'Sandbox clone OK', ''
+    # 4. telepito.bat futtatása a letöltött branch könyvtárban
+    telepito_path = os.path.join(branch_dir, 'telepito.bat')
+    if not os.path.exists(telepito_path):
+        return 1, '', '', f'telepito.bat nem található: {telepito_path}'
+    try:
+        # Új ablakban futtatás: cmd /c start cmd.exe /c telepito.bat
+        result = subprocess.run(['cmd.exe', '/c', 'start', 'cmd.exe', '/c', 'telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300)
+        # A start parancs mindig 0-val tér vissza, ezért nem biztos, hogy a telepito.bat sikeres volt, de legalább popup ablakban fut
+    except Exception as e:
+        return 1, '', '', f'telepito.bat futtatási hiba: {e}'
+
+    # 5. Ellenőrzés, hogy az INSTALLED_ROBOTS/<repo>/<branch>/start.bat létrejött-e
+    installed_dir = _normalize_dir_from_vars('INSTALLED_ROBOTS')
+    if not installed_dir:
+        installed_dir = os.path.join(os.getcwd(), 'InstalledRobots')
+    start_bat = os.path.join(installed_dir, safe_repo, safe_branch, 'start.bat')
+    if not os.path.exists(start_bat):
+        return 1, '', '', f'start.bat nem található a telepítés után: {start_bat}'
+
+    return 0, branch_dir, 'Install OK', ''
+
 @app.route('/')
 def index():
     """Főoldal"""
@@ -406,6 +483,35 @@ def api_execute_bulk():
         save_execution_results()
     
     return jsonify({"status": "ok", "count": len(printed), "robots": printed})
+
+@app.route('/api/install_selected', methods=['POST'])
+def api_install_selected():
+    """Kijelölt robotok letöltése és telepítése, de nem futtatja őket."""
+    data = request.get_json(silent=True) or {}
+    robots = data.get('robots') or []
+    if not robots:
+        return jsonify({'success': False, 'error': 'Nincs kiválasztott robot.'}), 400
+    installed = []
+    errors = []
+    for r in robots:
+        repo = (r.get('repo') or '').strip()
+        branch = (r.get('branch') or '').strip()
+        if not repo or not branch:
+            errors.append({'repo': repo, 'branch': branch, 'error': 'Hiányzó repo vagy branch'})
+            continue
+        try:
+            # Itt csak letöltés és telepítés, futtatás nélkül
+            # Feltételezzük, hogy van egy install_robot_with_params függvény
+            rc, out_dir, _stdout, _stderr = install_robot_with_params(repo, branch)
+            if rc == 0:
+                installed.append({'repo': repo, 'branch': branch, 'results_dir': out_dir})
+            else:
+                errors.append({'repo': repo, 'branch': branch, 'error': f'Installáció sikertelen, rc={rc}'})
+        except Exception as e:
+            errors.append({'repo': repo, 'branch': branch, 'error': str(e)})
+    if errors:
+        return jsonify({'success': False, 'installed': installed, 'errors': errors})
+    return jsonify({'success': True, 'installed': installed})
 
 @app.route('/favicon.ico')
 def favicon():
@@ -647,7 +753,7 @@ def get_sandbox_mode_api():
     """Visszaadja a jelenlegi SANDBOX_MODE értékét"""
     try:
         enabled = get_sandbox_mode()
-        return jsonify({'enabled': enabled})
+        return jsonify({'enabled': enabled, 'sandbox_mode': enabled})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1012,12 +1118,15 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="d-flex justify-content-between align-items-center mb-3">
 <h3 class="mb-0"><i class="bi bi-play-circle-fill text-success"></i> Kiválasztott Robotok Futtatása</h3>
 <div id="executionButtons" style="display: none;">
-<button class="btn btn-outline-secondary btn-lg me-2" onclick="clearSelection()">
-<i class="bi bi-x-circle"></i> Összes törlése
-</button>
-<button class="btn btn-success btn-lg" onclick="executeAllRobots()">
-<i class="bi bi-play-fill"></i> Összes futtatása
-</button>
+        <button class="btn btn-outline-secondary btn-lg me-2" onclick="clearSelection()">
+            <i class="bi bi-x-circle"></i> Összes visszavonása
+        </button>
+    <button class="btn btn-primary btn-lg me-2" onclick="installSelectedRobots()">
+        <i class="bi bi-download"></i> Kijelöltek letöltése
+    </button>
+        <button class="btn btn-success btn-lg" onclick="executeAllRobots()">
+            <i class="bi bi-play-fill"></i> Kijelöltek futtatása
+        </button>
 </div>
 </div>
 <div id="selectedRobotsContainer">
@@ -1239,6 +1348,106 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// SANDBOX_MODE lekérdezése backendről
+let SANDBOX_MODE = false;
+fetch('/api/get_sandbox_mode').then(r => r.json()).then(data => {
+    SANDBOX_MODE = !!data.sandbox_mode;
+    updateSandboxModeUI();
+});
+
+function updateSandboxModeUI() {
+    const runBtn = document.querySelector('button[onclick="executeAllRobots()"]');
+    const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
+    if (SANDBOX_MODE) {
+        if (runBtn) {
+            runBtn.style.display = 'none';
+        }
+        if (installBtn) {
+            installBtn.disabled = false;
+            installBtn.classList.remove('disabled');
+        }
+    } else {
+        if (runBtn) {
+            runBtn.style.display = '';
+            runBtn.disabled = false;
+            runBtn.classList.remove('disabled');
+        }
+        if (installBtn) {
+            installBtn.disabled = false;
+            installBtn.classList.remove('disabled');
+        }
+    }
+}
+// Kijelölt robotok telepítése (csak letöltés + install, nem futtat)
+function installSelectedRobots() {
+    const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
+    const runBtn = document.querySelector('button[onclick="executeAllRobots()"]');
+    if (installBtn) installBtn.disabled = true;
+    if (runBtn) runBtn.disabled = true;
+    const selected = Array.from(document.querySelectorAll('.robot-checkbox-available:checked'));
+    if (selected.length === 0) {
+        showToast('Nincs kijelölt robot a letöltéshez.', 'warning');
+    if (installBtn) installBtn.disabled = false;
+    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+        return;
+    }
+    const robots = selected.map(cb => ({
+        repo: cb.getAttribute('data-repo'),
+        branch: cb.getAttribute('data-branch')
+    }));
+    fetch('/api/install_selected', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ robots })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('A kijelölt robotok letöltése sikeres.', 'success');
+            // Sikeres telepítés után eltávolítjuk a telepített robotokat a kiválasztottak közül
+            const installed = data.installed || [];
+            // A kiválasztott robotokat teljesen eltávolítjuk a listából (kártyák is)
+            installed.forEach(inst => {
+                removeRobotFromExecutionList(inst.repo, inst.branch);
+                const cb = document.querySelector(`.robot-checkbox-available[data-repo="${inst.repo}"][data-branch="${inst.branch}"]`);
+                if (cb) cb.checked = false;
+            });
+            // Futtatható robotok tab frissítése
+            refreshRunnableRobots();
+            // Letölthető robotok tab frissítése
+            if (typeof refreshAvailableRobots === 'function') {
+                refreshAvailableRobots();
+            }
+        } else {
+            // Sikertelen telepítésnél a hibát az adott robot paneljébe írjuk
+            if (data.errors && data.errors.length > 0) {
+                data.errors.forEach(err => {
+                    const card = document.querySelector(
+                        `.card[data-repo="${err.repo}"][data-branch="${err.branch}"]`
+                    );
+                    if (card) {
+                        let errorDiv = card.querySelector('.install-error-msg');
+                        if (!errorDiv) {
+                            errorDiv = document.createElement('div');
+                            errorDiv.className = 'alert alert-danger install-error-msg mt-2 mb-0';
+                            card.querySelector('.card-body').appendChild(errorDiv);
+                        }
+                        errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Letöltési hiba: ${err.error || 'Ismeretlen hiba'}`;
+                    }
+                });
+            } else {
+                showToast('Hiba a letöltés során: ' + (data.error || 'Ismeretlen hiba'), 'danger');
+            }
+        }
+    if (installBtn) installBtn.disabled = false;
+    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+    })
+    .catch(err => {
+        showToast('Hálózati vagy szerverhiba: ' + err, 'danger');
+    if (installBtn) installBtn.disabled = false;
+    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+    });
+}
 // Törlési funkció - mindenképpen legyen elérhető
 function deleteRunnableBranch(repoName, branchName) {
     if (confirm('Valóban törölni szeretnéd a futtathatók közül?\\n\\nRepository: ' + repoName + '\\nBranch: ' + branchName)) {
@@ -1261,7 +1470,7 @@ function downloadSelectedRobots() {
         document.getElementById('executable-tab').click();
     }
 }
-// Letölthetű robotok azonnali hozzáadása/eltávolítása a Futtatás tab-hoz
+// Letölthető robotok azonnali hozzáadása/eltávolítása a Futtatás tab-hoz
 function handleAvailableRobotToggle(checkbox) {
     const repo = checkbox.getAttribute('data-repo');
     const branch = checkbox.getAttribute('data-branch');
@@ -1287,7 +1496,7 @@ function handleRunnableRobotToggle(checkbox) {
         addRobotToExecutionList(repo, branch);
         console.log(`Futtatható robot hozzáadva: ${repo}/${branch}`);
     } else {
-        // Eltávolítás a futtatási listából
+        // Eltávolítás a futtatható listából
         removeRobotFromExecutionList(repo, branch);
         console.log(`Futtatható robot eltávolítva: ${repo}/${branch}`);
     }
@@ -1442,7 +1651,7 @@ function showSelectedRobots(robots) {
                         <button class="btn btn-outline-success btn-sm" onclick="executeRobot('${robot.repo}', '${robot.branch}')" title="Robot futtatása">
                                 <i class="bi bi-play"></i> Indítás
                         </button>
-                        <button class="btn btn-outline-danger btn-sm" onclick="removeRobotFromList('${robot.repo}', '${robot.branch}')" title="Eltávolítás a listából">
+                                               <button class="btn btn-outline-danger btn-sm" onclick="removeRobotFromList('${robot.repo}', '${robot.branch}')" title="Eltávolítás a listából">
                             <i class="bi bi-x-circle"></i> Mégsem
                         </button>
                     </div>
@@ -1556,6 +1765,11 @@ function executeRobot(repo, branch) {
 }
 
 function executeAllRobots() {
+    // Gombok tiltása indításkor
+    const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
+    const runBtn = document.querySelector('button[onclick="executeAllRobots()"]');
+    if (installBtn) installBtn.disabled = true;
+    if (runBtn) runBtn.disabled = true;
     // Mindkét tabról származó kiválasztott robotokat összegyűjtjük
     const checkboxesRun = document.querySelectorAll('.robot-checkbox:checked');
     const checkboxesDownload = document.querySelectorAll('.robot-checkbox-available:checked');
@@ -1573,15 +1787,24 @@ function executeAllRobots() {
     });
     if (robots.length === 0) {
         alert('Nincs kiválasztott robot.');
+    if (installBtn) installBtn.disabled = false;
+    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
         return;
     }
     // Ha csak egy robot van kiválasztva, egyedi futtatásként kezeljük
     if (robots.length === 1) {
         const robot = robots[0];
         executeRobot(robot.repo, robot.branch);
+    if (installBtn) installBtn.disabled = false;
+    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
         return;
     }
     // "Fut" státusz megjelenítése minden robotnak azonnal (többes futtatás esetén)
+    // Gombok újra engedélyezése 2 másodperc múlva (ha nem aszinkron a futás)
+    setTimeout(() => {
+    if (installBtn) installBtn.disabled = false;
+    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+    }, 2000);
     const container = document.getElementById('selectedRobotsContainer');
     const currentTime = new Date().toLocaleString('hu-HU');
     // Csoport fejléc
@@ -2075,9 +2298,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (window._lastResultsWindow && !window._lastResultsWindow.closed) {
                     window._lastResultsWindow.close();
                 }
-            } catch (e) {
-                console.warn('Nem sikerült bezárni a külső ablakot:', e);
-            }
+            } catch (e) { /* ignore */ }
         });
     }
 });
@@ -2668,7 +2889,7 @@ function addBranchToAvailableTab(repoName, branchName) {
 </script>
 </body>
 </html>'''
-    
+
     # Dinamikus színek behelyettesítése a template-ben
     css_template = css_template.replace('{primary_color}', primary_color)
     css_template = css_template.replace('{secondary_color}', secondary_color)
