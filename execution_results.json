@@ -128,5 +128,15 @@
     "returncode": 0,
     "results_dir": "CPS-Robotok__ORIANA-Mezo-ellenor__20251106_160758",
     "type": "single"
+  },
+  {
+    "id": 14,
+    "timestamp": "2025-11-12 08:13:13",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251112_081313",
+    "type": "single"
   }
 ]

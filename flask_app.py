@@ -801,6 +801,21 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 .branch-checkbox { padding: 8px 12px; margin: 2px 0; border-radius: 6px; transition: background-color 0.2s; }
 .branch-checkbox:hover { background-color: #f8f9fa; }
 .branch-checkbox input:checked + label { font-weight: bold; color: {primary_color}; }
+/* Always show a border for checkboxes, even when not checked */
+.branch-checkbox .form-check-input[type="checkbox"] {
+    border: 2px solid #888;
+    background-color: #fff;
+    box-shadow: none;
+    -webkit-appearance: checkbox;
+         -moz-appearance: checkbox;
+                    appearance: checkbox;
+}
+.branch-checkbox .form-check-input[type="checkbox"]:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.15rem rgba(0,123,255,.25);
+}
+/* Always show a border for checkboxes, even when not checked */
+/* Widen and emphasize switches for robot selection */
 #repoSearch:focus, #branchFilter:focus { border-color: {primary_color}; box-shadow: 0 0 0 0.2rem rgba({rgba_color}, 0.25); }
 .input-group-text.bg-primary { background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%) !important; }
 .input-group-text.bg-success { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%) !important; }
@@ -901,21 +916,21 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                     <div class="branches-container">
                         {% for branch in repo.downloaded_branches %}
                             <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
-                                <input type="checkbox" class="form-check-input robot-checkbox me-2" 
+                                <input type="checkbox" class="form-check-input robot-checkbox me-2"
                                        id="branch-{{ repo.name }}-{{ branch }}" 
                                        data-repo="{{ repo.name }}" 
                                        data-branch="{{ branch }}"
                                        onchange="handleRunnableRobotToggle(this)">
                                 <div class="d-flex align-items-center me-2">
-                                    <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: {{ repo.pushed_at_formatted }}"></i>
-                                    <i class="bi bi-trash text-danger me-1" 
+                                    <i class="bi bi-house-fill text-primary me-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: {{ repo.pushed_at_formatted }}"></i>
+                                    <i class="bi bi-trash text-danger" 
                                        style="cursor: pointer;" 
                                        onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"
                                        data-bs-toggle="tooltip" 
                                        data-bs-placement="top" 
                                        title="Eltávolítás a futtathatók közül"></i>
                                 </div>
-                                <span>{{ branch }}</span>
+                                <label class="form-check-label mb-0 me-2" for="branch-{{ repo.name }}-{{ branch }}">{{ branch }}</label>
                             </div>
                         {% endfor %}
                     </div>
@@ -974,7 +989,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                     <div class="branches-container">
                         {% for branch in repo.available_branches %}
                             <div class="branch-checkbox">
-                                <input type="checkbox" class="form-check-input robot-checkbox-available" 
+                                <input type="checkbox" class="form-check-input robot-checkbox-available me-2"
                                        id="branch-available-{{ repo.name }}-{{ branch }}" 
                                        data-repo="{{ repo.name }}" 
                                        data-branch="{{ branch }}"
@@ -983,7 +998,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                     <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letölthető"></i>
                                     {{ branch }}
                                 </label>
-                            </div>
+                             </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -1055,11 +1070,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 <div class="card-body">
 <div class="form-check form-switch mb-3">
-<input class="form-check-input" type="checkbox" id="darkMode" checked>
+<input class="form-check-input" type="checkbox" role="switch" id="darkMode" checked>
 <label class="form-check-label" for="darkMode">Sötét téma</label>
 </div>
 <div class="form-check form-switch mb-3">
-<input class="form-check-input" type="checkbox" id="compactView">
+<input class="form-check-input" type="checkbox" role="switch" id="compactView">
 <label class="form-check-label" for="compactView">Kompakt nézet</label>
 </div>
 <div class="mb-3">
@@ -1094,13 +1109,13 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <label for="timeout" class="form-label">Időtúllépés (másodperc)</label>
 <input type="number" class="form-control" id="timeout" value="300" min="30" max="3600">
 </div>
-<div class="form-check mb-3">
-<input class="form-check-input" type="checkbox" id="generateReport" checked>
+<div class="form-check form-switch mb-3">
+<input class="form-check-input" type="checkbox" role="switch" id="generateReport" checked>
 <label class="form-check-label" for="generateReport">Jelentés generálása</label>
 </div>
-<div class="form-check mb-3">
-<input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
-<label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
+<div class="form-check form-switch mb-3">
+    <input class="form-check-input" type="checkbox" role="switch" id="sandboxMode" onchange="updateSandboxMode()">
+    <label class="form-check-label" for="sandboxMode">Fejlesztői mód (csak letöltés, telepítés nélkül)</label>
 </div>
 <button class="btn btn-warning" onclick="resetSettings()">
 <i class="bi bi-arrow-clockwise"></i> Alapértelmezett
@@ -2462,22 +2477,22 @@ function updateRunnableRobotsTab(repos) {
                     // Csak a telepített branch-ek
                     installedBranches.forEach(branch => {
                         html += `
-                            <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
-                                <input type="checkbox" class="form-check-input robot-checkbox me-2" 
-                                       id="branch-${repo.name}-${branch}" 
-                                       data-repo="${repo.name}" 
-                                       data-branch="${branch}"
-                                       onchange="handleRunnableRobotToggle(this)">
-                                <div class="d-flex align-items-center me-2">
-                                    <i class="bi bi-house-fill text-primary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: ${repo.pushed_at_formatted || ''}"></i>
-                                    <i class="bi bi-trash text-danger me-1" 
-                                       style="cursor: pointer;" 
-                                       onclick="deleteRunnableBranch('${repo.name}', '${branch}')"
-                                       data-bs-toggle="tooltip" 
-                                       data-bs-placement="top" 
-                                       title="Eltávolítás a futtathatók közül"></i>
+                            <div class=\"branch-checkbox d-flex align-items-center\" style=\"margin-bottom: 5px;\">
+                                <input type=\"checkbox\" class=\"form-check-input robot-checkbox me-2\"
+                                       id=\"branch-${repo.name}-${branch}\" 
+                                       data-repo=\"${repo.name}\" 
+                                       data-branch=\"${branch}\"
+                                       onchange=\"handleRunnableRobotToggle(this)\">
+                                <div class=\"d-flex align-items-center me-2\">
+                                    <i class=\"bi bi-house-fill text-primary me-2\" data-bs-toggle=\"tooltip\" data-bs-placement=\"top\" title=\"Feltöltve: ${repo.pushed_at_formatted || ''}\"></i>
+                                    <i class=\"bi bi-trash text-danger\" 
+                                       style=\"cursor: pointer;\" 
+                                       onclick=\"deleteRunnableBranch('${repo.name}', '${branch}')\"
+                                       data-bs-toggle=\"tooltip\" 
+                                       data-bs-placement=\"top\" 
+                                       title=\"Eltávolítás a futtathatók közül\"></i>
                                 </div>
-                                <span>${branch}</span>
+                                <label class=\"form-check-label mb-0 me-2\" for=\"branch-${repo.name}-${branch}\">${branch}</label>
                             </div>
                         `;
                     });
@@ -2621,7 +2636,7 @@ function addBranchToAvailableTab(repoName, branchName) {
 
     const input = document.createElement('input');
     input.type = 'checkbox';
-    input.className = 'form-check-input robot-checkbox-available';
+    input.className = 'form-check-input robot-checkbox-available me-2';
     input.id = inputId;
     input.setAttribute('data-repo', repoName);
     input.setAttribute('data-branch', branchName);
