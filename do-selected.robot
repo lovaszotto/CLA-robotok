@@ -13,6 +13,7 @@ Resource    ./resources/variables.robot
 Kiírás konzolra paraméterekből
     [Documentation]    A kapott REPO és BRANCH változók értékeinek kiírása.
     Log To Console     \n=== KIVÁLASZTOTT ROBOT ===
+    Log To Console     [DEBUG] SANDBOX_MODE értéke: ${SANDBOX_MODE}
     Set Global Variable    ${WORKFLOW_STATUS}    'STARTED'
     ${GIT_URL}=    Set Variable    ${GIT_URL_BASE}${REPO}.git
     Set Global Variable    ${GIT_URL}    ${GIT_URL}
@@ -64,7 +65,8 @@ Telepítettség és letöltöttség ellenőrzése
                 Move Directory    ${BRANCH_PATH}         ${TRASH_DIR}        
                 Set Global Variable    ${WORKFLOW_STATUS}    'MAKE_DIRS'
             ELSE
-              Set Global Variable    ${WORKFLOW_STATUS}    'SET_UP_OK'
+              Log To Console     Letöltött branch frissítése (git pull) szükséges
+              Set Global Variable    ${WORKFLOW_STATUS}    'TO_BE_PULL'
             END
         ELSE
              Log To Console     Könyvtárak nem léteznek! 
@@ -100,28 +102,45 @@ Könyvtárak létrehozása
 Branch klónozása
     [Documentation]    A REPO és BRANCH változók alapján klónozza a megfelelő könyvtárat, ha még nincs letöltve.
     #Log To Console    \nBranch klónozása WORKFLOW_STATUS, ha 'TO_BE_CLONE' = ${WORKFLOW_STATUS}    
-    IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
-         Log To Console     ======KLONOZÁS GIT-BŐL=====${WORKFLOW_STATUS}
-         IF    ${SANDBOX_MODE} == True
-             ${TARGET_DIR}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}
-        ELSE
-             ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
-         END
-         
-        #${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
-        Log To Console     \nGit parancs: git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}
-        
-        # Git clone parancs futtatása felugró cmd ablakban
-        Log To Console     Git clone futtatása új ablakban (automatikus bezárással)...
-        ${result}=    Run Process    cmd    /c    start    /wait    cmd    /c    git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}    shell=True    timeout=300s
-        Run Keyword If    ${result.rc} != 0    Log To Console    Git clone nem sikerült (timeout vagy hiba), de folytatjuk: ${result.stderr}
-        Run Keyword If    ${result.rc} == 0    Log To Console    Git clone sikeresen befejeződött
-           IF    ${SANDBOX_MODE} == True
-                Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
+        IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
+            Log To Console     ======KLONOZÁS GIT-BŐL=====${WORKFLOW_STATUS}
+            IF    ${SANDBOX_MODE} == True
+               ${TARGET_DIR}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}
            ELSE
-                Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
+               ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
             END
-     END
+         
+           Log To Console     [GIT KLÓNOZÁS] Forrás: ${GIT_URL}
+           Log To Console     [GIT KLÓNOZÁS] Branch: ${BRANCH}
+           Log To Console     [GIT KLÓNOZÁS] Cél könyvtár: ${TARGET_DIR}
+           Log To Console     [GIT KLÓNOZÁS] Parancs: git clone -b ${BRANCH} --single-branch ${GIT_URL} ${TARGET_DIR}
+
+           # Git clone parancs futtatása (kimenet rögzítése)
+           ${result}=    Run Process    git    clone    -b    ${BRANCH}    --single-branch    ${GIT_URL}    ${TARGET_DIR}    shell=True    timeout=300s
+           Log To Console     [GIT KLÓNOZÁS] rc: ${result.rc}
+           Log To Console     [GIT KLÓNOZÁS] stdout: ${result.stdout}
+           Log To Console     [GIT KLÓNOZÁS] stderr: ${result.stderr}
+           Run Keyword If    ${result.rc} != 0    Fail    Git clone sikertelen: ${result.stderr}
+           Run Keyword If    ${result.rc} == 0    Log To Console    Git clone sikeresen befejeződött
+             IF    ${SANDBOX_MODE} == True
+                 Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
+             ELSE
+                 Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
+              END
+        END
+
+Letöltött branch frissítése
+        [Documentation]    Ha a letöltött könyvtár már létezik, futtatunk egy git pull-t frissítéshez.
+        IF    ${WORKFLOW_STATUS} == 'TO_BE_PULL'
+           Log To Console     ======GIT PULL FUTTATÁSA=====${WORKFLOW_STATUS}
+           Log To Console     [GIT PULL] Könyvtár: ${BRANCH_PATH}
+           ${pull_result}=    Run Process    git    -C    ${BRANCH_PATH}    pull    shell=True    timeout=180s
+           Log To Console     [GIT PULL] rc: ${pull_result.rc}
+           Log To Console     [GIT PULL] stdout: ${pull_result.stdout}
+           Log To Console     [GIT PULL] stderr: ${pull_result.stderr}
+           Run Keyword If    ${pull_result.rc} != 0    Fail    Git pull sikertelen: ${pull_result.stderr}
+           Set Global Variable    ${WORKFLOW_STATUS}    'CLONED'
+        END
 
 Klónozás sikeresség ellenőrzése
    [Documentation]    A klónozás után ellenőrizzük, hogy létezik-e telepito.bat a most letöltött könyvtárban.
@@ -154,11 +173,13 @@ Telepítés futtatása
         Log To Console    BRANCH:${BRANCH}
 
         ${INSTALL_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/telepito.bat
-            Log To Console     Telepítés indítása: ${INSTALL_SCRIPT}
-            
-            # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
-            Log To Console     Telepítő script futtatása új ablakban (automatikus bezárással)...
-            ${install_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
+        Log To Console     [TELEPÍTŐ] telepito.bat elérési út: ${INSTALL_SCRIPT}
+        Log To Console     [TELEPÍTŐ] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+        Log To Console     [TELEPÍTŐ] Telepítés indítása: ${INSTALL_SCRIPT}
+
+        # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
+        Log To Console     [TELEPÍTŐ] Telepítő script futtatása új ablakban (automatikus bezárással)...
+        ${install_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
             IF    ${install_result.rc} != 0    
                 Log To Console    Telepítés nem sikerült (timeout vagy hiba): ${install_result.stderr}
                 Fail    A telepítés sikertelen volt, a telepito.bat nem található:\n ${INSTALL_SCRIPT}
@@ -189,28 +210,75 @@ Telepítés sikeresség ellenőrzése
     END
     
 Robot futtatása
-  [Documentation]    Futtatjuk a start.bat fájlt, ha létezik.
+  [Documentation]    Futtatjuk a start.bat fájlt, ha létezik, vagy SANDBOX módban közvetlenül a letöltött robotot.
   #Log To Console     \n=== ROBOT FUTTATÁSA, ha 'READY_TO_RUN' ===${WORKFLOW_STATUS}
   IF    ${WORKFLOW_STATUS} == 'READY_TO_RUN'    
-      Log To Console     \n=== ROBOT FUTTATÁSA== ${WORKFLOW_STATUS} ==
-      ${RUN_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
-      Log To Console     Robot futtatása az INSTALLED_ROBOTS könyvtárból: ${RUN_SCRIPT}
+      Log To Console     \n=== [FUTTATÁS GOMB] ROBOT FUTTATÁSA INDUL ===
+      Log To Console     [FUTTATÁS] WORKFLOW_STATUS: ${WORKFLOW_STATUS}
+      Log To Console     [FUTTATÁS] REPO: ${REPO}
+      Log To Console     [FUTTATÁS] BRANCH: ${BRANCH}
+            ${RUN_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+        Log To Console     [FUTTATÁS] start.bat elérési út: ${RUN_SCRIPT}
+        Log To Console     [FUTTATÁS] Futtatás könyvtára: ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}
 
       # Külön szerver indítása - popup ablakban futtatás
-      Log To Console     ${REPO}/${BRANCH} alkalmazás indítása külön popup ablakban...
-      Log To Console     Robot script indítása: ${RUN_SCRIPT}
-      
-      # Popup ablakban futtatás - /k paraméter nyitva tartja az ablakot, /wait nélkül hogy ne várjon
-      ${run_result}=    Run Process    cmd    /c    start    cmd    /k    ${RUN_SCRIPT}    shell=True    cwd=${INSTALLED_ROBOTS}/${REPO}/${BRANCH}    timeout=10s
-      
+      Log To Console     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása külön popup ablakban...
+      Log To Console     [FUTTATÁS] Robot script indítása: ${RUN_SCRIPT}
+
+      # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk, hogy elkerüljük az útvonal kódolási gondokat
+      ${run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${INSTALLED_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
+      Log To Console     [FUTTATÁS] Run Process rc: ${run_result.rc}
+      Log To Console     [FUTTATÁS] Run Process stdout: ${run_result.stdout}
+      Log To Console     [FUTTATÁS] Run Process stderr: ${run_result.stderr}
+
       IF    ${run_result.rc} == 0
-          Log To Console     ${REPO}/${BRANCH} alkalmazás sikeresen elindult popup ablakban
+          Log To Console     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás sikeresen elindult popup ablakban
       ELSE
-          Log To Console     ${REPO}/${BRANCH} alkalmazás indítása sikertelen: ${run_result.stderr}
+          Log To Console     [FUTTATÁS] start indítás sikertelen, PowerShell fallback próbálása...
+          ${ps_command}=    Set Variable    Start-Process -FilePath 'start.bat' -WorkingDirectory '${INSTALLED_ROBOTS}/${REPO}/${BRANCH}' -WindowStyle Normal
+          ${ps_result}=    Run Process    powershell.exe    -NoProfile    -ExecutionPolicy    Bypass    -Command    ${ps_command}    shell=True    timeout=60s
+          Log To Console     [FUTTATÁS][PS] rc: ${ps_result.rc}
+          Log To Console     [FUTTATÁS][PS] stdout: ${ps_result.stdout}
+          Log To Console     [FUTTATÁS][PS] stderr: ${ps_result.stderr}
+          IF    ${ps_result.rc} == 0
+              Log To Console     [FUTTATÁS] PowerShell fallback sikeres, ablak elindítva
+          ELSE
+              Log To Console     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása sikertelen: ${ps_result.stderr}
+          END
       END
-      
+
       Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
-      Log To Console    Robot indítása befejezve, a szerver a háttérben fut tovább    
+      Log To Console    [FUTTATÁS] Robot indítása befejezve, a szerver a háttérben fut tovább    
+    ELSE IF    ${SANDBOX_MODE} == True and ${WORKFLOW_STATUS} == 'ALL_DONE'
+      # SANDBOX módban közvetlenül futtatás a letöltött könyvtárból
+      Log To Console     \n=== SANDBOX ROBOT FUTTATÁSA ===
+    ${SANDBOX_RUN_SCRIPT}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}/start.bat
+      ${sandbox_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${SANDBOX_RUN_SCRIPT}
+      
+      IF    ${sandbox_script_exists}
+          Log To Console     Robot futtatása SANDBOX módban: ${SANDBOX_RUN_SCRIPT}
+          
+          # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk
+          ${sandbox_run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${SANDBOX_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
+          
+          IF    ${sandbox_run_result.rc} == 0
+              Log To Console     ${REPO}/${BRANCH} SANDBOX alkalmazás sikeresen elindult popup ablakban
+          ELSE
+              Log To Console     ${REPO}/${BRANCH} SANDBOX start indítása sikertelen, PowerShell fallback...
+              ${ps_sandbox_cmd}=    Set Variable    Start-Process -FilePath 'start.bat' -WorkingDirectory '${SANDBOX_ROBOTS}/${REPO}/${BRANCH}' -WindowStyle Normal
+              ${ps_sandbox_result}=    Run Process    powershell.exe    -NoProfile    -ExecutionPolicy    Bypass    -Command    ${ps_sandbox_cmd}    shell=True    timeout=60s
+              Log To Console     [SANDBOX][PS] rc: ${ps_sandbox_result.rc}
+              Log To Console     [SANDBOX][PS] stdout: ${ps_sandbox_result.stdout}
+              Log To Console     [SANDBOX][PS] stderr: ${ps_sandbox_result.stderr}
+              IF    ${ps_sandbox_result.rc} == 0
+                  Log To Console     ${REPO}/${BRANCH} SANDBOX alkalmazás PowerShell fallback-kel elindult
+              ELSE
+                  Log To Console     ${REPO}/${BRANCH} SANDBOX alkalmazás indítása sikertelen: ${ps_sandbox_result.stderr}
+              END
+          END
+      ELSE
+          Log To Console     SANDBOX start.bat nem található: ${SANDBOX_RUN_SCRIPT}
+      END
     END
     Log To Console     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log To Console     WORKFLOW_STATUS = ${WORKFLOW_STATUS}

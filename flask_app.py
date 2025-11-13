@@ -247,13 +247,28 @@ def run_robot_with_params(repo: str, branch: str):
     safe_repo = (repo or 'unknown').replace('/', '_')
     safe_branch = (branch or 'unknown').replace('/', '_')
     results_dir_rel = f'{safe_repo}__{safe_branch}__{timestamp}'
-    results_dir_abs = os.path.join('results', results_dir_rel)
+    results_dir_abs = os.path.abspath(os.path.join('results', results_dir_rel))
     os.makedirs(results_dir_abs, exist_ok=True)
 
     suite_path = 'do-selected.robot'
     cmd = [PYTHON_EXECUTABLE, '-m', 'robot', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
     try:
+        print(f"[RUN] Python exec: {PYTHON_EXECUTABLE}")
+        print(f"[RUN] CWD: {os.getcwd()}")
+        print(f"[RUN] Results dir (abs): {results_dir_abs}")
+        print(f"[RUN] Command: {' '.join(cmd)}")
+    except Exception:
+        pass
+    try:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='cp1252', errors='ignore')
+        try:
+            generated = []
+            if os.path.isdir(results_dir_abs):
+                generated = sorted(os.listdir(results_dir_abs))
+            print(f"[RUN] Return code: {result.returncode}")
+            print(f"[RUN] Generated files in results dir: {generated}")
+        except Exception as e:
+            print(f"[RUN] Post-run inspection failed: {e}")
         return result.returncode, results_dir_rel, result.stdout, result.stderr
     except FileNotFoundError as e:
         return 1, results_dir_rel, '', f'FileNotFoundError: {e}'
@@ -884,13 +899,16 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 .nav-tabs .nav-link.active { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%); color: white; border-bottom: 3px solid {primary_color}; }
 .nav-tabs .nav-link:hover { background: linear-gradient(135deg, {tertiary_color} 0%, {light_color} 100%); color: {primary_color}; }
 .tab-content { padding: 30px; }
-.card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+.card, .repo-card {
+    border: 2px solid #888 !important;
+}
+.card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; border: 1px solid #dee2e6 !important; }
 .actions { text-align: center; margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }
 .btn-custom { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
 .btn-custom:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, {hover_color} 0%, {primary_color} 50%, {tertiary_color} 100%); }
 .repo-card { 
     transition: all 0.3s ease; 
-    border: 2px solid transparent; 
+    border: 1px solid #dee2e6 !important; 
     background: linear-gradient(135deg, #ffffff 0%, #fdf2f2 100%) !important;
 }
 .repo-card:hover { 
