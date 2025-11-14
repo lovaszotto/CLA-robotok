@@ -1419,6 +1419,7 @@ function updateSandboxModeUI() {
 }
 // Kijelölt robotok telepítése (csak letöltés + install, nem futtat)
 function installSelectedRobots() {
+    console.log('[WORKFLOW] Kijelöltek letöltése indult');
     const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
     const runBtn = document.querySelector('button[onclick="executeAllRobots()"]');
     if (installBtn) installBtn.disabled = true;
@@ -1434,6 +1435,7 @@ function installSelectedRobots() {
         repo: cb.getAttribute('data-repo'),
         branch: cb.getAttribute('data-branch')
     }));
+    console.log('[WORKFLOW] Letöltési kérés elküldése a backendnek');
     fetch('/api/install_selected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1442,6 +1444,7 @@ function installSelectedRobots() {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            console.log('[WORKFLOW] Sikeres letöltés, telepített robotok:', data.installed);
             showToast('A kijelölt robotok letöltése sikeres.', 'success');
             // Sikeres telepítés után eltávolítjuk a telepített robotokat a kiválasztottak közül
             const installed = data.installed || [];
@@ -1458,6 +1461,7 @@ function installSelectedRobots() {
                 refreshAvailableRobots();
             }
         } else {
+            console.log('[WORKFLOW] Sikertelen letöltés vagy részleges hiba', data);
             // Sikertelen telepítésnél a hibát az adott robot paneljébe írjuk
             if (data.errors && data.errors.length > 0) {
                 data.errors.forEach(err => {
@@ -1804,6 +1808,7 @@ function executeRobot(repo, branch) {
 }
 
 function executeAllRobots() {
+    console.log('[WORKFLOW] Kijelöltek futtatása indult');
     // Gombok tiltása indításkor
     const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
     const runBtn = document.querySelector('button[onclick="executeAllRobots()"]');
@@ -1880,6 +1885,7 @@ function executeAllRobots() {
         container.appendChild(tempCard);
     });
     // Szervernek elküldjük a teljes listát
+    console.log('[WORKFLOW] Futtatási kérés elküldése a backendnek');
     fetch('/api/execute-bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1888,6 +1894,7 @@ function executeAllRobots() {
     .then(r => r.json())
     .then(data => {
         console.log('Szerver válasz (bulk):', data);
+        console.log('[WORKFLOW] Futtatás eredmény érkezett', data);
         // A csoport fejléc eltávolítása
         const groupHeader = container.querySelector('.alert-info');
         if (groupHeader) {
@@ -1935,6 +1942,7 @@ function executeAllRobots() {
         }
         
         // Eredmények lista frissítése a tömeges futtatás után
+        console.log('[WORKFLOW] Letölthető robotok tab frissítése');
         console.log('Eredmények lista frissítése (bulk után)...');
         loadResults();
         // Letölthető robotok tab frissítése
@@ -2940,6 +2948,7 @@ function addBranchToAvailableTab(repoName, branchName) {
 
 // Globális fallback: Letölthető robotok tab frissítése oldal reload-dal
 function refreshAvailableRobots() {
+    console.log('[WORKFLOW] Letölthető robotok tab frissítése (reload)');
     window.location.reload();
 }
 </script>
