@@ -77,7 +77,7 @@ Log Environment Status
     
     Log    === KÖRNYEZETI VÁLTOZÓK ÁLLAPOTA ===
     Log    Python executable: ${PYTHON_EXEC}
-    Log    Virtuális környezet: ${VENV_PATH}
+    #Log    Virtuális környezet: ${VENV_PATH}
     Log    Repository: ${REPO}
     Log    Branch: ${BRANCH}
     Log    Git URL: ${GIT_URL}

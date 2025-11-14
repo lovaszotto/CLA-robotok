@@ -3,7 +3,7 @@ Documentation     CLA-Developer robot: Robot letöltése a központi nyilvántar
 Library           OperatingSystem
 Library           SeleniumLibrary
 Library           Process
-Library           BuiltIn
+#Library           BuiltIn
 Library           libraries/PythonUtils.py
 Resource          resources/variables.robot
 Resource          resources/setup.robot
