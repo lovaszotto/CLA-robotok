@@ -251,7 +251,8 @@ def run_robot_with_params(repo: str, branch: str):
     os.makedirs(results_dir_abs, exist_ok=True)
 
     suite_path = 'do-selected.robot'
-    cmd = [PYTHON_EXECUTABLE, '-m', 'robot', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
+    # Egyszerűsítés: közvetlenül a robot.run modult hívjuk (__main__ hiány miatti problémák elkerülésére)
+    cmd = [PYTHON_EXECUTABLE, '-m', 'robot.run', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
     try:
         print(f"[RUN] Python exec: {PYTHON_EXECUTABLE}")
         print(f"[RUN] CWD: {os.getcwd()}")
@@ -410,44 +411,64 @@ def refresh_data():
 @app.route('/api/execute', methods=['POST'])
 def api_execute():
     """Egyetlen kiválasztott robot végrehajtásának kérése."""
-    data = request.get_json(silent=True) or {}
-    repo = (data.get('repo') or '').strip()
-    branch = (data.get('branch') or '').strip()
-    print(f"[EXECUTE] Futtatás kérés: {repo}/{branch}")
-    # Tényleges futtatás indítása Robot Framework-kel
-    if not repo or not branch:
-        print(f"[EXECUTE] HIBA: Hiányzó paraméterek - repo: '{repo}', branch: '{branch}'")
-        return jsonify({"status": "error", "message": "Hiányzó repo vagy branch"}), 400
+    try:
+        raw_body = request.get_data()  # nyers POST törzs
+        ct = request.content_type
+        print(f"[EXECUTE][RAW_BODY_LEN]={len(raw_body)}")
+        # Nyers törzs első 300 byte-ja debughoz
+        preview = raw_body[:300]
+        print(f"[EXECUTE][RAW_BODY_PREVIEW]={preview}")
+        print(f"[EXECUTE][CONTENT_TYPE]={ct}")
+        # Próbáljuk JSON-ként értelmezni több módszerrel
+        data = request.get_json(silent=True)
+        if data is None:
+            try:
+                import json as _json
+                data = _json.loads(raw_body.decode('utf-8-sig'))
+                print("[EXECUTE] json.loads utf-8-sig sikeres")
+            except Exception as e:
+                print(f"[EXECUTE] json parse hiba: {e}")
+                data = {}
+        repo = (data.get('repo') or request.values.get('repo') or '').strip()
+        branch = (data.get('branch') or request.values.get('branch') or '').strip()
+        print(f"[EXECUTE] Futtatás kérés repo='{repo}' branch='{branch}' len_repo={len(repo)} len_branch={len(branch)} data_keys={list(data.keys())}")
+        # Tényleges futtatás indítása Robot Framework-kel
+        if not repo or not branch:
+            print(f"[EXECUTE] HIBA: Hiányzó paraméterek - data={data}")
+            return jsonify({"status": "error", "message": "Hiányzó repo vagy branch"}), 400
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
+        rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
+        status = "success" if rc == 0 else "failed"
+        print(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
+        result_entry = {
+            'id': len(execution_results) + 1,
+            'timestamp': timestamp,
+            'repo': repo,
+            'branch': branch,
+            'status': status,
+            'returncode': rc,
+            'results_dir': out_dir,
+            'type': 'single'
+        }
+        execution_results.append(result_entry)
+        print(f"[EXECUTE] Eredmény hozzáadva: ID={result_entry['id']} összes={len(execution_results)}")
+        save_execution_results()
+        print("[EXECUTE] Eredmény elmentve fájlba")
+        return jsonify({
+            "status": "ok" if rc == 0 else "fail",
+            "repo": repo,
+            "branch": branch,
+            "returncode": rc,
+            "results_dir": out_dir
+        })
+    except Exception as ex:
+        import traceback
+        print("[EXECUTE][EXCEPTION] Kivétel történt:")
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": "internal error", "error": str(ex)}), 500
     
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
-    rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
-    status = "success" if rc == 0 else "failed"
-    print(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
-    
-    # Eredmény tárolása
-    result_entry = {
-        'id': len(execution_results) + 1,
-        'timestamp': timestamp,
-        'repo': repo,
-        'branch': branch,
-        'status': status,
-        'returncode': rc,
-        'results_dir': out_dir,
-        'type': 'single'
-    }
-    execution_results.append(result_entry)
-    print(f"[EXECUTE] Eredmény hozzáadva: ID={result_entry['id']}, összes eredmény: {len(execution_results)}")
-    save_execution_results()  # Mentés fájlba
-    print(f"[EXECUTE] Eredmény elmentve fájlba")
-    
-    return jsonify({
-        "status": "ok" if rc == 0 else "fail",
-        "repo": repo,
-        "branch": branch,
-        "returncode": rc,
-        "results_dir": out_dir
-    })
+    # (Fentebb a try blokkban már visszatértünk.)
 
 @app.route('/api/execute-bulk', methods=['POST'])
 def api_execute_bulk():
@@ -1916,6 +1937,12 @@ function executeAllRobots() {
         // Eredmények lista frissítése a tömeges futtatás után
         console.log('Eredmények lista frissítése (bulk után)...');
         loadResults();
+        // Letölthető robotok tab frissítése
+        if (typeof refreshAvailableRobots === 'function') {
+            refreshAvailableRobots();
+        } else {
+            window.location.reload();
+        }
     })
     .catch(err => {
         console.error('Tömeges futtatás hiba:', err);
@@ -1956,6 +1983,12 @@ function executeAllRobots() {
         // Hiba esetén is frissítsük az eredményeket
         console.log('Eredmények lista frissítése (bulk hiba után)...');
         loadResults();
+        // Letölthető robotok tab frissítése hiba esetén is
+        if (typeof refreshAvailableRobots === 'function') {
+            refreshAvailableRobots();
+        } else {
+            window.location.reload();
+        }
     });
 }
 
@@ -2904,6 +2937,11 @@ function addBranchToAvailableTab(repoName, branchName) {
     updateTabCounts();
 }
 // A branch név ikonját a HTML sablonban adjuk hozzá közvetlenül a label-ben
+
+// Globális fallback: Letölthető robotok tab frissítése oldal reload-dal
+function refreshAvailableRobots() {
+    window.location.reload();
+}
 </script>
 </body>
 </html>'''
