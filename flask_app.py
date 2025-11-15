@@ -70,10 +70,7 @@ def get_sandbox_mode():
 
 # --- Segédfüggvények az InstalledRobots elérési út és könyvtár törléséhez ---
 def get_robot_variable(var_name: str) -> str:
-    """Beolvassa a resources/variables.robot fájlból a megadott változó értékét.
-
-    Példa: get_robot_variable('INSTALLED_ROBOTS') -> 'c:/.../InstalledRobots/'
-    """
+    """Beolvassa a resources/variables.robot fájlból a megadott változó értékét (csak DownloadedRobots/SandboxRobots támogatott)."""
     try:
         variables_file = os.path.join('resources', 'variables.robot')
         if not os.path.exists(variables_file):
@@ -97,17 +94,10 @@ def _normalize_dir_from_vars(var_name: str) -> str:
     return os.path.normpath(path)
 
 def get_installed_robots_dir() -> str:
-    """Visszaadja, honnan számoljuk a 'futtatható' robotokat.
-
-    - SANDBOX_MODE == True esetén a SANDBOX_ROBOTS mappát használjuk
-    - különben az INSTALLED_ROBOTS mappát
-    """
-    try:
-        if get_sandbox_mode():
-            return _normalize_dir_from_vars('SANDBOX_ROBOTS')
-    except Exception:
-        pass
-    return _normalize_dir_from_vars('INSTALLED_ROBOTS')
+    """Mindig a DownloadedRobots vagy SandboxRobots könyvtárat adja vissza, InstalledRobots megszűnt."""
+    if get_sandbox_mode():
+        return _normalize_dir_from_vars('SANDBOX_ROBOTS')
+    return _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
 
 def get_downloaded_robots_dir() -> str:
     """DownloadedRobots bázis könyvtár."""
@@ -148,9 +138,6 @@ def _delete_robot_directory(base_dir: str, repo_name: str, branch_name: str):
     except Exception as e:
         return False, f'Törlés sikertelen: {target} - {e}'
 
-def delete_installed_robot_directory(repo_name: str, branch_name: str):
-    """Törli a telepített robot könyvtárát: InstalledRobots/<repo>/<branch>."""
-    return _delete_robot_directory(get_installed_robots_dir(), repo_name, branch_name)
 
 def delete_downloaded_robot_directory(repo_name: str, branch_name: str):
     """Törli a letöltött robot könyvtárát: DownloadedRobots/<repo>/<branch>."""
@@ -174,9 +161,9 @@ def get_downloaded_keys():
     return keys
 
 def get_installed_keys():
-    """Felderíti az InstalledRobots mappában az elérhető (telepített) REPO/BRANCH párokat.
+    """Felderíti a DownloadedRobots vagy SandboxRobots mappában az elérhető (futtatható) REPO/BRANCH párokat.
 
-    Struktúra: InstalledRobots/<repo>/<branch>/
+    Struktúra: <base>/<repo>/<branch>/, ahol base = DownloadedRobots vagy SandboxRobots
     Visszaad: set(["<repo>|<branch>", ...])
     """
     keys = set()
@@ -191,12 +178,12 @@ def get_installed_keys():
                     branch_path = os.path.join(repo_path, branch_name)
                     if not os.path.isdir(branch_path):
                         continue
-                    # Csak akkor tekintjük futtathatónak, ha van start.bat (ready to run)
-                    start_script = os.path.join(branch_path, 'start.bat')
-                    if os.path.isfile(start_script):
+                    # Csak akkor tekintjük futtathatónak, ha van .venv mappa (ready to run)
+                    venv_folder = os.path.join(branch_path, '.venv')
+                    if os.path.isdir(venv_folder):
                         keys.add(f"{repo_name}|{branch_name}")
     except Exception as e:
-        print(f"[INFO] Nem sikerült a telepített kulcsokat felderíteni: {e}")
+        print(f"[INFO] Nem sikerült a futtatható kulcsokat felderíteni: {e}")
     return keys
 def get_branches_for_repo(repo_name):
     """Lekéri egy repository branch-eit a git ls-remote segítségével."""
@@ -332,25 +319,22 @@ def install_robot_with_params(repo: str, branch: str):
     if get_sandbox_mode():
         # Csak klónozás SANDBOX módban, nincs telepito.bat, nincs start.bat ellenőrzés
         return 0, branch_dir, 'Sandbox clone OK', ''
-    # 4. telepito.bat futtatása a letöltött branch könyvtárban
-    telepito_path = os.path.join(branch_dir, 'telepito.bat')
-    if not os.path.exists(telepito_path):
-        return 1, '', '', f'telepito.bat nem található: {telepito_path}'
-    try:
-        # Új ablakban futtatás: cmd /c start cmd.exe /c telepito.bat
-        result = subprocess.run(['cmd.exe', '/c', 'start', 'cmd.exe', '/c', 'telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300)
-        # A start parancs mindig 0-val tér vissza, ezért nem biztos, hogy a telepito.bat sikeres volt, de legalább popup ablakban fut
-    except Exception as e:
-        return 1, '', '', f'telepito.bat futtatási hiba: {e}'
-
-    # 5. Ellenőrzés, hogy az INSTALLED_ROBOTS/<repo>/<branch>/start.bat létrejött-e
-    installed_dir = _normalize_dir_from_vars('INSTALLED_ROBOTS')
-    if not installed_dir:
-        installed_dir = os.path.join(os.getcwd(), 'InstalledRobots')
-    start_bat = os.path.join(installed_dir, safe_repo, safe_branch, 'start.bat')
-    if not os.path.exists(start_bat):
-        return 1, '', '', f'start.bat nem található a telepítés után: {start_bat}'
-
+    # 4. telepito.bat futtatása CSAK ha nincs .venv mappa a letöltött branch könyvtárban
+    installed_dir = get_installed_robots_dir()
+    venv_dir = os.path.join(installed_dir, safe_repo, safe_branch, '.venv')
+    if not os.path.isdir(venv_dir):
+        telepito_path = os.path.join(branch_dir, 'telepito.bat')
+        if not os.path.exists(telepito_path):
+            return 1, '', '', f'telepito.bat nem található: {telepito_path}'
+        try:
+            # Új ablakban futtatás: cmd /c start cmd.exe /c telepito.bat
+            result = subprocess.run(['cmd.exe', '/c', 'start', 'cmd.exe', '/c', 'telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300)
+            # A start parancs mindig 0-val tér vissza, ezért nem biztos, hogy a telepito.bat sikeres volt, de legalább popup ablakban fut
+        except Exception as e:
+            return 1, '', '', f'telepito.bat futtatási hiba: {e}'
+        # telepito.bat után újra ellenőrizzük a .venv mappát
+        if not os.path.isdir(venv_dir):
+            return 1, '', '', f'.venv mappa nem található a telepítés után: {venv_dir}'
     return 0, branch_dir, 'Install OK', ''
 
 @app.route('/')
@@ -637,11 +621,7 @@ def delete_runnable_branch():
         if not repo_name or not branch_name:
             return jsonify({'success': False, 'error': 'Repository és branch név szükséges'})
         
-        # Telepített robot könyvtár törlése az InstalledRobots alól
-        deleted_installed, info_inst = delete_installed_robot_directory(repo_name, branch_name)
-        status_inst = 'törölve' if deleted_installed else 'nem található, nincs mit törölni'
-        print(f"[DELETE] InstalledRobots: {repo_name}/{branch_name}: {status_inst}. {info_inst}")
-
+    
         # Letöltött robot könyvtár törlése a DownloadedRobots alól
         deleted_downloaded, info_down = delete_downloaded_robot_directory(repo_name, branch_name)
         status_down = 'törölve' if deleted_downloaded else 'nem található, nincs mit törölni'
@@ -650,8 +630,7 @@ def delete_runnable_branch():
         return jsonify({
             'success': True,
             'message': f'Branch {repo_name}/{branch_name} eltávolítva',
-            'deleted': deleted_installed,  # visszafelé kompatibilitás
-            'deleted_installed': deleted_installed,
+            'deleted': deleted_downloaded,  # csak DownloadedRobots számít
             'deleted_downloaded': deleted_downloaded
         })
         

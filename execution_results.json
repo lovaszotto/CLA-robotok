@@ -598,5 +598,85 @@
     "returncode": 1,
     "results_dir": "SzotarRobi__Szó-kikérdező__20251114_151056",
     "type": "single"
+  },
+  {
+    "id": 61,
+    "timestamp": "2025-11-15 06:11:09",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_061109",
+    "type": "single"
+  },
+  {
+    "id": 62,
+    "timestamp": "2025-11-15 06:12:50",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_061250",
+    "type": "single"
+  },
+  {
+    "id": 63,
+    "timestamp": "2025-11-15 06:29:09",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_062909",
+    "type": "single"
+  },
+  {
+    "id": 64,
+    "timestamp": "2025-11-15 06:31:29",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_063129",
+    "type": "single"
+  },
+  {
+    "id": 65,
+    "timestamp": "2025-11-15 06:43:51",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_064351",
+    "type": "single"
+  },
+  {
+    "id": 66,
+    "timestamp": "2025-11-15 06:47:55",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_064755",
+    "type": "single"
+  },
+  {
+    "id": 67,
+    "timestamp": "2025-11-15 06:56:22",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_065622",
+    "type": "single"
+  },
+  {
+    "id": 68,
+    "timestamp": "2025-11-15 06:56:32",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251115_065632",
+    "type": "single"
   }
 ]

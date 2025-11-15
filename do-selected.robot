@@ -28,7 +28,7 @@ Telepítettség és letöltöttség ellenőrzése
     Log To Console     \n=== TELEPÍTETTSÉG ÉS LETÖLTÖTTSÉG ELLENŐRZÉSE ===  ${WORKFLOW_STATUS}
     
     # Telepített robot ellenőrzése (start.bat létezik-e)
-    ${START_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+    ${START_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
     ${start_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${START_SCRIPT}
     
     IF    ${start_script_exists}
@@ -196,16 +196,16 @@ Telepítés sikeresség ellenőrzése
    #Log To Console     \n=== TELEPÍTÉS ELLENŐRZÉSE, ha 'SET_UP_OK' ===${WORKFLOW_STATUS}
    IF    ${WORKFLOW_STATUS} == 'SET_UP_OK'
         Log To Console     \n=== TELEPÍTÉS ELLENŐRZÉSE == ${WORKFLOW_STATUS}
-        ${START_SCRIPT}=    Set Variable    ${INSTALLED_ROBOTS}/${REPO}/${BRANCH}/start.bat
-        Log To Console     Ellenőrzés: start.bat létezik-e az INSTALLED_ROBOTS könyvtárban? ${START_SCRIPT}
+        ${START_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+        Log To Console     Ellenőrzés: start.bat létezik-e az DOWNLOADED_ROBOTS könyvtárban? ${START_SCRIPT}
 
         ${start_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${START_SCRIPT}
         IF    ${start_script_exists}
-            Log To Console     A telepítés sikeres volt, a start.bat megtalálható az INSTALLED_ROBOTS-ban: ${START_SCRIPT}
+            Log To Console     A telepítés sikeres volt, a start.bat megtalálható az DOWNLOADED_ROBOTS-ban: ${START_SCRIPT}
             Set Global Variable    ${WORKFLOW_STATUS}    'READY_TO_RUN'
         ELSE
-            Log To Console     A telepítés sikertelen volt, a start.bat nem található az INSTALLED_ROBOTS könyvtárban:\n ${START_SCRIPT}
-            Fail    A telepítés sikertelen volt, a start.bat nem található az INSTALLED_ROBOTS könyvtárban:\n ${START_SCRIPT}
+            Log To Console     A telepítés sikertelen volt, a start.bat nem található az DOWNLOADED_ROBOTS könyvtárban:\n ${START_SCRIPT}
+            Fail    A telepítés sikertelen volt, a start.bat nem található az DOWNLOADED_ROBOTS könyvtárban:\n ${START_SCRIPT}
         END
     END
     
