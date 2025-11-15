@@ -528,5 +528,75 @@
     "returncode": 1,
     "results_dir": "SzotarRobi__Szó-kikérdező__20251114_092401",
     "type": "single"
+  },
+  {
+    "id": 54,
+    "timestamp": "2025-11-14 11:04:23",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251114_110423",
+    "type": "single"
+  },
+  {
+    "id": 55,
+    "timestamp": "2025-11-14 11:30:37",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251114_113037",
+    "type": "single"
+  },
+  {
+    "id": 56,
+    "timestamp": "2025-11-14 11:43:05",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251114_114305",
+    "type": "single"
+  },
+  {
+    "id": 57,
+    "timestamp": "2025-11-14 11:44:37",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251114_114437",
+    "type": "single"
+  },
+  {
+    "id": 58,
+    "timestamp": "2025-11-14 15:06:19",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251114_150619",
+    "type": "single"
+  },
+  {
+    "id": 59,
+    "timestamp": "2025-11-14 15:09:16",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251114_150916",
+    "type": "single"
+  },
+  {
+    "id": 60,
+    "timestamp": "2025-11-14 15:10:56",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251114_151056",
+    "type": "single"
   }
 ]

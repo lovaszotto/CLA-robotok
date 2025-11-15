@@ -15,25 +15,25 @@ echo.
 :: Virtualis kornyezet ellenorzese
 echo [1/3] Virtualis kornyezet ellenorzese...
 
-if not exist "rf_env\Scripts\python.exe" (
+if not exist ".venv\Scripts\python.exe" (
     echo HIBA: Virtualis kornyezet nem talalhato!
     echo Futtassa eloszor a telepito.bat fajlt!
     pause
     exit /b 1
 )
-rf_env\Scripts\python.exe --version
+.venv\Scripts\python.exe --version
 
 :: Flask telepitettsegének ellenorzese
 echo [2/3] Flask csomag ellenorzese...
-rf_env\Scripts\python.exe -c "import importlib.metadata; print('Flask telepitve:', importlib.metadata.version('flask'))"
+.venv\Scripts\python.exe -c "import importlib.metadata; print('Flask telepitve:', importlib.metadata.version('flask'))"
 if %errorlevel% neq 0 (
     echo Flask telepitese virtualis kornyezetbe...
-    rf_env\Scripts\pip.exe install flask
+    .venv\Scripts\pip.exe install flask
 )
 
 :: Repository adatok frissitese
 echo [3/3] Repository adatok lekerése...
-rf_env\Scripts\python.exe fetch_github_repos.py lovaszotto
+.venv\Scripts\python.exe fetch_github_repos.py lovaszotto
 
 echo.
 echo ================================================
@@ -47,7 +47,7 @@ echo.
 
 :: Flask szerver inditasa
 start "Robot Kezelo" http://localhost:5000
-rf_env\Scripts\python.exe flask_app.py
+.venv\Scripts\python.exe flask_app.py
 
 :: Szerver leallitasa utan
 echo.

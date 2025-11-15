@@ -6,6 +6,8 @@ results/*
 __pycache__/
 *.pyc
 *.pyo
+#venv fájlok
+.venv/
 
 # Flask cache
 instance/
@@ -25,6 +27,12 @@ Thumbs.db
 
 # Log fájlok
 *.log
+output.xml
+report.html
+log.html
+
+#munka json fájlok
+execution_results.json
 
 # GitHub API cache
 repos_response.json
