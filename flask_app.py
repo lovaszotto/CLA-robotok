@@ -533,6 +533,76 @@ def api_install_selected():
         return jsonify({'success': False, 'installed': installed, 'errors': errors})
     return jsonify({'success': True, 'installed': installed})
 
+@app.route('/api/start_robot', methods=['POST'])
+def api_start_robot():
+    """Indítja a kiválasztott robotot a start.bat futtatásával a megfelelő könyvtárban.
+
+    Várható bemenet (JSON): { "repo": "<repo>", "branch": "<branch>" }
+    Válasz: { "success": true/false, ... }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        repo = (data.get('repo') or '').strip()
+        branch = (data.get('branch') or '').strip()
+        if not repo or not branch:
+            return jsonify({
+                'success': False,
+                'error': 'Hiányzó repo vagy branch'
+            }), 400
+
+        # Telepített robotok bázis könyvtára (Sandbox vagy Downloaded)
+        base_dir = get_installed_robots_dir()
+        if not base_dir:
+            # Fallback, ha a variables.robot nincs jól beállítva
+            base_dir = _normalize_dir_from_vars('DOWNLOADED_ROBOTS') or os.path.join(os.getcwd(), 'DownloadedRobots')
+
+        # A letöltés/telepítés során a branch könyvtár neve a '/' karaktereket '_' karakterre cserélve került létrehozásra
+        safe_repo = repo.replace('/', '_')
+        safe_branch = branch.replace('/', '_')
+        target_dir = os.path.join(base_dir, safe_repo, safe_branch)
+
+        start_bat = os.path.join(target_dir, 'start.bat')
+        if not os.path.isdir(target_dir):
+            return jsonify({
+                'success': False,
+                'error': f'Könyvtár nem található: {target_dir}'
+            }), 404
+        if not os.path.exists(start_bat):
+            return jsonify({
+                'success': False,
+                'error': f'start.bat nem található: {start_bat}'
+            }), 404
+
+        try:
+            # Új Windows konzol ablakban indítjuk a start.bat-ot, külön konzollal, leválasztva
+            creation_flags = 0
+            try:
+                creation_flags = subprocess.CREATE_NEW_CONSOLE
+            except Exception:
+                creation_flags = 0
+            subprocess.Popen(
+                ['cmd.exe', '/c', 'start', '""', 'start.bat'],
+                cwd=target_dir,
+                creationflags=creation_flags,
+                shell=False,
+                close_fds=False
+            )
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'start.bat futtatási hiba: {e}'
+            }), 500
+
+        return jsonify({
+            'success': True,
+            'message': 'Robot indítása elindítva',
+            'repo': repo,
+            'branch': branch,
+            'dir': target_dir
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/favicon.ico')
 def favicon():
     """Favicon kezelése"""
@@ -1049,12 +1119,15 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                     <i class="bi bi-house-fill text-primary me-2" data-bs-toggle="tooltip" data-bs-placement="top" title="Feltöltve: {{ repo.pushed_at_formatted }}"></i>
                                     <i class="bi bi-trash text-danger" 
                                        style="cursor: pointer;" 
-                                       onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"
+                                       onclick='deleteRunnableBranch({{ repo.name | tojson }}, {{ branch | tojson }})'
                                        data-bs-toggle="tooltip" 
                                        data-bs-placement="top" 
                                        title="Eltávolítás a futtathatók közül"></i>
                                 </div>
                                 <label class="form-check-label mb-0 me-2" for="branch-{{ repo.name }}-{{ branch }}">{{ branch }}</label>
+                                <button class="btn btn-success btn-sm ms-2" title="Futtatás" onclick='executeSingleRobot({{ repo.name | tojson }}, {{ branch | tojson }})'>
+                                    <i class="bi bi-play-fill"></i>
+                                </button>
                             </div>
                         {% endfor %}
                     </div>
@@ -1351,7 +1424,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <h3><i class="bi bi-box-arrow-right text-danger"></i> Kilépés</h3>
 <p class="lead mb-4">Biztos, hogy ki szeretne lépni az alkalmazásból?</p>
 <div class="d-grid gap-2 d-md-block">
-<button class="btn btn-danger btn-lg" onclick="exitApplication()">
+<button id="exitButton" class="btn btn-danger btn-lg" onclick="exitApplication()">
 <i class="bi bi-box-arrow-right"></i> Kilépés
 </button>
 <button class="btn btn-secondary btn-lg" onclick="cancelExit()">
@@ -1372,6 +1445,33 @@ fetch('/api/get_sandbox_mode').then(r => r.json()).then(data => {
     SANDBOX_MODE = !!data.sandbox_mode;
     updateSandboxModeUI();
 });
+
+// Play gomb: egyetlen robot futtatása (globális scope)
+function executeSingleRobot(repo, branch) {
+    try {
+        const msg = 'Valóban futtassam a robotot?\\n\\n' + repo + ' / ' + branch;
+        if (!confirm(msg)) return;
+        fetch('/api/start_robot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo: repo, branch: branch })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) {
+                showToast('Robot indítása sikeres.', 'success');
+            } else {
+                const err = (data && (data.error || data.message)) || 'Ismeretlen hiba';
+                showToast('Robot indítása sikertelen: ' + err, 'danger');
+            }
+        })
+        .catch(err => {
+            showToast('Robot indítása sikertelen: ' + String(err), 'danger');
+        });
+    } catch (e) {
+        showToast('Robot indítás hiba: ' + String(e), 'danger');
+    }
+}
 
 function updateSandboxModeUI() {
     const runBtn = document.querySelector('button[onclick="executeAllRobots()"]');
@@ -2325,6 +2425,14 @@ document.addEventListener('DOMContentLoaded', function() {
     loadSettings();
     updateRunButton();
     updateTabCounts();
+
+    // Fallback: Exit gomb eseménykezelője id alapján
+    try {
+        var exitBtn = document.getElementById('exitButton');
+        if (exitBtn && typeof exitApplication === 'function') {
+            exitBtn.addEventListener('click', function(ev){ ev.preventDefault(); exitApplication(); });
+        }
+    } catch(e) { /* ignore */ }
 });
 
 // Close the external results window when 'Visszatérés' is clicked in the modal
@@ -2942,7 +3050,70 @@ function refreshAvailableRobots() {
     css_template = css_template.replace('{light_color}', light_color)
     css_template = css_template.replace('{hover_color}', hover_color)
     css_template = css_template.replace('{rgba_color}', rgba_color)
-    
+
+    # Biztonsági: tegyünk egy külön script taget a body végére, ami globálisan definiálja a play gomb függvényét
+    insert_before = '</body>'
+    fallback_js = '''
+<script>
+// Fallback globális függvény, hogy az onclick működjön akkor is, ha a fő script korábban hibára futott
+window.executeSingleRobot = function(repo, branch) {
+    try {
+        var msg = 'Valóban futtassam a robotot?\\n\\n' + repo + ' / ' + branch;
+        if (!confirm(msg)) return;
+        fetch('/api/start_robot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo: repo, branch: branch })
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if (window.showToast) {
+                if (data && data.success) { showToast('Robot indítása sikeres.', 'success'); }
+                else { var err = (data && (data.error || data.message)) || 'Ismeretlen hiba'; showToast('Robot indítása sikertelen: ' + err, 'danger'); }
+            } else {
+                alert((data && data.success) ? 'Sikeres indítás' : 'Sikertelen indítás');
+            }
+        })
+        .catch(function(err){
+            if (window.showToast) { showToast('Robot indítása sikertelen: ' + String(err), 'danger'); }
+            else { alert('Robot indítása sikertelen: ' + String(err)); }
+        });
+    } catch(e) {
+        if (window.showToast) { showToast('Robot indítás hiba: ' + String(e), 'danger'); }
+        else { alert('Robot indítás hiba: ' + String(e)); }
+    }
+};
+
+// Fallback Kilépés funkciók, ha a fő script nem töltődött be
+window.exitApplication = window.exitApplication || function() {
+    try {
+        fetch('/shutdown', { method: 'POST' })
+            .catch(function(){})
+            .finally(function(){
+                try { window.close(); } catch(e) {}
+                setTimeout(function() {
+                    try {
+                        document.body.innerHTML = '<div class="text-center mt-5"><h1>Az alkalmazás bezárult</h1><p>Bezárhatja ezt a böngésző fület.</p></div>';
+                    } catch(e) {}
+                }, 150);
+            });
+    } catch (e) {
+        try { alert('Kilépés hiba: ' + String(e)); } catch(_) {}
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function(){
+    try {
+        var exitBtn = document.getElementById('exitButton');
+        if (exitBtn) {
+            exitBtn.addEventListener('click', function(ev){ ev.preventDefault(); try { window.exitApplication(); } catch(e) {} });
+        }
+    } catch(e) {}
+});
+</script>
+'''
+    if insert_before in css_template:
+        css_template = css_template.replace(insert_before, fallback_js + insert_before)
     return css_template
 
 # Alkalmazás indítása, ha közvetlenül futtatjuk a fájlt
