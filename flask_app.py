@@ -1152,9 +1152,9 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                 </div>
                                 <label class="form-check-label mb-0 me-2" for="branch-{{ repo.name }}-{{ branch }}">{{ branch }}</label>
                                 <button class="btn btn-success btn-sm ms-2" title="Futtatás"
-                                        data-repo="${repo.name}"
-                                        data-branch="${branch}"
-                                        onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch)">
+                                    data-repo="{{ repo.name }}"
+                                    data-branch="{{ branch }}"
+                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                             </div>
@@ -1388,10 +1388,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </div>
 <div class="col-md-3">
 <select class="form-select" id="statusFilter">
-                                <button class="btn btn-success btn-sm ms-2" title="Futtatás"
-                                        data-repo="${repo.name}"
-                                        data-branch="${branch}"
-                                        onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch)">
+<option value="">Összes státusz</option>
 <option value="success">Sikeres</option>
 <option value="failed">Sikertelen</option>
 </select>
@@ -2260,9 +2257,6 @@ function saveSettings() {
 function resetSettings() {
     document.getElementById('darkMode').checked = false;
     document.getElementById('compactView').checked = false;
-function resetSettings() {
-    document.getElementById('darkMode').checked = false;
-    document.getElementById('compactView').checked = false;
     document.getElementById('pageSize').value = '10';
     document.getElementById('executionMode').value = 'sequential';
     document.getElementById('timeout').value = '300';
@@ -2899,9 +2893,9 @@ function updateRunnableRobotsTab(repos) {
                                 </div>
                                 <label class=\"form-check-label mb-0 me-2\" for=\"branch-${repo.name}-${branch}\">${branch}</label>
                                 <button class="btn btn-success btn-sm ms-2" title="Futtatás"
-                                        data-repo="${repo.name}"
-                                        data-branch="${branch}"
-                                        onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch)">
+                                    data-repo="${repo.name}"
+                                    data-branch="${branch}"
+                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                             </div>
@@ -3087,6 +3081,19 @@ function refreshAvailableRobots() {
 </body>
 </html>
 '''
+
+    replacements = {
+        '{primary_color}': primary_color,
+        '{secondary_color}': secondary_color,
+        '{tertiary_color}': tertiary_color,
+        '{dark_color}': dark_color,
+        '{light_color}': light_color,
+        '{hover_color}': hover_color,
+        '{rgba_color}': rgba_color,
+    }
+    for placeholder, value in replacements.items():
+        css_template = css_template.replace(placeholder, value)
+
     return css_template
 
 
