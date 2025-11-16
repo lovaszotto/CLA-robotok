@@ -15,6 +15,8 @@ ${REPO_PATH}      ${EMPTY}
 # a kiválasztott branch a klónozáshoz (Flask-ból paraméterként kapjuk)
 ${BRANCH}    CPS-Mezo-ellenor
 ${BRANCH_PATH}    ${EMPTY}
+# a gyökér könyvtár, ahol a robotok telepítve vannak
+${ROOT_FOLDER}    c:/Users/oLovasz/MyRobotFramework/
 
 #developer módban csak letöltjük a robotokat, de nem telepítjük
 ${SANDBOX_MODE}         ${False}

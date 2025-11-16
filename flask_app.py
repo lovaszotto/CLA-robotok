@@ -342,6 +342,7 @@ def index():
     """Főoldal"""
     # Repository adatok lekérése
     repos = get_repository_data()
+    root_folder = get_robot_variable('ROOT_FOLDER')
     
     # Dátum formázása (pushed_at -> YYYY-MM-DD HH:MM) és branch adatok hozzáadása minden repository-hoz
     for repo in repos:
@@ -373,7 +374,13 @@ def index():
         ]
     html_template = get_html_template()
     response = app.response_class(
-        render_template_string(html_template, repos=repos, datetime=datetime, downloaded_keys=installed_keys),
+        render_template_string(
+            html_template,
+            repos=repos,
+            datetime=datetime,
+            downloaded_keys=installed_keys,
+            root_folder=root_folder or ''
+        ),
         mimetype='text/html'
     )
     # Cache törlése fejlécekkel
@@ -639,10 +646,19 @@ def favicon():
 def shutdown():
     """Leállítja a Flask szervert a Kilépés gomb kérésére."""
     func = request.environ.get('werkzeug.server.shutdown')
-    if func is None:
-        # Nem werkzeug szerver vagy nem elérhető – erőltetett kilépés utólag
+
+    def _delayed_shutdown(target_func):
+        time.sleep(0.5)
+        if target_func is not None:
+            try:
+                target_func()
+                return
+            except Exception as exc:
+                print(f"[SHUTDOWN] Werkzeug leállítás sikertelen: {exc}")
+        print('[SHUTDOWN] Fallback os._exit(0) hívás')
         os._exit(0)
-    func()
+
+    threading.Thread(target=_delayed_shutdown, args=(func,), daemon=True).start()
     return jsonify({"status": "shutting down"})
 
 @app.route('/api/restart', methods=['POST'])
@@ -1154,7 +1170,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                 <button class="btn btn-success btn-sm ms-2" title="Futtatás"
                                     data-repo="{{ repo.name }}"
                                     data-branch="{{ branch }}"
-                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch)">
+                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch, ROOT_FOLDER)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                             </div>
@@ -1470,15 +1486,30 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <script>
 // SANDBOX_MODE lekérdezése backendről
 let SANDBOX_MODE = false;
+const ROOT_FOLDER = {{ (root_folder or '')|tojson }};
 fetch('/api/get_sandbox_mode').then(r => r.json()).then(data => {
     SANDBOX_MODE = !!data.sandbox_mode;
     updateSandboxModeUI();
 });
 
 // Play gomb: egyetlen robot futtatása (globális scope)
-function executeSingleRobot(repo, branch) {
+function executeSingleRobot(repo, branch, rootFolder) {
     try {
-        const msg = 'Valóban futtassam a robotot?\\n\\n' + repo + ' / ' + branch;
+        const fallbackRoot = (typeof ROOT_FOLDER === 'string') ? ROOT_FOLDER : '';
+        const incomingRoot = (typeof rootFolder === 'string') ? rootFolder : fallbackRoot;
+        let normalizedRoot = (incomingRoot || '').trim().split('\\\\').join('/');
+        while (normalizedRoot.endsWith('/')) {
+            normalizedRoot = normalizedRoot.slice(0, -1);
+        }
+        const cmdInfo = (normalizedRoot ? normalizedRoot + '/' : '') + repo + '/' + branch + '/start.bat';
+        const msgLines = [
+            'Valóban futtassam a robotot?',
+            '',
+            'Repo: ' + repo,
+            'Branch: ' + branch,
+            'CMD: start.bat (' + cmdInfo + ')'
+        ];
+        const msg = msgLines.join('\\\\n');
         if (!confirm(msg)) return;
         fetch('/api/start_robot', {
             method: 'POST',
@@ -2402,15 +2433,36 @@ function getStatusClass(returnCode) {
 
 // Kilépés funkciók
 function exitApplication() {
-    // Először próbáljuk leállítani a szervert
+    if (!confirm('Biztos, hogy ki szeretnél lépni és leállítani a szervert?')) {
+        return;
+    }
+
+    const exitBtn = document.getElementById('exitButton');
+    if (exitBtn) {
+        exitBtn.disabled = true;
+        exitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Leállítás...';
+    }
+
+    showToast('Kilépés folyamatban, a szerver leáll.', 'info');
+
     fetch('/shutdown', { method: 'POST' })
-        .catch(() => { /* ignore network errors during shutdown */ })
+        .then(() => {
+            showToast('A szerver leállt, az ablak bezáródik.', 'success');
+        })
+        .catch((error) => {
+            console.warn('Kilépés közbeni hiba:', error);
+            showToast('Kilépés közben hiba történt. Ha az ablak nyitva marad, zárd be kézzel.', 'warning');
+        })
         .finally(() => {
-            // Majd bezárás vagy üzenet megjelenítése
-            window.close();
             setTimeout(function() {
-                document.body.innerHTML = '<div class="text-center mt-5"><h1>Az alkalmazás bezárult</h1><p>Bezárhatja ezt a böngésző fület.</p></div>';
-            }, 150);
+                try {
+                    window.open('', '_self');
+                    window.close();
+                } catch (e) {
+                    console.warn('A böngésző nem engedte bezárni az ablakot:', e);
+                }
+                document.body.innerHTML = '<div class="text-center mt-5"><h1>Az alkalmazás bezárult</h1><p>Ha az ablak nyitva marad, zárd be kézzel ezt a böngészőfület.</p></div>';
+            }, 350);
         });
 }
 
@@ -2895,7 +2947,7 @@ function updateRunnableRobotsTab(repos) {
                                 <button class="btn btn-success btn-sm ms-2" title="Futtatás"
                                     data-repo="${repo.name}"
                                     data-branch="${branch}"
-                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch)">
+                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch, ROOT_FOLDER)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                             </div>
