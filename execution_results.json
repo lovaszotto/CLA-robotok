@@ -48,5 +48,15 @@
     "returncode": 0,
     "results_dir": "SzotarRobi__Szó-kikérdező__20251117_104341",
     "type": "single"
+  },
+  {
+    "id": 6,
+    "timestamp": "2025-11-17 10:55:51",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_105551",
+    "type": "single"
   }
 ]
