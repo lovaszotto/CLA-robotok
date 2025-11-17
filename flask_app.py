@@ -3,55 +3,31 @@ import json
 import subprocess
 import os
 import sys
-from datetime import datetime
-import threading
-import time
-import shutil
 import re
+import shutil
 import html
+import time
+import threading
+from datetime import datetime
+
 
 app = Flask(__name__)
-# Secret key szükséges a Flask session használatához
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-cla-ssistant-secret-key')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
 
-# Globális változók - dinamikus Python executable meghatározása
-def get_python_executable():
-    """Meghatározza a megfelelő Python executable útvonalát.
-    
-    Prioritási sorrend:
-    1. Virtuális környezet (rf_env\\Scripts\\python.exe)
-    2. Aktuális Python interpreter (sys.executable)
-    3. Rendszer PATH-ban található python
-    """
-    # 1. Virtuális környezet ellenőrzése
-    venv_python = os.path.join('rf_env', 'Scripts', 'python.exe')
-    if os.path.exists(venv_python):
-        return os.path.abspath(venv_python)
-    
-    # 2. Aktuális Python interpreter
-    if sys.executable:
-        return sys.executable
-    
-    # 3. Fallback - rendszer python
-    return 'python'
 
-PYTHON_EXECUTABLE = get_python_executable()
-print(f"[INFO] Használt Python executable: {PYTHON_EXECUTABLE}")
+PYTHON_EXECUTABLE = sys.executable or 'python'
 
-def get_sandbox_mode():
-    """Visszaadja a SANDBOX_MODE aktuális értékét.
 
-    Elsődlegesen a Flask session-ben tárolt értéket használjuk (csak aktuális böngésző session-re érvényes),
-    ennek hiányában a resources/variables.robot fájlban lévő alapértéket olvassuk be.
-    """
-    # 1) Session elsőbbséget élvez (nem perzisztens fájlba)
-    if 'sandbox_mode' in session:
-        try:
+def get_sandbox_mode() -> bool:
+    """Határozza meg, hogy a felület sandbox módban fusson-e."""
+    # 1) Session alapú érték, ha a felhasználó már választott üzemmódot.
+    try:
+        if 'sandbox_mode' in session:
             return bool(session['sandbox_mode'])
-        except Exception:
-            pass
+    except Exception:
+        pass
 
-    # 2) Fallback: variables.robot alapérték
+    # 2) Fallback: resources/variables.robot beállítása.
     try:
         variables_file = os.path.join('resources', 'variables.robot')
         if os.path.exists(variables_file):
@@ -61,7 +37,7 @@ def get_sandbox_mode():
                     if line.strip().startswith('${SANDBOX_MODE}'):
                         if '${True}' in line:
                             return True
-                        elif '${False}' in line:
+                        if '${False}' in line:
                             return False
     except Exception as e:
         print(f"[WARNING] Hiba a SANDBOX_MODE beolvasásakor: {e}")
@@ -606,7 +582,7 @@ def api_start_robot():
         branch = (data.get('branch') or '').strip()
         debug_mode = bool(data.get('debug', False))
 
-        print(f"[START_ROBOT] Kérés érkezett: repo={repo}, branch={branch}, debug_mode={debug_mode}")
+        print(f"[START_ROBOT] Kérés érkezett (start.bat futtatás letiltva): repo={repo}, branch={branch}, debug_mode={debug_mode}")
 
         if not repo or not branch:
             print("[START_ROBOT] HIBA: Hiányzó repo vagy branch paraméter")
@@ -622,8 +598,8 @@ def api_start_robot():
         safe_repo = repo.replace('/', '_')
         safe_branch = branch.replace('/', '_')
         target_dir = os.path.join(base_dir, safe_repo, safe_branch)
-
         start_bat = os.path.join(target_dir, 'start.bat')
+
         if not os.path.isdir(target_dir):
             print(f"[START_ROBOT] HIBA: Könyvtár nem található: {target_dir}")
             return jsonify({
@@ -637,61 +613,19 @@ def api_start_robot():
                 'error': f'start.bat nem található: {start_bat}'
             }), 404
 
-        if debug_mode:
-            print(f"[START_ROBOT] Debug módban futtatás: {start_bat}")
-            try:
-                result = subprocess.run(
-                    ['cmd.exe', '/c', 'start.bat'],
-                    cwd=target_dir,
-                    capture_output=True,
-                    text=True,
-                    encoding='cp1252',
-                    errors='replace',
-                    timeout=120
-                )
-            except subprocess.TimeoutExpired as exc:
-                print(f"[START_ROBOT] HIBA: Timeout: {exc}")
-                return jsonify({
-                    'success': False,
-                    'error': f'Timeout történt a start.bat futtatásakor: {exc}'
-                }), 500
-
-            print(
-                f"[START_ROBOT] Debug futtatás eredménye: rc={result.returncode}, "
-                f"stdout_hossz={len(result.stdout or '')}, stderr_hossz={len(result.stderr or '')}"
-            )
-            return jsonify({
-                'success': result.returncode == 0,
-                'repo': repo,
-                'branch': branch,
-                'dir': target_dir,
-                'returncode': result.returncode,
-                'stdout': result.stdout[-4000:] if result.stdout else '',
-                'stderr': result.stderr[-4000:] if result.stderr else ''
-            })
-
-        print(f"[START_ROBOT] Normál módban futtatás: {start_bat}")
-        creation_flags = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
-        cmd_args = ['cmd.exe', '/k', 'pushd', target_dir, '&&', 'call', 'start.bat']
-        # Új konzolt nyitunk, belépünk a céligényelt könyvtárba, majd meghívjuk a start.bat-ot.
-        subprocess.Popen(
-            cmd_args,
-            creationflags=creation_flags,
-            shell=False,
-            close_fds=False
-        )
+        print(f"[START_ROBOT] start.bat futtatása a Flask alkalmazásból le van tiltva (repo={repo}, branch={branch}).")
         return jsonify({
-            'success': True,
-            'message': 'Robot indítása elindítva',
+            'success': False,
+            'error': 'start.bat futtatása a Flask alkalmazásból letiltva',
             'repo': repo,
             'branch': branch,
             'dir': target_dir
-        })
+        }), 403
     except Exception as exc:
         print(f"[START_ROBOT] HIBA: {exc}")
         return jsonify({
             'success': False,
-            'error': 'start.bat futtatása közben hiba történt',
+            'error': 'start.bat futtatása letiltva, további hiba történt',
             'details': str(exc)
         }), 500
 
@@ -722,29 +656,12 @@ def shutdown():
 
 @app.route('/api/restart', methods=['POST'])
 def api_restart():
-    """Újraindítja az alkalmazást: elindítja a start.bat-ot és leállítja a jelenlegi szervert.
-
-    A folyamatot háttérben időzítve indítjuk, hogy az HTTP válasz visszaadható legyen.
-    """
-    try:
-        def _do_restart():
-            try:
-                bat_path = os.path.abspath('start.bat')
-                workdir = os.path.dirname(bat_path)
-                if os.path.exists(bat_path):
-                    # Windows: nyit egy új cmd ablakot és futtatja a start.bat-ot
-                    subprocess.Popen(['cmd', '/c', 'start', '""', bat_path], cwd=workdir)
-                else:
-                    print('[WARNING] start.bat nem található:', bat_path)
-            finally:
-                # Biztosan leállítjuk a jelenlegi folyamatot
-                os._exit(0)
-
-        # Kis késleltetés, hogy a kliens megkaphassa a választ
-        threading.Timer(0.5, _do_restart).start()
-        return jsonify({"status": "restarting"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Újraindítási kérés kezelése start.bat indítása nélkül."""
+    print('[RESTART] start.bat indítása letiltva, restart API nem futtat parancsot.')
+    return jsonify({
+        'success': False,
+        'error': 'start.bat indítása letiltva, kérjük manuálisan indítsd újra az alkalmazást'
+    }), 403
 
 # Globális eredmények tárolás
 RESULTS_FILE = 'execution_results.json'
@@ -1551,58 +1468,29 @@ fetch('/api/get_sandbox_mode').then(r => r.json()).then(data => {
     updateSandboxModeUI();
 });
 
-// Play gomb: futtatás + indítás, hogy eredmények is készüljenek
-async function executeSingleRobot(repo, branch, rootFolder) {
+// Play gomb: csak megerősít, majd a közös végrehajtó ágra delegál
+function executeSingleRobot(repo, branch, rootFolder) {
+    const fallbackRoot = (typeof ROOT_FOLDER === 'string') ? ROOT_FOLDER : '';
+    const incomingRoot = (typeof rootFolder === 'string') ? rootFolder : fallbackRoot;
+    const msgLines = [
+        'Valóban futtassam a robotot?',
+        '',
+        'Repo: ' + repo,
+        'Branch: ' + branch,
+        incomingRoot ? ('Gyökér: ' + incomingRoot) : ''
+    ].filter(Boolean);
+    const msg = msgLines.join('\\n');
+    if (!confirm(msg)) {
+        return;
+    }
     try {
-        const fallbackRoot = (typeof ROOT_FOLDER === 'string') ? ROOT_FOLDER : '';
-        const incomingRoot = (typeof rootFolder === 'string') ? rootFolder : fallbackRoot;
-        // Normalize backslashes coming from Windows-style ROOT_FOLDER paths
-        let normalizedRoot = (incomingRoot || '').trim().replace(/\\\\/g, '/');
-        if (normalizedRoot && !normalizedRoot.endsWith('/')) {
-            normalizedRoot += '/';
+        // Ugrás a Futtatás fülre, hogy azonnal látható legyen az állapotkártya
+        const executableTab = document.getElementById('executable-tab');
+        if (executableTab) {
+            executableTab.click();
         }
-        const subFolder = SANDBOX_MODE ? 'SandboxedRobots/' : 'DownloadedRobots/';
-        const basePath = normalizedRoot ? normalizedRoot + subFolder : subFolder;
-        const cmdInfo = basePath + repo + '/' + branch + '/start.bat';
-        const msgLines = [
-            'Valóban futtassam a robotot?',
-            '',
-            'Repo: ' + repo,
-            'Branch: ' + branch
-        ];
-        const msg = msgLines.join('\\n');
-        if (!confirm(msg)) return;
-
-        showToast('Robot futtatása indult (naplózás)...', 'info');
-        const execResponse = await fetch('/api/execute', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repo, branch })
-        });
-        const execData = await execResponse.json();
-        const execSuccess = execData && (execData.returncode === 0 || execData.status === 'ok' || execData.status === 'success');
-        if (typeof loadResults === 'function') {
-            loadResults();
-        }
-        if (!execSuccess) {
-            const execErr = (execData && (execData.message || execData.error)) || 'Ismeretlen hiba a futtatás során';
-            showToast('Robot futtatása sikertelen: ' + execErr, 'danger');
-            return;
-        }
-        showToast('Robot futtatása kész, indítás következik...', 'success');
-
-        const startResponse = await fetch('/api/start_robot', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repo, branch })
-        });
-        const startData = await startResponse.json();
-        if (startData && startData.success) {
-            showToast('Robot indítása sikeres.', 'success');
-        } else {
-            const startErr = (startData && (startData.error || startData.message)) || 'Ismeretlen hiba';
-            showToast('Robot indítása sikertelen: ' + startErr, 'danger');
-        }
+        showToast(`Robot futtatása indult: ${repo}/${branch}`, 'info');
+        executeRobot(repo, branch);
     } catch (e) {
         showToast('Robot indítás hiba: ' + String(e), 'danger');
     }

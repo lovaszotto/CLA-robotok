@@ -25,7 +25,7 @@ Kiírás konzolra paraméterekből
 
 Telepítettség és letöltöttség ellenőrzése
     [Documentation]    Ellenőrzi, hogy a robot már telepítve van-e (start.bat létezik), vagy csak letöltve
-    Log Everywhere     \n=== TELEPÍTETTSÉG ÉS LETÖLTÖTTSÉG ELLENŐRZÉSE ===  ${WORKFLOW_STATUS}
+    Log Everywhere     \n=== TELEPÍTETTSÉG ÉS LETÖLTÖTTSÉG ELLENŐRZÉSE === (${WORKFLOW_STATUS})
     
     # Telepített robot ellenőrzése (start.bat létezik-e)
     ${START_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
@@ -78,7 +78,7 @@ Könyvtárak létrehozása
     [Documentation]    Létrehozza a szükséges könyvtárakat, ha még nem léteznek.  
        #Log To Console     \n=== KÖNYVTÁRAK LÉTREHOZÁSA, ha 'MAKE_DIRS' === ${WORKFLOW_STATUS}
     IF    ${WORKFLOW_STATUS} == 'MAKE_DIRS'
-        Log Everywhere     ======Könyvtár létrehozás====${WORKFLOW_STATUS}
+        Log Everywhere     ======Könyvtár létrehozás==== (${WORKFLOW_STATUS})
         #létrehozzuk a repository könyvtárat, ha nem létezik
         Create Directory    ${REPO_PATH}
         Log Everywhere     Létrehozva a repository könyvtár: ${REPO_PATH}
@@ -103,7 +103,7 @@ Branch klónozása
     [Documentation]    A REPO és BRANCH változók alapján klónozza a megfelelő könyvtárat, ha még nincs letöltve.
     #Log To Console    \nBranch klónozása WORKFLOW_STATUS, ha 'TO_BE_CLONE' = ${WORKFLOW_STATUS}    
         IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
-            Log Everywhere     ======KLONOZÁS GIT-BŐL=====${WORKFLOW_STATUS}
+            Log Everywhere     ======KLONOZÁS GIT-BŐL===== (${WORKFLOW_STATUS})
             IF    ${SANDBOX_MODE} == True
                ${TARGET_DIR}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}
            ELSE
@@ -132,7 +132,7 @@ Branch klónozása
 Letöltött branch frissítése
         [Documentation]    Ha a letöltött könyvtár már létezik, futtatunk egy git pull-t frissítéshez.
         IF    ${WORKFLOW_STATUS} == 'TO_BE_PULL'
-           Log Everywhere     ======GIT PULL FUTTATÁSA=====${WORKFLOW_STATUS}
+           Log Everywhere     ======GIT PULL FUTTATÁSA===== (${WORKFLOW_STATUS})
            Log Everywhere     [GIT PULL] Könyvtár: ${BRANCH_PATH}
            ${pull_result}=    Run Process    git    -C    ${BRANCH_PATH}    pull    shell=True    timeout=180s
            Log Everywhere     [GIT PULL] rc: ${pull_result.rc}
@@ -146,7 +146,7 @@ Klónozás sikeresség ellenőrzése
    [Documentation]    A klónozás után ellenőrizzük, hogy létezik-e telepito.bat a most letöltött könyvtárban.
    #Log To Console     \n=== KLÓNOZÁS ELLENŐRZÉSE, ha 'CLONED' ===${WORKFLOW_STATUS}
    IF    ${WORKFLOW_STATUS} == 'CLONED'
-       Log Everywhere     ======KLONOZÁS ELLENŐRZÉSE=====${WORKFLOW_STATUS}
+    Log Everywhere     ======KLONOZÁS ELLENŐRZÉSE===== (${WORKFLOW_STATUS})
        Log Everywhere    REPO:${REPO}
        Log Everywhere    BRANCH:${BRANCH}
 
@@ -167,7 +167,7 @@ Telepítés futtatása
     [Documentation]    A klónozás után futtatjuk a telepit.bat fájlt.
     #Log To Console     \n=== TELEPÍTÉS FUTTATÁSA, ha 'CLONED_OK' ===${WORKFLOW_STATUS}
     IF    ${WORKFLOW_STATUS} == 'CLONED_OK'
-           Log Everywhere     \n=== TELEPÍTÉS FUTTATÁSA===${WORKFLOW_STATUS}
+           Log Everywhere     \n=== TELEPÍTÉS FUTTATÁSA=== (${WORKFLOW_STATUS})
         Log Everywhere   DOWNLOADED_ROBOTS:${DOWNLOADED_ROBOTS}
         Log Everywhere    REPO:${REPO}
         Log Everywhere    BRANCH:${BRANCH}
@@ -195,7 +195,7 @@ Telepítés sikeresség ellenőrzése
    [Documentation]    A telepítés után ellenőrizzük, hogy létezik-e start.bat a most letöltött könyvtárban.
    #Log To Console     \n=== TELEPÍTÉS ELLENŐRZÉSE, ha 'SET_UP_OK' ===${WORKFLOW_STATUS}
    IF    ${WORKFLOW_STATUS} == 'SET_UP_OK'
-        Log Everywhere     \n=== TELEPÍTÉS ELLENŐRZÉSE == ${WORKFLOW_STATUS}
+        Log Everywhere     \n=== TELEPÍTÉS ELLENŐRZÉSE == (${WORKFLOW_STATUS})
         ${START_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
         Log Everywhere     Ellenőrzés: start.bat létezik-e az DOWNLOADED_ROBOTS könyvtárban? ${START_SCRIPT}
 
@@ -212,73 +212,78 @@ Telepítés sikeresség ellenőrzése
 Robot futtatása
   [Documentation]    Futtatjuk a start.bat fájlt
   #Log To Console     \n=== ROBOT FUTTATÁSA, ha 'READY_TO_RUN' ===${WORKFLOW_STATUS}
-  IF    ${WORKFLOW_STATUS} == 'READY_TO_RUN'    
-      Log Everywhere     \n=== [FUTTATÁS GOMB] ROBOT FUTTATÁSA INDUL ===
-      Log Everywhere     [FUTTATÁS] WORKFLOW_STATUS: ${WORKFLOW_STATUS}
-      Log Everywhere     [FUTTATÁS] REPO: ${REPO}
-      Log Everywhere     [FUTTATÁS] BRANCH: ${BRANCH}
-            ${RUN_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
-        Log Everywhere     [FUTTATÁS] start.bat elérési út: ${RUN_SCRIPT}
-        Log Everywhere     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+  IF    ${AUTO_LAUNCH_START_BAT} == True
+      IF    ${WORKFLOW_STATUS} == 'READY_TO_RUN'    
+          Log Everywhere     \n=== [FUTTATÁS GOMB] ROBOT FUTTATÁSA INDUL ===
+          Log Everywhere     [FUTTATÁS] WORKFLOW_STATUS: ${WORKFLOW_STATUS}
+          Log Everywhere     [FUTTATÁS] REPO: ${REPO}
+          Log Everywhere     [FUTTATÁS] BRANCH: ${BRANCH}
+                ${RUN_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+            Log Everywhere     [FUTTATÁS] start.bat elérési út: ${RUN_SCRIPT}
+            Log Everywhere     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
 
-      # Külön szerver indítása - popup ablakban futtatás
-      Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása külön popup ablakban...
-      Log Everywhere     [FUTTATÁS] Robot script indítása: ${RUN_SCRIPT}
+          # Külön szerver indítása - popup ablakban futtatás
+          Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása külön popup ablakban...
+          Log Everywhere     [FUTTATÁS] Robot script indítása: ${RUN_SCRIPT}
 
-      # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk, hogy elkerüljük az útvonal kódolási gondokat
-      ${run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
-      Log Everywhere     [FUTTATÁS] Run Process rc: ${run_result.rc}
-      Log Everywhere     [FUTTATÁS] Run Process stdout: ${run_result.stdout}
-      Log Everywhere     [FUTTATÁS] Run Process stderr: ${run_result.stderr}
+          # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk, hogy elkerüljük az útvonal kódolási gondokat
+          ${run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
+          Log Everywhere     [FUTTATÁS] Run Process rc: ${run_result.rc}
+          Log Everywhere     [FUTTATÁS] Run Process stdout: ${run_result.stdout}
+          Log Everywhere     [FUTTATÁS] Run Process stderr: ${run_result.stderr}
 
-      IF    ${run_result.rc} == 0
-          Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás sikeresen elindult popup ablakban
-      ELSE
-          Log Everywhere     [FUTTATÁS] start indítás sikertelen, PowerShell fallback próbálása...
-          ${ps_command}=    Set Variable    Start-Process -FilePath 'start.bat' -WorkingDirectory '${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}' -WindowStyle Normal
-          ${ps_result}=    Run Process    powershell.exe    -NoProfile    -ExecutionPolicy    Bypass    -Command    ${ps_command}    shell=True    timeout=60s
-          Log Everywhere     [FUTTATÁS][PS] rc: ${ps_result.rc}
-          Log Everywhere     [FUTTATÁS][PS] stdout: ${ps_result.stdout}
-          Log Everywhere     [FUTTATÁS][PS] stderr: ${ps_result.stderr}
-          IF    ${ps_result.rc} == 0
-              Log Everywhere     [FUTTATÁS] PowerShell fallback sikeres, ablak elindítva
+          IF    ${run_result.rc} == 0
+              Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás sikeresen elindult popup ablakban
           ELSE
-              Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása sikertelen: ${ps_result.stderr}
-          END
-      END
-
-      Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
-      Log Everywhere    [FUTTATÁS] Robot indítása befejezve, a szerver a háttérben fut tovább    
-    ELSE IF    ${SANDBOX_MODE} == True and ${WORKFLOW_STATUS} == 'ALL_DONE'
-      # SANDBOX módban közvetlenül futtatás a letöltött könyvtárból
-      Log Everywhere     \n=== SANDBOX ROBOT FUTTATÁSA ===
-    ${SANDBOX_RUN_SCRIPT}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}/start.bat
-      ${sandbox_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${SANDBOX_RUN_SCRIPT}
-      
-      IF    ${sandbox_script_exists}
-          Log Everywhere     Robot futtatása SANDBOX módban: ${SANDBOX_RUN_SCRIPT}
-          
-          # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk
-          ${sandbox_run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${SANDBOX_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
-          
-          IF    ${sandbox_run_result.rc} == 0
-              Log Everywhere     ${REPO}/${BRANCH} SANDBOX alkalmazás sikeresen elindult popup ablakban
-          ELSE
-              Log Everywhere     ${REPO}/${BRANCH} SANDBOX start indítása sikertelen, PowerShell fallback...
-              ${ps_sandbox_cmd}=    Set Variable    Start-Process -FilePath 'start.bat' -WorkingDirectory '${SANDBOX_ROBOTS}/${REPO}/${BRANCH}' -WindowStyle Normal
-              ${ps_sandbox_result}=    Run Process    powershell.exe    -NoProfile    -ExecutionPolicy    Bypass    -Command    ${ps_sandbox_cmd}    shell=True    timeout=60s
-              Log Everywhere     [SANDBOX][PS] rc: ${ps_sandbox_result.rc}
-              Log Everywhere     [SANDBOX][PS] stdout: ${ps_sandbox_result.stdout}
-              Log Everywhere     [SANDBOX][PS] stderr: ${ps_sandbox_result.stderr}
-              IF    ${ps_sandbox_result.rc} == 0
-                  Log Everywhere     ${REPO}/${BRANCH} SANDBOX alkalmazás PowerShell fallback-kel elindult
+              Log Everywhere     [FUTTATÁS] start indítás sikertelen, PowerShell fallback próbálása...
+              ${ps_command}=    Set Variable    Start-Process -FilePath 'start.bat' -WorkingDirectory '${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}' -WindowStyle Normal
+              ${ps_result}=    Run Process    powershell.exe    -NoProfile    -ExecutionPolicy    Bypass    -Command    ${ps_command}    shell=True    timeout=60s
+              Log Everywhere     [FUTTATÁS][PS] rc: ${ps_result.rc}
+              Log Everywhere     [FUTTATÁS][PS] stdout: ${ps_result.stdout}
+              Log Everywhere     [FUTTATÁS][PS] stderr: ${ps_result.stderr}
+              IF    ${ps_result.rc} == 0
+                  Log Everywhere     [FUTTATÁS] PowerShell fallback sikeres, ablak elindítva
               ELSE
-                  Log Everywhere     ${REPO}/${BRANCH} SANDBOX alkalmazás indítása sikertelen: ${ps_sandbox_result.stderr}
+                  Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása sikertelen: ${ps_result.stderr}
               END
           END
-      ELSE
-          Log Everywhere     SANDBOX start.bat nem található: ${SANDBOX_RUN_SCRIPT}
+
+          Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
+          Log Everywhere    [FUTTATÁS] Robot indítása befejezve, a szerver a háttérben fut tovább    
+        ELSE IF    ${SANDBOX_MODE} == True and ${WORKFLOW_STATUS} == 'ALL_DONE'
+          # SANDBOX módban közvetlenül futtatás a letöltött könyvtárból
+          Log Everywhere     \n=== SANDBOX ROBOT FUTTATÁSA ===
+        ${SANDBOX_RUN_SCRIPT}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}/start.bat
+          ${sandbox_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${SANDBOX_RUN_SCRIPT}
+          
+          IF    ${sandbox_script_exists}
+              Log Everywhere     Robot futtatása SANDBOX módban: ${SANDBOX_RUN_SCRIPT}
+              
+              # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk
+              ${sandbox_run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${SANDBOX_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
+              
+              IF    ${sandbox_run_result.rc} == 0
+                  Log Everywhere     ${REPO}/${BRANCH} SANDBOX alkalmazás sikeresen elindult popup ablakban
+              ELSE
+                  Log Everywhere     ${REPO}/${BRANCH} SANDBOX start indítása sikertelen, PowerShell fallback...
+                  ${ps_sandbox_cmd}=    Set Variable    Start-Process -FilePath 'start.bat' -WorkingDirectory '${SANDBOX_ROBOTS}/${REPO}/${BRANCH}' -WindowStyle Normal
+                  ${ps_sandbox_result}=    Run Process    powershell.exe    -NoProfile    -ExecutionPolicy    Bypass    -Command    ${ps_sandbox_cmd}    shell=True    timeout=60s
+                  Log Everywhere     [SANDBOX][PS] rc: ${ps_sandbox_result.rc}
+                  Log Everywhere     [SANDBOX][PS] stdout: ${ps_sandbox_result.stdout}
+                  Log Everywhere     [SANDBOX][PS] stderr: ${ps_sandbox_result.stderr}
+                  IF    ${ps_sandbox_result.rc} == 0
+                      Log Everywhere     ${REPO}/${BRANCH} SANDBOX alkalmazás PowerShell fallback-kel elindult
+                  ELSE
+                      Log Everywhere     ${REPO}/${BRANCH} SANDBOX alkalmazás indítása sikertelen: ${ps_sandbox_result.stderr}
+                  END
+              END
+          ELSE
+              Log Everywhere     SANDBOX start.bat nem található: ${SANDBOX_RUN_SCRIPT}
+          END
       END
-    END
+  ELSE
+      Log Everywhere     [FUTTATÁS] start.bat automatikus indítása kihagyva (AUTO_LAUNCH_START_BAT = ${AUTO_LAUNCH_START_BAT})
+      Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
+  END
     Log Everywhere     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log Everywhere     WORKFLOW_STATUS = ${WORKFLOW_STATUS}

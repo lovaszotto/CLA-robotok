@@ -25,6 +25,9 @@ ${SANDBOX_ROBOTS}       c:/Users/oLovasz/MyRobotFramework/SandboxRobots/
 # A robotok letöltési könyvtárai
 ${DOWNLOADED_ROBOTS}    c:/Users/oLovasz/MyRobotFramework/DownloadedRobots/
 
+# Automatikus start.bat futtatás engedélyezése
+${AUTO_LAUNCH_START_BAT}    ${False}
+
 # A telepítési könyvtárai
 ${INSTALLED_ROBOTS}     c:/Users/oLovasz/MyRobotFramework/InstalledRobots/
 
