@@ -52,3 +52,6 @@ start "Robot Kezelo" http://localhost:5000
 :: Szerver leallitasa utan
 echo.
 echo Flask szerver leállt.
+echo.
+echo Nyomj meg egy billentyût a bezáráshoz...
+pause

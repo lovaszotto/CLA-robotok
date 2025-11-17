@@ -614,9 +614,10 @@ def api_start_robot():
 
         print(f"[START_ROBOT] Normál módban futtatás: {start_bat}")
         creation_flags = getattr(subprocess, 'CREATE_NEW_CONSOLE', 0)
+        cmd_args = ['cmd.exe', '/k', 'pushd', target_dir, '&&', 'call', 'start.bat']
+        # Új konzolt nyitunk, belépünk a céligényelt könyvtárba, majd meghívjuk a start.bat-ot.
         subprocess.Popen(
-            ['cmd.exe', '/c', 'start', '""', 'start.bat'],
-            cwd=target_dir,
+            cmd_args,
             creationflags=creation_flags,
             shell=False,
             close_fds=False
@@ -1498,10 +1499,12 @@ function executeSingleRobot(repo, branch, rootFolder) {
         const fallbackRoot = (typeof ROOT_FOLDER === 'string') ? ROOT_FOLDER : '';
         const incomingRoot = (typeof rootFolder === 'string') ? rootFolder : fallbackRoot;
         let normalizedRoot = (incomingRoot || '').trim().split('\\\\').join('/');
-        while (normalizedRoot.endsWith('/')) {
-            normalizedRoot = normalizedRoot.slice(0, -1);
+        if (normalizedRoot && !normalizedRoot.endsWith('/')) {
+            normalizedRoot += '/';
         }
-        const cmdInfo = (normalizedRoot ? normalizedRoot + '/' : '') + repo + '/' + branch + '/start.bat';
+        const subFolder = SANDBOX_MODE ? 'SandboxedRobots/' : 'DownloadedRobots/';
+        const basePath = normalizedRoot ? normalizedRoot + subFolder : subFolder;
+        const cmdInfo = basePath + repo + '/' + branch + '/start.bat';
         const msgLines = [
             'Valóban futtassam a robotot?',
             '',
