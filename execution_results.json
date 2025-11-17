@@ -48,5 +48,45 @@
     "returncode": 0,
     "results_dir": "SzotarRobi__Szó-kikérdező__20251117_122048",
     "type": "single"
+  },
+  {
+    "id": 6,
+    "timestamp": "2025-11-17 12:24:53",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_122453",
+    "type": "single"
+  },
+  {
+    "id": 7,
+    "timestamp": "2025-11-17 12:28:00",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_122800",
+    "type": "single"
+  },
+  {
+    "id": 8,
+    "timestamp": "2025-11-17 12:28:39",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_122839",
+    "type": "single"
+  },
+  {
+    "id": 9,
+    "timestamp": "2025-11-17 14:51:23",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_145123",
+    "type": "single"
   }
 ]

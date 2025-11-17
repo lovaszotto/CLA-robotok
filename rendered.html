@@ -1006,6 +1006,10 @@ function runSelectedRobots() {
 function showSelectedRobots(robots) {
     console.log('showSelectedRobots hívva', robots.length, 'robottal');
     const container = document.getElementById('selectedRobotsContainer');
+    if (!container) {
+        console.error('Hiba: selectedRobotsContainer elem nem található!');
+        return;
+    }
     
     // Gombok megjelenítése a fejlécben
     const executionButtons = document.getElementById('executionButtons');
@@ -1046,6 +1050,10 @@ function showSelectedRobots(robots) {
 function executeRobot(repo, branch) {
     // "Fut" státusz megjelenítése azonnal
     const container = document.getElementById('selectedRobotsContainer');
+    if (!container) {
+        console.error('Hiba: selectedRobotsContainer elem nem található!');
+        return;
+    }
     const currentTime = new Date().toLocaleString('hu-HU');
     const tempMsg = document.createElement('div');
     tempMsg.className = 'alert alert-info mt-3';
