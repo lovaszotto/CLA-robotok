@@ -1,62 +1,52 @@
 [
   {
-    "id": 18,
-    "timestamp": "2025-11-17 10:18:09",
+    "id": 1,
+    "timestamp": "2025-11-17 12:03:09",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_101809",
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_120309",
     "type": "single"
   },
   {
-    "id": 19,
-    "timestamp": "2025-11-17 10:26:50",
+    "id": 2,
+    "timestamp": "2025-11-17 12:10:43",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_102650",
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_121043",
     "type": "single"
   },
   {
-    "id": 20,
-    "timestamp": "2025-11-17 10:28:14",
+    "id": 3,
+    "timestamp": "2025-11-17 12:11:58",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_102814",
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_121158",
     "type": "single"
   },
   {
-    "id": 20,
-    "timestamp": "2025-11-17 10:33:56",
+    "id": 4,
+    "timestamp": "2025-11-17 12:16:09",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_103356",
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_121609",
     "type": "single"
   },
   {
     "id": 5,
-    "timestamp": "2025-11-17 10:43:41",
+    "timestamp": "2025-11-17 12:20:48",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_104341",
-    "type": "single"
-  },
-  {
-    "id": 6,
-    "timestamp": "2025-11-17 10:55:51",
-    "repo": "SzotarRobi",
-    "branch": "Szó-kikérdező",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_105551",
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251117_122048",
     "type": "single"
   }
 ]

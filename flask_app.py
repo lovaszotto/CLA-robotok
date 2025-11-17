@@ -613,14 +613,26 @@ def api_start_robot():
                 'error': f'start.bat nem található: {start_bat}'
             }), 404
 
-        print(f"[START_ROBOT] start.bat futtatása a Flask alkalmazásból le van tiltva (repo={repo}, branch={branch}).")
-        return jsonify({
-            'success': False,
-            'error': 'start.bat futtatása a Flask alkalmazásból letiltva',
-            'repo': repo,
-            'branch': branch,
-            'dir': target_dir
-        }), 403
+        try:
+            # start.bat futtatása subprocess-szel
+            result = subprocess.run([start_bat], cwd=target_dir, capture_output=True, text=True, shell=True)
+            print(f"[START_ROBOT] start.bat futtatva: rc={result.returncode}")
+            return jsonify({
+                'success': result.returncode == 0,
+                'repo': repo,
+                'branch': branch,
+                'dir': target_dir,
+                'returncode': result.returncode,
+                'stdout': result.stdout,
+                'stderr': result.stderr
+            })
+        except Exception as exc:
+            print(f"[START_ROBOT] HIBA futtatás közben: {exc}")
+            return jsonify({
+                'success': False,
+                'error': 'start.bat futtatása közben hiba történt',
+                'details': str(exc)
+            }), 500
     except Exception as exc:
         print(f"[START_ROBOT] HIBA: {exc}")
         return jsonify({
@@ -987,17 +999,21 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 .nav-tabs .nav-link.active { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%); color: white; border-bottom: 3px solid {primary_color}; }
 .nav-tabs .nav-link:hover { background: linear-gradient(135deg, {tertiary_color} 0%, {light_color} 100%); color: {primary_color}; }
 .tab-content { padding: 30px; }
+/* Minden card halványkék háttérrel és vékony szürke kerettel */
+/* Minden card halványkék háttérrel és vékony szürke kerettel */
+/* Minden card halványkék háttérrel és vékony szürke kerettel, extra erősséggel */
 .card, .repo-card {
-    border: 2px solid #888 !important;
+    background-color: #e3f2fd !important;
+    border: 1px solid #b0bec5 !important;
 }
-.card { box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; border: 1px solid #dee2e6 !important; }
+.card.bg-white, .card.bg-light, .repo-card.bg-white, .repo-card.bg-light {
+    background-color: #e3f2fd !important;
+}
 .actions { text-align: center; margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }
 .btn-custom { background: linear-gradient(135deg, {primary_color} 0%, {secondary_color} 50%, {tertiary_color} 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
 .btn-custom:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, {hover_color} 0%, {primary_color} 50%, {tertiary_color} 100%); }
 .repo-card { 
     transition: all 0.3s ease; 
-    border: 1px solid #dee2e6 !important; 
-    background: linear-gradient(135deg, #ffffff 0%, #fdf2f2 100%) !important;
 }
 .repo-card:hover { 
     transform: translateY(-5px); 
@@ -1055,11 +1071,6 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </button>
 </li>
 <li class="nav-item" role="presentation">
-<button class="nav-link" id="executable-tab" data-bs-toggle="tab" data-bs-target="#executable-pane" type="button" role="tab">
-<i class="bi bi-play-circle"></i> Futtatás
-</button>
-</li>
-<li class="nav-item" role="presentation">
 <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results-pane" type="button" role="tab">
 <i class="bi bi-list-task"></i> Eredmények
 </button>
@@ -1110,7 +1121,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
     {% for repo in repos %}
         {% if repo.downloaded_branches|length > 0 %}
         <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="{{ repo.name }}">
-            <div class="card repo-card h-100">
+            <div class="card repo-card h-100" style="background-color: #e3f2fd !important;">
                 <div class="card-header text-white">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-github"></i>
@@ -1127,7 +1138,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                     <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
                     <div class="branches-container">
                         {% for branch in repo.downloaded_branches %}
-                            <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
+                            <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;" id="branch-{{ repo.name }}-{{ branch }}">
                                 <button class="btn btn-success btn-sm me-2" title="Futtatás"
                                     data-repo="{{ repo.name }}"
                                     data-branch="{{ branch }}"
@@ -1171,7 +1182,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
         <div class="col-md-4 d-flex align-items-center">
             <div class="text-muted small">
                 <i class="bi bi-info-circle me-1"></i>
-                Jelölje be a futtatni kívánt robotokat
+                Kattintson a letöltés gombra azonnali telepítéshez
             </div>
         </div>
     </div>
@@ -1198,22 +1209,14 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                     <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
                     <div class="branches-container">
                         {% for branch in repo.available_branches %}
-                            <div class="branch-checkbox d-flex align-items-center">
+                            <div class="branch-checkbox d-flex align-items-center" id="branch-available-{{ repo.name }}-{{ branch }}">
                                 <button class="btn btn-warning btn-sm me-2 text-dark"
                                         type="button"
                                         title="Azonnali letöltés"
                                         onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
                                     <i class="bi bi-download"></i>
                                 </button>
-                                <input type="checkbox" class="form-check-input robot-checkbox-available me-2"
-                                       id="branch-available-{{ repo.name }}-{{ branch }}" 
-                                       data-repo="{{ repo.name }}" 
-                                       data-branch="{{ branch }}"
-                                       onchange="handleAvailableRobotToggle(this)">
-                                <label class="form-check-label mb-0" for="branch-available-{{ repo.name }}-{{ branch }}">
-                                    <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letölthető"></i>
-                                    {{ branch }}
-                                </label>
+                                <span>{{ branch }}</span>
                              </div>
                         {% endfor %}
                     </div>
@@ -1224,30 +1227,11 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
     {% endfor %}
     </div>
 </div>
-<div class="tab-pane fade" id="executable-pane" role="tabpanel">
-<div class="d-flex justify-content-between align-items-center mb-3">
-<h3 class="mb-0"><i class="bi bi-play-circle-fill text-success"></i> Kiválasztott Robotok Futtatása</h3>
-<div id="executionButtons" style="display: none;">
-        <button class="btn btn-outline-secondary btn-lg me-2" onclick="clearSelection()">
-            <i class="bi bi-x-circle"></i> Összes visszavonása
-        </button>
-    <button class="btn btn-primary btn-lg me-2" onclick="installSelectedRobots()">
-        <i class="bi bi-download"></i> Kijelöltek letöltése
-    </button>
-        <button class="btn btn-success btn-lg" onclick="executeAllRobots()">
-            <i class="bi bi-play-fill"></i> Kijelöltek futtatása
-        </button>
-</div>
-</div>
-<div id="selectedRobotsContainer">
-<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>
-</div>
-</div>
 <div class="tab-pane fade" id="info-pane" role="tabpanel">
 <h3><i class="bi bi-info-circle-fill text-info"></i> Rendszer Információk</h3>
 <div class="row">
 <div class="col-md-6">
-<div class="card">
+<div class="card" style="background-color: #e3f2fd !important;">
 <div class="card-header text-white" style="background: linear-gradient(135deg, {primary_color}, {dark_color});">
 <h5><i class="bi bi-laptop"></i> Rendszer</h5>
 </div>
@@ -1482,11 +1466,6 @@ function executeSingleRobot(repo, branch, rootFolder) {
         return;
     }
     try {
-        // Ugrás a Futtatás fülre, hogy azonnal látható legyen az állapotkártya
-        const executableTab = document.getElementById('executable-tab');
-        if (executableTab) {
-            executableTab.click();
-        }
         showToast(`Robot futtatása indult: ${repo}/${branch}`, 'info');
         executeRobot(repo, branch);
     } catch (e) {
@@ -1620,21 +1599,6 @@ function deleteRunnableBranch(repoName, branchName) {
     }
 }
 
-function downloadSelectedRobots() {
-    const checkboxes = document.querySelectorAll('.robot-checkbox-available:checked');
-    const selectedRobots = [];
-    checkboxes.forEach(checkbox => {
-        selectedRobots.push({
-            repo: checkbox.getAttribute('data-repo'),
-            branch: checkbox.getAttribute('data-branch')
-        });
-    });
-    if (selectedRobots.length > 0) {
-        showSelectedRobots(selectedRobots);
-        // Váltás a futtatás tab-ra
-        document.getElementById('executable-tab').click();
-    }
-}
 // Letölthető robotok azonnali hozzáadása/eltávolítása a Futtatás tab-hoz
 function handleAvailableRobotToggle(checkbox) {
     const repo = checkbox.getAttribute('data-repo');
@@ -1667,7 +1631,7 @@ function handleRunnableRobotToggle(checkbox) {
     }
     
     // Továbbra is frissítsük a régi gomb állapotot is (kompatibilitás)
-    updateRunButton();
+    // updateRunButton(); // Futtatás tab megszűnt, törölhető
 }
 
 // Robot hozzáadása a futtatási listához (Futtatás tab)
@@ -1737,7 +1701,7 @@ function filterRepos() {
     
     repoItems.forEach(item => {
         const repoName = item.getAttribute('data-repo-name').toLowerCase();
-        const branches = item.querySelectorAll('.branch-checkbox label');
+        const branches = item.querySelectorAll('.branch-checkbox span');
         let hasMatchingBranch = false;
         
         branches.forEach(branch => {
@@ -1762,7 +1726,7 @@ function filterReposAvailable() {
     
     repoItems.forEach(item => {
         const repoName = item.getAttribute('data-repo-name').toLowerCase();
-        const branches = item.querySelectorAll('.branch-checkbox label');
+        const branches = item.querySelectorAll('.branch-checkbox span');
         let hasMatchingBranch = false;
         
         branches.forEach(branch => {
@@ -1780,17 +1744,9 @@ function filterReposAvailable() {
     });
 }
 
-function updateRunButton() {
-    // Ez a függvény már nem szükséges, mivel azonnali checkbox működés van
-    // De meghagyjuk a kompatibilitás érdekében (üres működéssel)
-    return;
-}
 
-function runSelectedRobots() {
-    // Ez a függvény már nem szükséges, mivel azonnali checkbox működés van
-    // Meghagyjuk üres formában a kompatibilitás érdekében
-    return;
-}
+
+
 
 function showSelectedRobots(robots) {
     console.log('showSelectedRobots hívva', robots.length, 'robottal');
@@ -1836,17 +1792,19 @@ function executeRobot(repo, branch) {
     // "Fut" státusz megjelenítése azonnal
     const container = document.getElementById('selectedRobotsContainer');
     const currentTime = new Date().toLocaleString('hu-HU');
-    const tempMsg = document.createElement('div');
-    tempMsg.className = 'alert alert-info mt-3';
-    tempMsg.id = `status-${repo}-${branch}`;
-    tempMsg.innerHTML = `
-        <i class="bi bi-arrow-clockwise spinning"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong> 
-        <small class="text-muted">(${currentTime})</small>
-        <div class="mt-2">
-            <span class="badge bg-primary">Státusz: Fut</span>
-        </div>
-    `;
-    container.appendChild(tempMsg);
+    if (container) {
+        const tempMsg = document.createElement('div');
+        tempMsg.className = 'alert alert-info mt-3';
+        tempMsg.id = `status-${repo}-${branch}`;
+        tempMsg.innerHTML = `
+            <i class="bi bi-arrow-clockwise spinning"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong> 
+            <small class="text-muted">(${currentTime})</small>
+            <div class="mt-2">
+                <span class="badge bg-primary">Státusz: Fut</span>
+            </div>
+        `;
+        container.appendChild(tempMsg);
+    }
     
     // Szerver értesítése a futtatásról
     fetch('/api/execute', {
@@ -1929,250 +1887,11 @@ function executeRobot(repo, branch) {
     });
 }
 
-function executeAllRobots() {
-    console.log('[WORKFLOW] Kijelöltek futtatása indult');
-    // Gombok tiltása indításkor
-    const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
-    const runBtn = document.querySelector('button[onclick="executeAllRobots()"]');
-    if (installBtn) installBtn.disabled = true;
-    if (runBtn) runBtn.disabled = true;
-    // Mindkét tabról származó kiválasztott robotokat összegyűjtjük
-    const checkboxesRun = document.querySelectorAll('.robot-checkbox:checked');
-    const checkboxesDownload = document.querySelectorAll('.robot-checkbox-available:checked');
-    const robots = [];
-    checkboxesRun.forEach(cb => {
-        robots.push({ repo: cb.getAttribute('data-repo'), branch: cb.getAttribute('data-branch') });
-    });
-    checkboxesDownload.forEach(cb => {
-        // Ne legyen duplikáció, ha valaki mindkét tabon kijelölte ugyanazt
-        const repo = cb.getAttribute('data-repo');
-        const branch = cb.getAttribute('data-branch');
-        if (!robots.some(r => r.repo === repo && r.branch === branch)) {
-            robots.push({ repo, branch });
-        }
-    });
-    if (robots.length === 0) {
-        alert('Nincs kiválasztott robot.');
-    if (installBtn) installBtn.disabled = false;
-    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
-        return;
-    }
-    // Ha csak egy robot van kiválasztva, egyedi futtatásként kezeljük
-    if (robots.length === 1) {
-        const robot = robots[0];
-        executeRobot(robot.repo, robot.branch);
-    if (installBtn) installBtn.disabled = false;
-    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
-        return;
-    }
-    // "Fut" státusz megjelenítése minden robotnak azonnal (többes futtatás esetén)
-    // Gombok újra engedélyezése 2 másodperc múlva (ha nem aszinkron a futás)
-    setTimeout(() => {
-    if (installBtn) installBtn.disabled = false;
-    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
-    }, 2000);
-    const container = document.getElementById('selectedRobotsContainer');
-    const currentTime = new Date().toLocaleString('hu-HU');
-    // Csoport fejléc
-    const groupHeader = document.createElement('div');
-    groupHeader.className = 'alert alert-info mt-3';
-    groupHeader.innerHTML = `
-        <i class="bi bi-arrow-clockwise spinning"></i> Tömeges futtatás elindult 
-        <small class="text-muted">(${currentTime})</small>
-        <div class="mt-2">
-            <span class="badge bg-primary">Státusz: ${robots.length} robot fut</span>
-        </div>
-    `;
-    container.appendChild(groupHeader);
-    // Egyedi kártyák minden robothoz
-    robots.forEach(robot => {
-        const tempCard = document.createElement('div');
-        tempCard.className = 'col-md-6 mb-2 mt-2';
-        tempCard.id = `bulk-status-${robot.repo}-${robot.branch}`;
-        tempCard.innerHTML = `
-            <div class="card border-info">
-                <div class="card-body py-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <i class="bi bi-github"></i> <strong>${robot.repo}</strong> / 
-                            <i class="bi bi-git"></i> ${robot.branch}
-                        </div>
-                        <div>
-                            <i class="bi bi-arrow-clockwise spinning text-primary"></i> <small>Fut</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        container.appendChild(tempCard);
-    });
-    // Szervernek elküldjük a teljes listát
-    console.log('[WORKFLOW] Futtatási kérés elküldése a backendnek');
-    fetch('/api/execute-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ robots })
-    })
-    .then(r => r.json())
-    .then(data => {
-        console.log('Szerver válasz (bulk):', data);
-        console.log('[WORKFLOW] Futtatás eredmény érkezett', data);
-        // A csoport fejléc eltávolítása
-        const groupHeader = container.querySelector('.alert-info');
-        if (groupHeader) {
-            groupHeader.remove();
-        }
-        // Egyedi kártyák frissítése
-        if (data.robots) {
-            data.robots.forEach((result, index) => {
-                const robot = robots[index];
-                const card = document.getElementById(`bulk-status-${robot.repo}-${robot.branch}`);
-                if (card) {
-                    const currentTime = new Date().toLocaleString('hu-HU');
-                    const statusIcon = getStatusIcon(result.returncode);
-                    const statusText = getStatusText(result.returncode);
-                    const statusClass = getStatusClass(result.returncode);
-                    card.className = 'col-12 mb-2';
-                    card.innerHTML = `
-                        <div class="alert ${statusClass} mt-3">
-                            ${statusIcon} Futtatás befejezve: <strong>${robot.repo}/${robot.branch}</strong> 
-                            <small class="text-muted">(${currentTime})</small>
-                            <div class="mt-2">
-                                <span class="badge bg-secondary">Végső státusz: ${statusText}</span>
-                            </div>
-                        </div>
-                    `;
-                    // Sikeres futás esetén törölje a robotot a kiválasztottak közül
-                    console.log(`Debug bulk: Return code érték: ${result.returncode} (típus: ${typeof result.returncode}) robot: ${robot.repo}/${robot.branch}`);
-                    if (result.returncode === 0) {
-                        console.log(`Sikeres tömeges futás észlelve: ${robot.repo}/${robot.branch} - eltávolítás a listából`);
-                        setTimeout(() => {
-                            removeRobotFromSelection(robot.repo, robot.branch);
-                            card.querySelector('.alert').innerHTML += `
-                                <div class="mt-2">
-                                    <small class="text-success">
-                                        <i class="bi bi-check-circle"></i> Robot automatikusan eltávolítva a kiválasztottak közül
-                                    </small>
-                                </div>
-                            `;
-                        }, 2000);
-                    } else {
-                        console.log(`Sikertelen tömeges futás: ${robot.repo}/${robot.branch} - returncode: ${result.returncode}`);
-                    }
-                }
-            });
-        }
-        
-        // Eredmények lista frissítése a tömeges futtatás után
-        console.log('[WORKFLOW] Letölthető robotok tab frissítése');
-        console.log('Eredmények lista frissítése (bulk után)...');
-        loadResults();
-        // Letölthető robotok tab frissítése
-        if (typeof refreshAvailableRobots === 'function') {
-            refreshAvailableRobots();
-        } else {
-            window.location.reload();
-        }
-    })
-    .catch(err => {
-        console.error('Tömeges futtatás hiba:', err);
-        // Hiba esetén minden kártya frissítése
-        robots.forEach(robot => {
-            const card = document.getElementById(`bulk-status-${robot.repo}-${robot.branch}`);
-            if (card) {
-                card.className = 'col-md-6 mb-2 mt-2';
-                card.innerHTML = `
-                    <div class="card border-danger">
-                        <div class="card-body py-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="bi bi-github"></i> <strong>${robot.repo}</strong> / 
-                                    <i class="bi bi-git"></i> ${robot.branch}
-                                </div>
-                                <div class="text-danger">
-                                    <i class="bi bi-x-circle"></i> <small>Sikertelen</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-        });
-        // Fejléc frissítése
-        const groupHeader = container.querySelector('.alert-info');
-        if (groupHeader) {
-            groupHeader.className = 'alert alert-danger mt-3';
-            groupHeader.innerHTML = `
-                <i class="bi bi-x-circle"></i> Tömeges futtatás sikertelen
-                <div class="mt-2">
-                    <span class="badge bg-danger">Hiba történt</span>
-                </div>
-            `;
-        }
-        
-        // Hiba esetén is frissítsük az eredményeket
-        console.log('Eredmények lista frissítése (bulk hiba után)...');
-        loadResults();
-        // Letölthető robotok tab frissítése hiba esetén is
-        if (typeof refreshAvailableRobots === 'function') {
-            refreshAvailableRobots();
-        } else {
-            window.location.reload();
-        }
-    });
-}
 
-function removeRobotFromSelection(repo, branch) {
-    // Keressük meg és törölük a checkbox-ot
-    console.log(`removeRobotFromSelection meghívva: ${repo}/${branch}`);
-    const selector = `input[data-repo="${repo}"][data-branch="${branch}"]`;
-    console.log(`Checkbox selector: ${selector}`);
-    const checkbox = document.querySelector(selector);
-    console.log(`Checkbox talált:`, checkbox);
-    
-    if (checkbox) {
-        checkbox.checked = false;
-        console.log(`Robot eltávolítva a kiválasztottak közül: ${repo}/${branch}`);
-        
-        // Frissítsük a futtatás gombot
-        updateRunButton();
-        
-        // Ha nincs több kiválasztott robot, frissítsük a kiválasztottak listáját
-        const selectedCheckboxes = document.querySelectorAll('.robot-checkbox:checked');
-        if (selectedCheckboxes.length === 0) {
-            // Gombok elrejtése
-            const executionButtons = document.getElementById('executionButtons');
-            if (executionButtons) {
-                executionButtons.style.display = 'none';
-            }
-            
-            const container = document.getElementById('selectedRobotsContainer');
-            container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Válasszon ki robotokat a "Futtatható robotok" tab-on a futtatáshoz.</div>';
-        } else {
-            // Frissítsük a kiválasztottak listáját
-            updateSelectedRobotsList();
-        }
-    } else {
-        console.log(`HIBA: Checkbox nem található: ${selector}`);
-    }
-}
 
-function updateSelectedRobotsList() {
-    // Új lista generálása a jelenlegi kiválasztásokból
-    const checkboxes = document.querySelectorAll('.robot-checkbox:checked');
-    const selectedRobots = [];
-    
-    checkboxes.forEach(checkbox => {
-        selectedRobots.push({
-            repo: checkbox.getAttribute('data-repo'),
-            branch: checkbox.getAttribute('data-branch')
-        });
-    });
-    
-    if (selectedRobots.length > 0) {
-        showSelectedRobots(selectedRobots);
-    }
-}
+
+
+
 
 function markAsSuccessAndRemove(repo, branch, buttonElement) {
     console.log(`Manuális sikeres jelölés: ${repo}/${branch}`);
@@ -2237,7 +1956,7 @@ function removeRobotFromList(repo, branch) {
 
 function clearSelection() {
     document.querySelectorAll('.robot-checkbox:checked').forEach(cb => cb.checked = false);
-    updateRunButton();
+    // updateRunButton(); // Futtatás tab megszűnt, törölhető
     
     // Gombok elrejtése
     const executionButtons = document.getElementById('executionButtons');
@@ -2467,18 +2186,12 @@ function updateTabCounts() {
         }
 
         // Letölthető robotok számának frissítése
-        const availableRobots = document.querySelectorAll('#repoContainerAvailable .robot-checkbox-available').length;
+        const availableRobots = document.querySelectorAll('#repoContainerAvailable .branch-checkbox').length;
         const availableTab = document.getElementById('available-tab');
         if (availableTab) {
             availableTab.innerHTML = '<i class="bi bi-download"></i> Letölthető robotok (' + availableRobots + ')';
         }
 
-        // Futtatás tab robotok számának frissítése
-        const selectedRobots = getSelectedRobots().length;
-        const executableTab = document.getElementById('executable-tab');
-        if (executableTab) {
-            executableTab.innerHTML = '<i class="bi bi-play-circle"></i> Futtatás (' + selectedRobots + ')';
-        }
     } catch (error) {
         console.warn('Tab számok frissítése sikertelen:', error);
     }
@@ -2487,7 +2200,7 @@ function updateTabCounts() {
 // Oldal betöltésekor
 document.addEventListener('DOMContentLoaded', function() {
     loadSettings();
-    updateRunButton();
+    // updateRunButton(); // Futtatás tab megszűnt, törölhető
     updateTabCounts();
 
     // Fallback: Exit gomb eseménykezelője id alapján
@@ -2515,9 +2228,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Checkbox változásokra figyelés
 document.addEventListener('change', function(e) {
-    if (e.target.classList.contains('robot-checkbox')) {
-        updateRunButton();
-    }
+    // futtatható tab megszűnt, robot-checkbox már nincs
 });
 
 // Eredmények kezelése
@@ -2911,11 +2622,7 @@ function updateRunnableRobotsTab(repos) {
                     installedBranches.forEach(branch => {
                         html += `
                             <div class=\"branch-checkbox d-flex align-items-center\" style=\"margin-bottom: 5px;\">
-                                <input type=\"checkbox\" class=\"form-check-input robot-checkbox me-2\"
-                                       id=\"branch-${repo.name}-${branch}\" 
-                                       data-repo=\"${repo.name}\" 
-                                       data-branch=\"${branch}\"
-                                       onchange=\"handleRunnableRobotToggle(this)\">
+                                    <!-- Checkbox removed: futtatható tab megszűnt -->
                                 <div class=\"d-flex align-items-center me-2\">
                                     <i class=\"bi bi-house-fill text-primary me-2\" data-bs-toggle=\"tooltip\" data-bs-placement=\"top\" title=\"Feltöltve: ${repo.pushed_at_formatted || ''}\"></i>
                                     <i class=\"bi bi-trash text-danger\" 
@@ -3026,7 +2733,7 @@ function deleteBranchFromRunnable(repoName, branchName) {
             }
             
             // Frissítsük a futtatás gombot
-            updateRunButton();
+            // updateRunButton(); // Futtatás tab megszűnt, törölhető
             
             console.log(`Branch ${repoName}/${branchName} eltávolítva a futtathatók közül`);
 
@@ -3063,39 +2770,31 @@ function addBranchToAvailableTab(repoName, branchName) {
     const branchesContainer = repoEl.querySelector('.branches-container');
     if (!branchesContainer) return;
 
-    // Ha már létezik ilyen checkbox, ne duplikáljuk
-    const inputId = `branch-available-${repoName}-${branchName}`;
-    if (repoEl.querySelector(`#${CSS.escape(inputId)}`)) {
+    const wrapperId = `branch-available-${repoName}-${branchName}`;
+    if (repoEl.querySelector(`#${CSS.escape(wrapperId)}`)) {
         return;
     }
 
     // Új branch elem felépítése
     const wrapper = document.createElement('div');
-    wrapper.className = 'branch-checkbox';
+    wrapper.className = 'branch-checkbox d-flex align-items-center';
+    wrapper.id = wrapperId;
 
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.className = 'form-check-input robot-checkbox-available me-2';
-    input.id = inputId;
-    input.setAttribute('data-repo', repoName);
-    input.setAttribute('data-branch', branchName);
-    input.addEventListener('change', function() { handleAvailableRobotToggle(this); });
+    const button = document.createElement('button');
+    button.className = 'btn btn-warning btn-sm me-2 text-dark';
+    button.type = 'button';
+    button.title = 'Azonnali letöltés';
+    button.innerHTML = '<i class="bi bi-download"></i>';
+    button.addEventListener('click', function() {
+        installRobot(repoName, branchName, button);
+    });
 
-    const label = document.createElement('label');
-    label.className = 'form-check-label ms-2';
-    label.setAttribute('for', inputId);
-    label.innerHTML = `
-        <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letölthető"></i>
-        ${branchName}
-    `;
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = branchName;
 
-    wrapper.appendChild(input);
-    wrapper.appendChild(label);
+    wrapper.appendChild(button);
+    wrapper.appendChild(labelSpan);
     branchesContainer.appendChild(wrapper);
-
-    // Tooltipek újrainicializálása
-    const tList = [].slice.call(branchesContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tList.forEach(function (el) { try { new bootstrap.Tooltip(el); } catch(e) {} });
 
     // Aktuális szűrők alkalmazása
     try { filterReposAvailable(); } catch(e) {}
