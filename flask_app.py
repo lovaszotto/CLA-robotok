@@ -254,7 +254,15 @@ def run_robot_with_params(repo: str, branch: str):
         return 1, results_dir_rel, '', msg
 
     # Egyszerűsítés: közvetlenül a robot.run modult hívjuk (__main__ hiány miatti problémák elkerülésére)
-    cmd = [PYTHON_EXECUTABLE, '-m', 'robot.run', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
+    cmd = [
+        PYTHON_EXECUTABLE, '-m', 'robot.run',
+        '-d', results_dir_abs,
+        '--log', 'log.html',
+        '--report', 'report.html',
+        '-v', f'REPO:{repo}',
+        '-v', f'BRANCH:{branch}',
+        suite_path
+    ]
     try:
         logger.info(f"[RUN] Python exec: {PYTHON_EXECUTABLE}")
         logger.info(f"[RUN] CWD: {os.getcwd()}")
@@ -286,17 +294,26 @@ def run_robot_with_params(repo: str, branch: str):
                 generated = sorted(os.listdir(results_dir_abs))
             logger.info(f"[RUN] Return code: {result.returncode}")
             logger.info(f"[RUN] Generated files in results dir: {generated}")
+            logger.info(f"[RUN] Robot visszatérés: returncode={result.returncode}, results_dir_rel={results_dir_rel}")
+            logger.info(f"[RUN] Robot stdout: {result.stdout[:500] if result.stdout else ''}")
+            logger.info(f"[RUN] Robot stderr: {result.stderr[:500] if result.stderr else ''}")
         except Exception as e:
             logger.error(f"[RUN] Post-run inspection failed: {e}")
         return result.returncode, results_dir_rel, result.stdout, result.stderr
     except FileNotFoundError as e:
         _persist_robot_outputs(results_dir_abs, '', f'FileNotFoundError: {e}', note='Robot Framework nem indult (python modul hiányzik)')
         logger.error(f"[RUN][ERROR] FileNotFoundError: {e}")
+        logger.info(f"[RUN] Robot visszatérés: returncode=1, results_dir_rel={results_dir_rel}")
+        logger.info(f"[RUN] Robot stdout: '')")
+        logger.info(f"[RUN] Robot stderr: FileNotFoundError: {e}")
         return 1, results_dir_rel, '', f'FileNotFoundError: {e}'
     except Exception as e:
         # Windows hibadoboz elkerülése: hiba naplózása, de nem dobunk tovább hibát
         _persist_robot_outputs(results_dir_abs, '', str(e), note='Robot Framework futtatása kivétellel leállt')
         logger.error(f"[RUN][ERROR] {e}")
+        logger.info(f"[RUN] Robot visszatérés: returncode=1, results_dir_rel={results_dir_rel}")
+        logger.info(f"[RUN] Robot stdout: '')")
+        logger.info(f"[RUN] Robot stderr: {str(e)}")
         return 1, results_dir_rel, '', str(e)
 
 
