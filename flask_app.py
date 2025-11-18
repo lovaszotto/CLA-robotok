@@ -373,17 +373,21 @@ def install_robot_with_params(repo: str, branch: str):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     safe_repo = (repo or 'unknown').replace('/', '_')
     safe_branch = (branch or 'unknown').replace('/', '_')
+    logger.info(f"[INSTALL] install_robot_with_params indult: repo='{repo}', branch='{branch}', safe_repo='{safe_repo}', safe_branch='{safe_branch}', timestamp='{timestamp}'")
     # 1. Könyvtárak létrehozása (repo és branch szint)
     if get_sandbox_mode():
         base_dir = _normalize_dir_from_vars('SANDBOX_ROBOTS')
         if not base_dir:
             base_dir = os.path.join(os.getcwd(), 'SandboxRobots')
+        logger.info(f"[INSTALL] SANDBOX_MODE aktív, base_dir: {base_dir}")
     else:
         base_dir = _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
         if not base_dir:
             base_dir = os.path.join(os.getcwd(), 'DownloadedRobots')
+        logger.info(f"[INSTALL] NEM sandbox mód, base_dir: {base_dir}")
     repo_dir = os.path.join(base_dir, safe_repo)
     branch_dir = os.path.join(repo_dir, safe_branch)
+    logger.info(f"[INSTALL] repo_dir: {repo_dir}, branch_dir: {branch_dir}")
     os.makedirs(repo_dir, exist_ok=True)
     os.makedirs(branch_dir, exist_ok=True)
 
@@ -395,47 +399,76 @@ def install_robot_with_params(repo: str, branch: str):
             for r in repos:
                 if r.get('name', '').lower() == repo.lower():
                     repo_url = r.get('clone_url')
+                    logger.info(f"[INSTALL] repo_url megtalálva: {repo_url}")
                     break
     except Exception as e:
+        logger.error(f"[INSTALL][ERROR] Hiba a repos_response.json olvasásakor: {e}")
         return 1, '', '', f'Hiba a repos_response.json olvasásakor: {e}'
     if not repo_url:
+        logger.error(f"[INSTALL][ERROR] Nem található repo URL: {repo}")
         return 1, '', '', f'Nem található repo URL: {repo}'
 
     # 3. Klónozás, ha nincs meg a branch könyvtárban .git
     try:
-        if not os.path.exists(os.path.join(branch_dir, '.git')):
+        git_dir = os.path.join(branch_dir, '.git')
+        if not os.path.exists(git_dir):
             clone_cmd = [
                 'git', 'clone', '--branch', branch, '--single-branch', repo_url, branch_dir
             ]
+            logger.info(f"[INSTALL] Klónozás indítása: {' '.join(clone_cmd)}")
             result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=120)
+            logger.info(f"[INSTALL] Klónozás befejezve: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
             if result.returncode != 0:
+                logger.error(f"[INSTALL][ERROR] Klónozás sikertelen: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
                 return 1, '', result.stdout, result.stderr
         else:
-            pull_cmd = ['git', '-C', branch_dir, 'pull']
-            result = subprocess.run(pull_cmd, capture_output=True, text=True, timeout=60)
-            if result.returncode != 0:
-                return 1, '', result.stdout, result.stderr
+            # Force pull: fetch + reset --hard
+            fetch_cmd = ['git', '-C', branch_dir, 'fetch', 'origin']
+            logger.info(f"[INSTALL] Fetch indítása: {' '.join(fetch_cmd)}")
+            fetch_result = subprocess.run(fetch_cmd, capture_output=True, text=True, timeout=60)
+            logger.info(f"[INSTALL] Fetch befejezve: rc={fetch_result.returncode}, stdout={fetch_result.stdout[:300]}, stderr={fetch_result.stderr[:300]}")
+            if fetch_result.returncode != 0:
+                logger.error(f"[INSTALL][ERROR] Fetch sikertelen: rc={fetch_result.returncode}, stdout={fetch_result.stdout[:300]}, stderr={fetch_result.stderr[:300]}")
+                return 1, '', fetch_result.stdout, fetch_result.stderr
+            reset_cmd = ['git', '-C', branch_dir, 'reset', '--hard', f'origin/{branch}']
+            logger.info(f"[INSTALL] Reset --hard indítása: {' '.join(reset_cmd)}")
+            reset_result = subprocess.run(reset_cmd, capture_output=True, text=True, timeout=60)
+            logger.info(f"[INSTALL] Reset --hard befejezve: rc={reset_result.returncode}, stdout={reset_result.stdout[:300]}, stderr={reset_result.stderr[:300]}")
+            if reset_result.returncode != 0:
+                logger.error(f"[INSTALL][ERROR] Reset --hard sikertelen: rc={reset_result.returncode}, stdout={reset_result.stdout[:300]}, stderr={reset_result.stderr[:300]}")
+                return 1, '', reset_result.stdout, reset_result.stderr
     except Exception as e:
+        logger.error(f"[INSTALL][ERROR] Git klónozás/pull hiba: {e}")
         return 1, '', '', f'Git klónozás/pull hiba: {e}'
 
     if get_sandbox_mode():
-        # Csak klónozás SANDBOX módban, nincs telepito.bat, nincs start.bat ellenőrzés
+        logger.info(f"[INSTALL] SANDBOX_MODE: csak klónozás történt, nincs telepito.bat, nincs .venv ellenőrzés")
         return 0, branch_dir, 'Sandbox clone OK', ''
     # 4. telepito.bat futtatása CSAK ha nincs .venv mappa a letöltött branch könyvtárban
     installed_dir = get_installed_robots_dir()
     venv_dir = os.path.join(installed_dir, safe_repo, safe_branch, '.venv')
+    logger.info(f"[INSTALL] venv_dir ellenőrzés: {venv_dir}")
     if not os.path.isdir(venv_dir):
         telepito_path = os.path.join(branch_dir, 'telepito.bat')
+        logger.info(f"[INSTALL] telepito.bat path: {telepito_path}")
         if not os.path.exists(telepito_path):
+            logger.error(f"[INSTALL][ERROR] telepito.bat nem található: {telepito_path}")
             return 1, '', '', f'telepito.bat nem található: {telepito_path}'
         try:
-            # Blokkoló módon futtatjuk a telepito.bat-ot, hogy megvárjuk a végét
+            logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir}")
             result = subprocess.run(['telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300, shell=True)
+            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
         except Exception as e:
+            logger.error(f"[INSTALL][ERROR] telepito.bat futtatási hiba: {e}")
             return 1, '', '', f'telepito.bat futtatási hiba: {e}'
         # telepito.bat után újra ellenőrizzük a .venv mappát
         if not os.path.isdir(venv_dir):
+            logger.error(f"[INSTALL][ERROR] .venv mappa nem található a telepítés után: {venv_dir}")
             return 1, '', '', f'.venv mappa nem található a telepítés után: {venv_dir}'
+        logger.info(f"[INSTALL] .venv mappa sikeresen létrejött: {venv_dir}")
+    else:
+        logger.info(f"[INSTALL] .venv mappa már létezik: {venv_dir}")
+    logger.info(f"[INSTALL] install_robot_with_params sikeresen lefutott: repo='{repo}', branch='{branch}', branch_dir='{branch_dir}'")
     return 0, branch_dir, 'Install OK', ''
 
 @app.route('/')
@@ -620,7 +653,9 @@ def api_install_selected():
     """Kijelölt robotok letöltése és telepítése, de nem futtatja őket."""
     data = request.get_json(silent=True) or {}
     robots = data.get('robots') or []
+    logger.info(f"[INSTALL_SELECTED] Download gomb lenyomva, robots param: {robots}")
     if not robots:
+        logger.warning("[INSTALL_SELECTED] Nincs kiválasztott robot a letöltéshez.")
         return jsonify({'success': False, 'error': 'Nincs kiválasztott robot.'}), 400
     installed = []
     errors = []
@@ -631,8 +666,9 @@ def api_install_selected():
             errors.append({'repo': repo, 'branch': branch, 'error': 'Hiányzó repo vagy branch'})
             continue
         try:
+            # Log the install_robot_with_params call
+            logger.info(f"[INSTALL_SELECTED] install_robot_with_params hívás: repo='{repo}', branch='{branch}'")
             # Itt csak letöltés és telepítés, futtatás nélkül
-            # Feltételezzük, hogy van egy install_robot_with_params függvény
             rc, out_dir, _stdout, _stderr = install_robot_with_params(repo, branch)
             if rc == 0:
                 installed.append({'repo': repo, 'branch': branch, 'results_dir': out_dir})
@@ -1285,9 +1321,9 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                         {% for branch in repo.available_branches %}
                             <div class="branch-checkbox d-flex align-items-center" id="branch-available-{{ repo.name }}-{{ branch }}">
                                 <button class="btn btn-warning btn-sm me-2 text-dark"
-                                        type="button"
-                                        title="Azonnali letöltés"
-                                        onclick="installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)">
+                                    type="button"
+                                    title="Azonnali letöltés"
+                                    onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
                                     <i class="bi bi-download"></i>
                                 </button>
                                 <span>{{ branch }}</span>
