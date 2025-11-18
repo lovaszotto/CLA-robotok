@@ -9,6 +9,7 @@ import html
 import time
 import threading
 from datetime import datetime
+import logging
 
 
 app = Flask(__name__)
@@ -16,6 +17,18 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
 
 
 PYTHON_EXECUTABLE = sys.executable or 'python'
+
+
+# Logging beállítás: minden log menjen a server.log fájlba is, konzolra is
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s %(message)s',
+    handlers=[
+        logging.FileHandler('server.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 def get_sandbox_mode() -> bool:
@@ -40,7 +53,7 @@ def get_sandbox_mode() -> bool:
                         if '${False}' in line:
                             return False
     except Exception as e:
-        print(f"[WARNING] Hiba a SANDBOX_MODE beolvasásakor: {e}")
+        logger.warning(f"[WARNING] Hiba a SANDBOX_MODE beolvasásakor: {e}")
 
     # 3) Végső alapértelmezés
     return False
@@ -59,7 +72,7 @@ def get_robot_variable(var_name: str) -> str:
                 if m:
                     return m.group(1).strip()
     except Exception as e:
-        print(f"[WARNING] Hiba a(z) {var_name} beolvasásakor: {e}")
+        logger.warning(f"[WARNING] Hiba a(z) {var_name} beolvasásakor: {e}")
     return ''
 
 def _normalize_dir_from_vars(var_name: str) -> str:
@@ -134,7 +147,7 @@ def get_downloaded_keys():
                         safe_branch = parts[1]
                         keys.add(f"{safe_repo}|{safe_branch}")
     except Exception as e:
-        print(f"[INFO] Nem sikerült a results alapú kulcsokat felderíteni: {e}")
+        logger.info(f"[INFO] Nem sikerült a results alapú kulcsokat felderíteni: {e}")
     return keys
 
 def get_installed_keys():
@@ -160,7 +173,7 @@ def get_installed_keys():
                     if os.path.isdir(venv_folder):
                         keys.add(f"{repo_name}|{branch_name}")
     except Exception as e:
-        print(f"[INFO] Nem sikerült a futtatható kulcsokat felderíteni: {e}")
+        logger.info(f"[INFO] Nem sikerült a futtatható kulcsokat felderíteni: {e}")
     return keys
 def get_branches_for_repo(repo_name):
     """Lekéri egy repository branch-eit a git ls-remote segítségével."""
@@ -183,7 +196,7 @@ def get_branches_for_repo(repo_name):
         else:
             return []
     except Exception as e:
-        print(f"Hiba a branch-ek lekérésében: {e}")
+        logger.error(f"Hiba a branch-ek lekérésében: {e}")
         return []
 
 def get_repository_data():
@@ -198,7 +211,7 @@ def get_repository_data():
                 return json.load(f)
         return []
     except Exception as e:
-        print(f"Kivétel a repository adatok lekérésében: {e}")
+        logger.error(f"Kivétel a repository adatok lekérésében: {e}")
         return []
 
 
@@ -214,18 +227,53 @@ def run_robot_with_params(repo: str, branch: str):
     results_dir_abs = os.path.abspath(os.path.join('results', results_dir_rel))
     os.makedirs(results_dir_abs, exist_ok=True)
 
-    suite_path = 'do-selected.robot'
+    suite_path = os.path.abspath('do-selected.robot')
+    # Ellenőrzések futtatás előtt
+    if not os.path.isfile(PYTHON_EXECUTABLE):
+        msg = f"Python végrehajtható nem található: {PYTHON_EXECUTABLE}"
+        _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
+        logger.error(f"[RUN][ERROR] {msg}")
+        return 1, results_dir_rel, '', msg
+    # Ellenőrizzük, hogy a robot modul elérhető-e
+    try:
+        import importlib.util
+        if importlib.util.find_spec('robot.run') is None:
+            msg = "A 'robot' modul nem található a Python környezetben."
+            _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
+            logger.error(f"[RUN][ERROR] {msg}")
+            return 1, results_dir_rel, '', msg
+    except Exception as e:
+        msg = f"A 'robot' modul ellenőrzése hibát dobott: {e}"
+        _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
+        logger.error(f"[RUN][ERROR] {msg}")
+        return 1, results_dir_rel, '', msg
+    if not os.path.isfile(suite_path):
+        msg = f"A teszt suite fájl nem található: {suite_path}"
+        _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
+        logger.error(f"[RUN][ERROR] {msg}")
+        return 1, results_dir_rel, '', msg
+
     # Egyszerűsítés: közvetlenül a robot.run modult hívjuk (__main__ hiány miatti problémák elkerülésére)
     cmd = [PYTHON_EXECUTABLE, '-m', 'robot.run', '-d', results_dir_abs, '-v', f'REPO:{repo}', '-v', f'BRANCH:{branch}', suite_path]
     try:
-        print(f"[RUN] Python exec: {PYTHON_EXECUTABLE}")
-        print(f"[RUN] CWD: {os.getcwd()}")
-        print(f"[RUN] Results dir (abs): {results_dir_abs}")
-        print(f"[RUN] Command: {' '.join(cmd)}")
+        logger.info(f"[RUN] Python exec: {PYTHON_EXECUTABLE}")
+        logger.info(f"[RUN] CWD: {os.getcwd()}")
+        logger.info(f"[RUN] Results dir (abs): {results_dir_abs}")
+        logger.info(f"[RUN] Command: {' '.join(cmd)}")
     except Exception:
         pass
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='cp1252', errors='ignore')
+        # Windows hibadoboz elkerülése: CREATE_NO_WINDOW flag
+        creationflags = 0x08000000 if os.name == 'nt' else 0
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            errors='ignore',
+            check=False,
+            creationflags=creationflags
+        )
         _persist_robot_outputs(
             results_dir_abs,
             result.stdout or '',
@@ -236,16 +284,19 @@ def run_robot_with_params(repo: str, branch: str):
             generated = []
             if os.path.isdir(results_dir_abs):
                 generated = sorted(os.listdir(results_dir_abs))
-            print(f"[RUN] Return code: {result.returncode}")
-            print(f"[RUN] Generated files in results dir: {generated}")
+            logger.info(f"[RUN] Return code: {result.returncode}")
+            logger.info(f"[RUN] Generated files in results dir: {generated}")
         except Exception as e:
-            print(f"[RUN] Post-run inspection failed: {e}")
+            logger.error(f"[RUN] Post-run inspection failed: {e}")
         return result.returncode, results_dir_rel, result.stdout, result.stderr
     except FileNotFoundError as e:
         _persist_robot_outputs(results_dir_abs, '', f'FileNotFoundError: {e}', note='Robot Framework nem indult (python modul hiányzik)')
+        logger.error(f"[RUN][ERROR] FileNotFoundError: {e}")
         return 1, results_dir_rel, '', f'FileNotFoundError: {e}'
     except Exception as e:
+        # Windows hibadoboz elkerülése: hiba naplózása, de nem dobunk tovább hibát
         _persist_robot_outputs(results_dir_abs, '', str(e), note='Robot Framework futtatása kivétellel leállt')
+        logger.error(f"[RUN][ERROR] {e}")
         return 1, results_dir_rel, '', str(e)
 
 
@@ -293,9 +344,9 @@ def _persist_robot_outputs(results_dir_abs: str, stdout_text: str, stderr_text: 
 </html>"""
             with open(log_path, 'w', encoding='utf-8') as f:
                 f.write(fallback_html)
-            print(f"[RUN] Fallback log létrehozva: {log_path}")
+            logger.info(f"[RUN] Fallback log létrehozva: {log_path}")
     except Exception as e:
-        print(f"[RUN] Nem sikerült a fallback log mentése: {e}")
+        logger.error(f"[RUN] Nem sikerült a fallback log mentése: {e}")
 
 def install_robot_with_params(repo: str, branch: str):
     """Letölti és telepíti a robotot a megadott repo/branch alapján, de nem futtatja.
@@ -361,9 +412,8 @@ def install_robot_with_params(repo: str, branch: str):
         if not os.path.exists(telepito_path):
             return 1, '', '', f'telepito.bat nem található: {telepito_path}'
         try:
-            # Új ablakban futtatás: cmd /c start cmd.exe /c telepito.bat
-            result = subprocess.run(['cmd.exe', '/c', 'start', 'cmd.exe', '/c', 'telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300)
-            # A start parancs mindig 0-val tér vissza, ezért nem biztos, hogy a telepito.bat sikeres volt, de legalább popup ablakban fut
+            # Blokkoló módon futtatjuk a telepito.bat-ot, hogy megvárjuk a végét
+            result = subprocess.run(['telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300, shell=True)
         except Exception as e:
             return 1, '', '', f'telepito.bat futtatási hiba: {e}'
         # telepito.bat után újra ellenőrizzük a .venv mappát
@@ -436,36 +486,39 @@ def refresh_data():
 @app.route('/api/execute', methods=['POST'])
 def api_execute():
     """Egyetlen kiválasztott robot végrehajtásának kérése."""
+    logger.info("[EXECUTE] api_execute() hívás indult")
     try:
         raw_body = request.get_data()  # nyers POST törzs
         ct = request.content_type
-        print(f"[EXECUTE][RAW_BODY_LEN]={len(raw_body)}")
+        logger.info(f"[EXECUTE][RAW_BODY_LEN]={len(raw_body)}")
         # Nyers törzs első 300 byte-ja debughoz
         preview = raw_body[:300]
-        print(f"[EXECUTE][RAW_BODY_PREVIEW]={preview}")
-        print(f"[EXECUTE][CONTENT_TYPE]={ct}")
+        logger.info(f"[EXECUTE][RAW_BODY_PREVIEW]={preview}")
+        logger.info(f"[EXECUTE][CONTENT_TYPE]={ct}")
         # Próbáljuk JSON-ként értelmezni több módszerrel
         data = request.get_json(silent=True)
         if data is None:
             try:
                 import json as _json
                 data = _json.loads(raw_body.decode('utf-8-sig'))
-                print("[EXECUTE] json.loads utf-8-sig sikeres")
+                logger.info("[EXECUTE] json.loads utf-8-sig sikeres")
             except Exception as e:
-                print(f"[EXECUTE] json parse hiba: {e}")
+                logger.warning(f"[EXECUTE] json parse hiba: {e}")
                 data = {}
         repo = (data.get('repo') or request.values.get('repo') or '').strip()
         branch = (data.get('branch') or request.values.get('branch') or '').strip()
-        print(f"[EXECUTE] Futtatás kérés repo='{repo}' branch='{branch}' len_repo={len(repo)} len_branch={len(branch)} data_keys={list(data.keys())}")
+        logger.info(f"[EXECUTE] Futtatás kérés repo='{repo}' branch='{branch}' len_repo={len(repo)} len_branch={len(branch)} data_keys={list(data.keys())}")
         # Tényleges futtatás indítása Robot Framework-kel
         if not repo or not branch:
-            print(f"[EXECUTE] HIBA: Hiányzó paraméterek - data={data}")
+            logger.warning(f"[EXECUTE] HIBA: Hiányzó paraméterek - data={data}")
             return jsonify({"status": "error", "message": "Hiányzó repo vagy branch"}), 400
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        print(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
+        logger.info(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
+        logger.info(f"[EXECUTE] run_robot_with_params hívás előtt: repo={repo}, branch={branch}")
         rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
+        logger.info(f"[EXECUTE] run_robot_with_params visszatért: rc={rc}, out_dir={out_dir}")
         status = "success" if rc == 0 else "failed"
-        print(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
+        logger.info(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
         result_entry = {
             'id': len(execution_results) + 1,
             'timestamp': timestamp,
@@ -474,23 +527,27 @@ def api_execute():
             'status': status,
             'returncode': rc,
             'results_dir': out_dir,
-            'type': 'single'
+            'type': 'single',
+            'stdout': _stdout,
+            'stderr': _stderr
         }
         execution_results.append(result_entry)
-        print(f"[EXECUTE] Eredmény hozzáadva: ID={result_entry['id']} összes={len(execution_results)}")
+        logger.info(f"[EXECUTE] Eredmény hozzáadva: ID={result_entry['id']} összes={len(execution_results)}")
         save_execution_results()
-        print("[EXECUTE] Eredmény elmentve fájlba")
+        logger.info("[EXECUTE] Eredmény elmentve fájlba")
+        logger.info(f"[EXECUTE] Válasz visszaküldése a frontendnek: status={'ok' if rc == 0 else 'fail'}, rc={rc}, results_dir={out_dir}")
         return jsonify({
             "status": "ok" if rc == 0 else "fail",
             "repo": repo,
             "branch": branch,
             "returncode": rc,
-            "results_dir": out_dir
+            "results_dir": out_dir,
+            "stdout": _stdout,
+            "stderr": _stderr
         })
     except Exception as ex:
         import traceback
-        print("[EXECUTE][EXCEPTION] Kivétel történt:")
-        traceback.print_exc()
+        logger.error(f"[EXECUTE][EXCEPTION] Kivétel történt: {ex}", exc_info=ex)
         return jsonify({"status": "error", "message": "internal error", "error": str(ex)}), 500
     
     # (Fentebb a try blokkban már visszatértünk.)
@@ -506,7 +563,7 @@ def api_execute_bulk():
     for r in robots:
         repo = (r.get('repo') or '').strip()
         branch = (r.get('branch') or '').strip()
-        print(f"EXECUTE SELECTED: {repo}/{branch}")
+        logger.info(f"EXECUTE SELECTED: {repo}/{branch}")
         if repo and branch:
             rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
             status = "success" if rc == 0 else "failed"
@@ -1142,7 +1199,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                 <button class="btn btn-success btn-sm me-2" title="Futtatás"
                                     data-repo="{{ repo.name }}"
                                     data-branch="{{ branch }}"
-                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch, ROOT_FOLDER)">
+                                    onclick="executeSingleRobot(this)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                                 <i class="bi bi-trash text-danger me-2" 
@@ -1213,7 +1270,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
                                 <button class="btn btn-warning btn-sm me-2 text-dark"
                                         type="button"
                                         title="Azonnali letöltés"
-                                        onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
+                                        onclick="installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)">
                                     <i class="bi bi-download"></i>
                                 </button>
                                 <span>{{ branch }}</span>
@@ -1451,25 +1508,36 @@ fetch('/api/get_sandbox_mode').then(r => r.json()).then(data => {
 });
 
 // Play gomb: csak megerősít, majd a közös végrehajtó ágra delegál
-function executeSingleRobot(repo, branch, rootFolder) {
+function executeSingleRobot(button) {
+    const repo = button.getAttribute('data-repo');
+    const branch = button.getAttribute('data-branch');
     const fallbackRoot = (typeof ROOT_FOLDER === 'string') ? ROOT_FOLDER : '';
-    const incomingRoot = (typeof rootFolder === 'string') ? rootFolder : fallbackRoot;
     const msgLines = [
         'Valóban futtassam a robotot?',
         '',
         'Repo: ' + repo,
         'Branch: ' + branch,
-        incomingRoot ? ('Gyökér: ' + incomingRoot) : ''
+        fallbackRoot ? ('Gyökér: ' + fallbackRoot) : ''
     ].filter(Boolean);
-    const msg = msgLines.join('\\n');
+    const msg = msgLines.join("\\n");
     if (!confirm(msg)) {
         return;
     }
     try {
         showToast(`Robot futtatása indult: ${repo}/${branch}`, 'info');
-        executeRobot(repo, branch);
+        // Spinner és disable a gombon
+        if (button) {
+            button.disabled = true;
+            button._originalInnerHTML = button.innerHTML;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        }
+        executeRobot(repo, branch, button);
     } catch (e) {
         showToast('Robot indítás hiba: ' + String(e), 'danger');
+        if (button) {
+            button.disabled = false;
+            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
+        }
     }
 }
 
@@ -1611,7 +1679,7 @@ function handleAvailableRobotToggle(checkbox) {
     } else {
         // Eltávolítás a futási listából
         removeRobotFromExecutionList(repo, branch);
-        console.log(`Robot eltávolítva a futtatási listából: ${repo}/${branch}`);
+        console.log(`Robot eltávolítva a futtatható listából: ${repo}/${branch}`);
     }
 }
 
@@ -1788,7 +1856,7 @@ function showSelectedRobots(robots) {
     updateTabCounts();
 }
 
-function executeRobot(repo, branch) {
+function executeRobot(repo, branch, button) {
     // "Fut" státusz megjelenítése azonnal
     const container = document.getElementById('selectedRobotsContainer');
     const currentTime = new Date().toLocaleString('hu-HU');
@@ -1820,6 +1888,12 @@ function executeRobot(repo, branch) {
         const tempMsg = document.getElementById(`status-${repo}-${branch}`);
         if (tempMsg) tempMsg.remove();
         
+        // Gomb visszaállítása
+        if (button) {
+            button.disabled = false;
+            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
+        }
+
         const msg = document.createElement('div');
         const currentTime = new Date().toLocaleString('hu-HU');
         const statusIcon = getStatusIcon(data.returncode);
@@ -1881,6 +1955,12 @@ function executeRobot(repo, branch) {
         console.error('Hiba (execute):', err);
         alert('Hiba történt a szerver hívása közben.');
         
+        // Gomb visszaállítása hiba esetén is
+        if (button) {
+            button.disabled = false;
+            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
+        }
+
         // Hiba esetén is frissítsük az eredményeket és a futtatható listát
         loadResults();
         refreshRunnableRobots();
@@ -2636,7 +2716,7 @@ function updateRunnableRobotsTab(repos) {
                                 <button class="btn btn-success btn-sm ms-2" title="Futtatás"
                                     data-repo="${repo.name}"
                                     data-branch="${branch}"
-                                    onclick="executeSingleRobot(this.dataset.repo, this.dataset.branch, ROOT_FOLDER)">
+                                    onclick="executeSingleRobot(this, '${repo.name}', '${branch}', ROOT_FOLDER)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                             </div>

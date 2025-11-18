@@ -62,7 +62,7 @@ echo Leallitashoz nyomj CTRL+C-t
 echo.
 
 :: Flask szerver inditasa
-start "Robot Kezelo" http://localhost:5000
+explorer http://localhost:5000
 .venv\Scripts\python.exe flask_app.py
 if %errorlevel% neq 0 (
     echo HIBA: flask_app.py futtatasa sikertelen!

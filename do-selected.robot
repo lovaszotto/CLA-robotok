@@ -222,34 +222,18 @@ Robot futtatása
             Log Everywhere     [FUTTATÁS] start.bat elérési út: ${RUN_SCRIPT}
             Log Everywhere     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
 
-          # Külön szerver indítása - popup ablakban futtatás
-          Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása külön popup ablakban...
-          Log Everywhere     [FUTTATÁS] Robot script indítása: ${RUN_SCRIPT}
-
-          # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk, hogy elkerüljük az útvonal kódolási gondokat
-          ${run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
+          Log Everywhere     [FUTTATÁS] Robot script indítása blokkoló módon: ${RUN_SCRIPT}
+          ${run_result}=    Run Process    ${RUN_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=600s
           Log Everywhere     [FUTTATÁS] Run Process rc: ${run_result.rc}
           Log Everywhere     [FUTTATÁS] Run Process stdout: ${run_result.stdout}
           Log Everywhere     [FUTTATÁS] Run Process stderr: ${run_result.stderr}
-
           IF    ${run_result.rc} == 0
-              Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás sikeresen elindult popup ablakban
+              Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás sikeresen lefutott.
           ELSE
-              Log Everywhere     [FUTTATÁS] start indítás sikertelen, PowerShell fallback próbálása...
-              ${ps_command}=    Set Variable    Start-Process -FilePath 'start.bat' -WorkingDirectory '${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}' -WindowStyle Normal
-              ${ps_result}=    Run Process    powershell.exe    -NoProfile    -ExecutionPolicy    Bypass    -Command    ${ps_command}    shell=True    timeout=60s
-              Log Everywhere     [FUTTATÁS][PS] rc: ${ps_result.rc}
-              Log Everywhere     [FUTTATÁS][PS] stdout: ${ps_result.stdout}
-              Log Everywhere     [FUTTATÁS][PS] stderr: ${ps_result.stderr}
-              IF    ${ps_result.rc} == 0
-                  Log Everywhere     [FUTTATÁS] PowerShell fallback sikeres, ablak elindítva
-              ELSE
-                  Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás indítása sikertelen: ${ps_result.stderr}
-              END
+              Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás futtatása sikertelen: ${run_result.stderr}
           END
-
           Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
-          Log Everywhere    [FUTTATÁS] Robot indítása befejezve, a szerver a háttérben fut tovább    
+          Log Everywhere    [FUTTATÁS] Robot indítása befejezve, a szerver tényleg megvárta a futás végét    
         ELSE IF    ${SANDBOX_MODE} == True and ${WORKFLOW_STATUS} == 'ALL_DONE'
           # SANDBOX módban közvetlenül futtatás a letöltött könyvtárból
           Log Everywhere     \n=== SANDBOX ROBOT FUTTATÁSA ===
