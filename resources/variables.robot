@@ -1,7 +1,7 @@
 *** Variables ***
 #verzió információ
-${VERSION}    1.0.0
-${BUILD_DATE}    2025-11-19 08:06:00    
+${VERSION}    1.0.1
+${BUILD_DATE}    2025-11-19 08:39:00    
 
 # A git repository alap URL-je
 ${GIT_URL_BASE}           https://github.com/lovaszotto/
@@ -19,24 +19,31 @@ ${REPO_PATH}      ${EMPTY}
 # a kiválasztott branch a klónozáshoz (Flask-ból paraméterként kapjuk)
 ${BRANCH}    CPS-Mezo-ellenor
 ${BRANCH_PATH}    ${EMPTY}
+
+# Felhasználó HOME könyvtárának dinamikus beállítása
+${USER_HOME}    %{USERPROFILE}
 # a gyökér könyvtár, ahol a robotok telepítve vannak
-${ROOT_FOLDER}    c:/Users/oLovasz/MyRobotFramework/
+${ROOT_FOLDER}    ${USER_HOME}/MyRobotFramework/
+
 
 #developer módban csak letöltjük a robotokat, de nem telepítjük
 ${SANDBOX_MODE}         ${False}
-${SANDBOX_ROBOTS}       c:/Users/oLovasz/MyRobotFramework/SandboxRobots/
+${SANDBOX_ROBOTS}       ${USER_HOME}/MyRobotFramework/SandboxRobots/
+
 
 # A robotok letöltési könyvtárai
-${DOWNLOADED_ROBOTS}    c:/Users/oLovasz/MyRobotFramework/DownloadedRobots/
+${DOWNLOADED_ROBOTS}    ${USER_HOME}/MyRobotFramework/DownloadedRobots/
 
 # Automatikus start.bat futtatás engedélyezése
 ${AUTO_LAUNCH_START_BAT}    ${True}
 
+
 # A telepítési könyvtárai
-${INSTALLED_ROBOTS}     c:/Users/oLovasz/MyRobotFramework/InstalledRobots/
+${INSTALLED_ROBOTS}     ${USER_HOME}/MyRobotFramework/InstalledRobots/
+
 
 # A kuka könyvtár helye
-${TRASH_DIR}            c:/Users/oLovasz/MyRobotFramework/Trash/
+${TRASH_DIR}            ${USER_HOME}/MyRobotFramework/Trash/
 
 # Python executable változó (dinamikusan meghatározva)
 # Prioritási sorrend: 1. rf_env virtuális környezet, 2. rendszer python
