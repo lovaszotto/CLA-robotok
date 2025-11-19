@@ -1,4 +1,8 @@
 *** Variables ***
+#verzió információ
+${VERSION}    1.0.0
+${BUILD_DATE}    2025-11-19 08:06:00    
+
 # A git repository alap URL-je
 ${GIT_URL_BASE}           https://github.com/lovaszotto/
 

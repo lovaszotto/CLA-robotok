@@ -514,6 +514,8 @@ def index():
             branch for branch in repo['branches']
             if f"{repo['name']}|{branch}" not in installed_keys
         ]
+    version = get_robot_variable('VERSION')
+    build_date = get_robot_variable('BUILD_DATE')
     html_template = get_html_template()
     response = app.response_class(
         render_template_string(
@@ -521,7 +523,9 @@ def index():
             repos=repos,
             datetime=datetime,
             downloaded_keys=installed_keys,
-            root_folder=root_folder or ''
+            root_folder=root_folder or '',
+            version=version,
+            build_date=build_date
         ),
         mimetype='text/html'
     )
@@ -1348,36 +1352,49 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <div class="tab-pane fade" id="info-pane" role="tabpanel">
 <h3><i class="bi bi-info-circle-fill text-info"></i> Rendszer Információk</h3>
 <div class="row">
-<div class="col-md-6">
-<div class="card" style="background-color: #e3f2fd !important;">
-<div class="card-header text-white" style="background: linear-gradient(135deg, {primary_color}, {dark_color});">
-<h5><i class="bi bi-laptop"></i> Rendszer</h5>
-</div>
-<div class="card-body">
-<ul class="list-unstyled">
-<li><strong>Platform:</strong> Flask Web App</li>
-<li><strong>Python verzió:</strong> 3.x</li>
-<li><strong>Framework:</strong> Bootstrap 5</li>
-<li><strong>Adatbázis:</strong> JSON fájlok</li>
-</ul>
-</div>
-</div>
-</div>
-
-<div class="col-md-6">
-<div class="card">
-<div class="card-header bg-success text-white">
-<h5><i class="bi bi-github"></i> GitHub Integráció</h5>
-</div>
-<div class="card-body">
-<ul class="list-unstyled">
-<li><strong>Felhasználó:</strong> lovaszotto</li>
-<li><strong>Repository-k:</strong> {{ repos|length }}</li>
-<li><strong>API verzió:</strong> v3 REST</li>
-<li><strong>Kódolás:</strong> UTF-8</li>
-</ul>
-</div>
-</div>
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="bi bi-info-square"></i> Verzió információk</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li><strong>Verzió:</strong> {{ version or '-' }}</li>
+                    <li><strong>Build dátum:</strong> {{ build_date or '-' }}</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-3" style="background-color: #e3f2fd !important;">
+            <div class="card-header text-white" style="background: linear-gradient(135deg, {primary_color}, {dark_color});">
+                <h5><i class="bi bi-laptop"></i> Rendszer</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li><strong>Platform:</strong> Flask Web App</li>
+                    <li><strong>Python verzió:</strong> 3.x</li>
+                    <li><strong>Framework:</strong> Bootstrap 5</li>
+                    <li><strong>Adatbázis:</strong> JSON fájlok</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h5><i class="bi bi-github"></i> GitHub Integráció</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li><strong>Felhasználó:</strong> lovaszotto</li>
+                    <li><strong>Repository-k:</strong> {{ repos|length }}</li>
+                    <li><strong>API verzió:</strong> v3 REST</li>
+                    <li><strong>Kódolás:</strong> UTF-8</li>
+                </ul>
+            </div>
+        </div>
+    </div>
 </div>
 </div>
 </div>
