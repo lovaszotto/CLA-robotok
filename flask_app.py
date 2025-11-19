@@ -12,6 +12,14 @@ from datetime import datetime
 import logging
 
 
+
+# Töröljük a server.log tartalmát a futás elején
+try:
+    with open('server.log', 'w', encoding='utf-8') as f:
+        f.write('')
+except Exception:
+    pass
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
 
