@@ -46,7 +46,7 @@ echo.
 
 REM Alkonyvtarak letrehozasa
 echo [3/7] Szukseges alkonyvtarak ellenorzese es letrehozasa...
-set "subDirs=DownloadedRobots InstalledRobots SandboxRobots Kuka"
+set "subDirs=DownloadedRobots SandboxRobots Kuka"
 for %%d in (%subDirs%) do (
     set "dirPath=%myRobotPath%\%%d"
     if not exist "!dirPath!" (
@@ -158,4 +158,4 @@ echo.
 echo ========================================
 echo    Setup es robot futtatas kesz!
 echo ========================================
-exit /b 0
+exit  0

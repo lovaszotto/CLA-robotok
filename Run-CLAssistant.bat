@@ -13,7 +13,7 @@ echo.
 
 REM Telepitett CLA-ssistant konyvtar meghatározasa
 set "myRobotPath=c:\users\%actualUser%\MyRobotFramework"
-set "installedPath=%myRobotPath%\InstalledRobots\CLA-robotok\CLA-ssistant"
+set "installedPath=%myRobotPath%\DownloadedRobots\CLA-robotok\CLA-ssistant"
 
 echo [1/3] Telepitett CLA-ssistant keresese...
 echo Keresett hely: %installedPath%
@@ -76,4 +76,4 @@ echo.
 echo A Flask szerver leállt. Újraindításhoz futtassa újra ezt a scriptet.
 echo.
 pause
-exit /b 0
+exit  0
