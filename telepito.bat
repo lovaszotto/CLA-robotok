@@ -70,7 +70,7 @@ echo.
 REM Virtualis kornyezet aktivalasa es csomagok telepitese
 echo CLA-ssistant csomagok telepitese...
 REM .venv\Scripts\activate (nem szükséges, pip elérési út miatt)
-.venv\Scripts\pip.exe install --upgrade pip
+rem .venv\Scripts\pip.exe install --upgrade pip
 .venv\Scripts\pip.exe install robotframework
 .venv\Scripts\pip.exe install robotframework-seleniumlibrary
 .venv\Scripts\pip.exe install requests

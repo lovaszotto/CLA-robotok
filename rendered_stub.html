@@ -84,7 +84,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 </button>
 </li>
 <li class="nav-item" role="presentation">
-<button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab">
+<button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" onclick="updateAvailableRobotsTab()">
 <i class="bi bi-download"></i> Letölthető robotok
 </button>
 </li>
@@ -244,39 +244,7 @@ body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; 
 <li><strong>Python verzió:</strong> 3.x</li>
 <li><strong>Framework:</strong> Bootstrap 5</li>
 <li><strong>Adatbázis:</strong> JSON fájlok</li>
-</ul>
-</div>
-</div>
-</div>
-
-<div class="col-md-6">
-<div class="card">
-<div class="card-header bg-success text-white">
-<h5><i class="bi bi-github"></i> GitHub Integráció</h5>
-</div>
-<div class="card-body">
-<ul class="list-unstyled">
-<li><strong>Felhasználó:</strong> lovaszotto</li>
-<li><strong>Repository-k:</strong> 1</li>
-<li><strong>API verzió:</strong> v3 REST</li>
-<li><strong>Kódolás:</strong> UTF-8</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
-</div>
-<div class="tab-pane fade" id="settings-pane" role="tabpanel">
-<h3><i class="bi bi-gear-fill text-secondary"></i> Beállítások</h3>
-<div class="row">
-<div class="col-md-6">
-<div class="card">
-<div class="card-header bg-primary text-white">
-<h5><i class="bi bi-display"></i> Megjelenítés</h5>
-</div>
-<div class="card-body">
-<div class="form-check form-switch mb-3">
-<input class="form-check-input" type="checkbox" role="switch" id="darkMode" checked>
+    <!-- Dinamikusan töltjük -->
 <label class="form-check-label" for="darkMode">Sötét téma</label>
 </div>
 <div class="form-check form-switch mb-3">
@@ -1846,6 +1814,8 @@ document.addEventListener('DOMContentLoaded', function() {
     try { reconcileRunnableWithInstalled(); } catch(e) {
         console.warn('reconcileRunnableWithInstalled hívás sikertelen', e);
     }
+    // Letölthető robotok tab dinamikus betöltése elsőre
+    updateAvailableRobotsTab();
 });
 
 // Futtatható robotok lista frissítése (újra lekéri és frissíti a DOM-ot)
@@ -2099,10 +2069,77 @@ function addBranchToAvailableTab(repoName, branchName) {
 }
 // A branch név ikonját a HTML sablonban adjuk hozzá közvetlenül a label-ben
 
+
+// Dinamikus Letölthető robotok tab frissítés
+function updateAvailableRobotsTab() {
+    const container = document.getElementById('repoContainerAvailable');
+    if (!container) return;
+    // Lekérjük a repókat és a telepítetteket
+    Promise.all([
+        fetch('/api/refresh').then(r => r.json()),
+        fetch('/api/debug/installed').then(r => r.json())
+    ]).then(([repos, installed]) => {
+        const installedSet = new Set(installed.installed_keys || []);
+        let html = '';
+        repos.forEach(repo => {
+            // Csak azokat a brancheket mutatjuk, amelyek NINCSENEK telepítve
+            const availableBranches = (repo.branches || []).filter(branch => !installedSet.has(`${repo.name}|${branch}`));
+            if (availableBranches.length === 0) return;
+            html += `
+                <div class="col-lg-6 col-xl-4 mb-4 repo-item-available" data-repo-name="${repo.name}">
+                    <div class="card repo-card h-100">
+                        <div class="card-header text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-github"></i>
+                                <a href="${repo.html_url}" target="_blank" class="text-white text-decoration-none">
+                                    ${repo.name}
+                                </a>
+                            </h5>
+                            ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">${repo.description || 'Nincs leírás'}</p>
+                            <h6 class="mt-3"><i class="bi bi-git"></i> Letölthető robotok:</h6>
+                            <div class="branches-container">
+            `;
+            availableBranches.forEach(branch => {
+                const inputId = `branch-available-${repo.name}-${branch}`;
+                html += `
+                    <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;">
+                        <input type="checkbox" class="form-check-input robot-checkbox-available me-2"
+                               id="${inputId}"
+                               data-repo="${repo.name}"
+                               data-branch="${branch}"
+                               onchange="handleAvailableRobotToggle(this)">
+                        <label class="form-check-label ms-2" for="${inputId}">
+                            <i class="bi bi-download text-secondary me-1" data-bs-toggle="tooltip" data-bs-placement="top" title="Letölthető"></i>
+                            ${branch}
+                        </label>
+                    </div>
+                `;
+            });
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+        // Tooltipek újrainicializálása
+        const tooltipTriggerList = [].slice.call(container.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            try { new bootstrap.Tooltip(tooltipTriggerEl); } catch(e) {}
+        });
+        updateTabCounts();
+    }).catch(err => {
+        container.innerHTML = `<div class='alert alert-danger'>Nem sikerült betölteni a letölthető robotokat: ${err}</div>`;
+    });
+}
+
 // Globális fallback: Letölthető robotok tab frissítése oldal reload-dal
 function refreshAvailableRobots() {
-    console.log('[WORKFLOW] Letölthető robotok tab frissítése (reload)');
-    window.location.reload();
+    updateAvailableRobotsTab();
 }
 
 </script>

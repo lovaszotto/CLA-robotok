@@ -480,12 +480,9 @@ def install_robot_with_params(repo: str, branch: str):
             logger.error(f"[INSTALL][ERROR] telepito.bat nem található: {telepito_path}")
             return 1, '', '', f'telepito.bat nem található: {telepito_path}'
         try:
-            logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir} (külön cmd ablakban)")
-            # Windows alatt külön konzol ablakban indítjuk
-            CREATE_NEW_CONSOLE = 0x00000010
-            proc = subprocess.Popen(['cmd.exe', '/c', 'start', 'telepito.bat'], cwd=branch_dir, creationflags=CREATE_NEW_CONSOLE)
-            proc.wait(timeout=300)
-            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={proc.returncode}")
+            logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir} (szinkron, várakozás)")
+            result = subprocess.run(['telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300, shell=True)
+            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
         except Exception as e:
             logger.error(f"[INSTALL][ERROR] telepito.bat futtatási hiba: {e}")
             return 1, '', '', f'telepito.bat futtatási hiba: {e}'
@@ -683,34 +680,42 @@ def api_execute_bulk():
 @app.route('/api/install_selected', methods=['POST'])
 def api_install_selected():
     """Kijelölt robotok letöltése és telepítése, de nem futtatja őket."""
-    data = request.get_json(silent=True) or {}
-    robots = data.get('robots') or []
-    logger.info(f"[INSTALL_SELECTED] Download gomb lenyomva, robots param: {robots}")
-    if not robots:
-        logger.warning("[INSTALL_SELECTED] Nincs kiválasztott robot a letöltéshez.")
-        return jsonify({'success': False, 'error': 'Nincs kiválasztott robot.'}), 400
-    installed = []
-    errors = []
-    for r in robots:
-        repo = (r.get('repo') or '').strip()
-        branch = (r.get('branch') or '').strip()
-        if not repo or not branch:
-            errors.append({'repo': repo, 'branch': branch, 'error': 'Hiányzó repo vagy branch'})
-            continue
-        try:
-            # Log the install_robot_with_params call
-            logger.info(f"[INSTALL_SELECTED] install_robot_with_params hívás: repo='{repo}', branch='{branch}'")
-            # Itt csak letöltés és telepítés, futtatás nélkül
-            rc, out_dir, _stdout, _stderr = install_robot_with_params(repo, branch)
-            if rc == 0:
-                installed.append({'repo': repo, 'branch': branch, 'results_dir': out_dir})
-            else:
-                errors.append({'repo': repo, 'branch': branch, 'error': f'Installáció sikertelen, rc={rc}'})
-        except Exception as e:
-            errors.append({'repo': repo, 'branch': branch, 'error': str(e)})
-    if errors:
-        return jsonify({'success': False, 'installed': installed, 'errors': errors})
-    return jsonify({'success': True, 'installed': installed})
+    try:
+        data = request.get_json(silent=True) or {}
+        robots = data.get('robots') or []
+        logger.info(f"[INSTALL_SELECTED] Download gomb lenyomva, robots param: {robots}")
+        if not robots:
+            logger.warning("[INSTALL_SELECTED] Nincs kiválasztott robot a letöltéshez.")
+            return jsonify({'success': False, 'error': 'Nincs kiválasztott robot.'}), 400
+        installed = []
+        errors = []
+        for r in robots:
+            repo = (r.get('repo') or '').strip()
+            branch = (r.get('branch') or '').strip()
+            if not repo or not branch:
+                logger.error(f"[INSTALL_SELECTED] Hiányzó repo vagy branch: {r}")
+                errors.append({'repo': repo, 'branch': branch, 'error': 'Hiányzó repo vagy branch'})
+                continue
+            try:
+                logger.info(f"[INSTALL_SELECTED] install_robot_with_params hívás: repo='{repo}', branch='{branch}'")
+                rc, out_dir, _stdout, _stderr = install_robot_with_params(repo, branch)
+                logger.info(f"[INSTALL_SELECTED] install_robot_with_params eredmény: rc={rc}, out_dir={out_dir}")
+                if rc == 0:
+                    installed.append({'repo': repo, 'branch': branch, 'results_dir': out_dir})
+                else:
+                    logger.error(f"[INSTALL_SELECTED] Installáció sikertelen, rc={rc}, repo={repo}, branch={branch}, stdout={_stdout}, stderr={_stderr}")
+                    errors.append({'repo': repo, 'branch': branch, 'error': f'Installáció sikertelen, rc={rc}', 'stdout': _stdout, 'stderr': _stderr})
+            except Exception as e:
+                logger.exception(f"[INSTALL_SELECTED] Kivétel installálás közben: repo={repo}, branch={branch}, error={e}")
+                errors.append({'repo': repo, 'branch': branch, 'error': str(e)})
+        if errors:
+            logger.error(f"[INSTALL_SELECTED] Hibák a letöltés során: {errors}")
+            return jsonify({'success': False, 'installed': installed, 'errors': errors}), 500
+        logger.info(f"[INSTALL_SELECTED] Sikeres letöltés: {installed}")
+        return jsonify({'success': True, 'installed': installed})
+    except Exception as e:
+        logger.exception(f"[INSTALL_SELECTED] Váratlan szerverhiba: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 @app.route('/api/start_robot', methods=['POST'])
 def api_start_robot():
     """Indítja a kiválasztott robotot a start.bat futtatásával a megfelelő könyvtárban.
@@ -1678,6 +1683,10 @@ function installSelectedRobots() {
 // Egyedi robot azonnali letöltése a Letölthető tab-ról
 function installRobot(repo, branch, buttonElement) {
     console.log('[WORKFLOW] Egyedi robot letöltése indult', repo, branch);
+    const msg = `Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ${repo}\nBranch: ${branch}\n\nEz a művelet hosszabb ideig is eltarthat!`;
+    if (!confirm(msg)) {
+        return;
+    }
     installRobots([{ repo, branch }], { triggerButton: buttonElement });
 }
 
