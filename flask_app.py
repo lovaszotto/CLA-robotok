@@ -88,14 +88,28 @@ def _normalize_dir_from_vars(var_name: str) -> str:
     path = get_robot_variable(var_name)
     if not path:
         return ''
-    path = os.path.expandvars(os.path.expanduser(path))
-    return os.path.normpath(path)
+    # Mindig az aktuális user home könyvtárat használjuk, függetlenül a változó tartalmától
+    home = os.path.expanduser('~')
+    # Ha a változóban ${USER_HOME} vagy %USERPROFILE% vagy hasonló szerepel, azt figyelmen kívül hagyjuk
+    # és mindenhol a home könyvtárat illesztjük be
+    # Példák: ${USER_HOME}/MyRobotFramework/DownloadedRobots/ vagy %USERPROFILE%\MyRobotFramework\DownloadedRobots\
+    # Kivesszük a változóban lévő home részt, és csak a relatív utat illesztjük a tényleges home elé
+    import re
+    # Eltávolítjuk az elejéről a home-ra utaló részt
+    rel_path = re.sub(r'^(\${USER_HOME}|%USERPROFILE%|~)[/\\]?', '', path)
+    full_path = os.path.join(home, rel_path)
+    full_path = os.path.expandvars(os.path.expanduser(full_path))
+    return os.path.normpath(full_path)
 
 def get_installed_robots_dir() -> str:
     """Mindig a DownloadedRobots vagy SandboxRobots könyvtárat adja vissza, InstalledRobots megszűnt."""
     if get_sandbox_mode():
-        return _normalize_dir_from_vars('SANDBOX_ROBOTS')
-    return _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
+        dir_path = _normalize_dir_from_vars('SANDBOX_ROBOTS')
+        logger.info(f"[ROBOT ELLENŐRZÉS] SANDBOX módban ellenőrzés, könyvtár: {os.path.abspath(dir_path)}")
+        return dir_path
+    dir_path = _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
+    logger.info(f"[ROBOT ELLENŐRZÉS] NEM sandbox módban ellenőrzés, könyvtár: {os.path.abspath(dir_path)}")
+    return dir_path
 
 def get_downloaded_robots_dir() -> str:
     """DownloadedRobots bázis könyvtár."""
@@ -166,6 +180,7 @@ def get_installed_keys():
     """
     keys = set()
     base_dir = get_installed_robots_dir()
+    logger.info(f"[ROBOT ELLENŐRZÉS] Futtatható robotok keresése ebben a könyvtárban: {os.path.abspath(base_dir)}")
     try:
         if base_dir and os.path.isdir(base_dir):
             for repo_name in os.listdir(base_dir):
@@ -388,11 +403,13 @@ def install_robot_with_params(repo: str, branch: str):
         if not base_dir:
             base_dir = os.path.join(os.getcwd(), 'SandboxRobots')
         logger.info(f"[INSTALL] SANDBOX_MODE aktív, base_dir: {base_dir}")
+        logger.info(f"[ROBOT ELLENŐRZÉS] Telepítés SANDBOX könyvtárban: {base_dir}, repo: {repo}, branch: {branch}")
     else:
         base_dir = _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
         if not base_dir:
             base_dir = os.path.join(os.getcwd(), 'DownloadedRobots')
         logger.info(f"[INSTALL] NEM sandbox mód, base_dir: {base_dir}")
+        logger.info(f"[ROBOT ELLENŐRZÉS] Telepítés DOWNLOADED könyvtárban: {base_dir}, repo: {repo}, branch: {branch}")
     repo_dir = os.path.join(base_dir, safe_repo)
     branch_dir = os.path.join(repo_dir, safe_branch)
     logger.info(f"[INSTALL] repo_dir: {repo_dir}, branch_dir: {branch_dir}")
@@ -463,9 +480,12 @@ def install_robot_with_params(repo: str, branch: str):
             logger.error(f"[INSTALL][ERROR] telepito.bat nem található: {telepito_path}")
             return 1, '', '', f'telepito.bat nem található: {telepito_path}'
         try:
-            logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir}")
-            result = subprocess.run(['telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300, shell=True)
-            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
+            logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir} (külön cmd ablakban)")
+            # Windows alatt külön konzol ablakban indítjuk
+            CREATE_NEW_CONSOLE = 0x00000010
+            proc = subprocess.Popen(['cmd.exe', '/c', 'start', 'telepito.bat'], cwd=branch_dir, creationflags=CREATE_NEW_CONSOLE)
+            proc.wait(timeout=300)
+            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={proc.returncode}")
         except Exception as e:
             logger.error(f"[INSTALL][ERROR] telepito.bat futtatási hiba: {e}")
             return 1, '', '', f'telepito.bat futtatási hiba: {e}'
@@ -714,13 +734,16 @@ def api_start_robot():
             }), 400
 
         base_dir = get_installed_robots_dir()
+        logger.info(f"[ROBOT ELLENŐRZÉS] Robot indítás ellenőrzés, könyvtár: {base_dir}, repo: {repo}, branch: {branch}")
         if not base_dir:
             base_dir = _normalize_dir_from_vars('DOWNLOADED_ROBOTS') or os.path.join(os.getcwd(), 'DownloadedRobots')
+            logger.info(f"[ROBOT ELLENŐRZÉS] Fallback könyvtár: {base_dir}")
 
         safe_repo = repo.replace('/', '_')
         safe_branch = branch.replace('/', '_')
         target_dir = os.path.join(base_dir, safe_repo, safe_branch)
         start_bat = os.path.join(target_dir, 'start.bat')
+        logger.info(f"[ROBOT ELLENŐRZÉS] Indítás target_dir: {target_dir}, start_bat: {start_bat}")
 
         if not os.path.isdir(target_dir):
             print(f"[START_ROBOT] HIBA: Könyvtár nem található: {target_dir}")
@@ -1700,10 +1723,9 @@ function installRobots(robots, options = {}) {
                     const cb = document.querySelector(`.robot-checkbox-available[data-repo="${inst.repo}"][data-branch="${inst.branch}"]`);
                     if (cb) cb.checked = false;
                 });
+                // Mindkét tab frissítése AJAX-szal
                 refreshRunnableRobots();
-                if (typeof refreshAvailableRobots === 'function') {
-                    refreshAvailableRobots();
-                }
+                refreshAvailableRobots();
             } else {
                 console.log('[WORKFLOW] Sikertelen letöltés vagy részleges hiba', data);
                 if (data.errors && data.errors.length > 0) {
@@ -1724,10 +1746,15 @@ function installRobots(robots, options = {}) {
                 } else {
                     showToast('Hiba a letöltés során: ' + (data.error || 'Ismeretlen hiba'), 'danger');
                 }
+                // Sikertelen letöltésnél is frissítjük a tabokat, hogy a státuszok naprakészek legyenek
+                refreshRunnableRobots();
+                refreshAvailableRobots();
             }
         })
         .catch(err => {
             showToast('Hálózati vagy szerverhiba: ' + err, 'danger');
+            refreshRunnableRobots();
+            refreshAvailableRobots();
         })
         .finally(() => {
             if (installBtn) installBtn.disabled = false;
@@ -2963,9 +2990,71 @@ function addBranchToAvailableTab(repoName, branchName) {
 // A branch név ikonját a HTML sablonban adjuk hozzá közvetlenül a label-ben
 
 // Globális fallback: Letölthető robotok tab frissítése oldal reload-dal
+// Letölthető robotok tab frissítése AJAX-szal (ne csak reload)
 function refreshAvailableRobots() {
-    console.log('[WORKFLOW] Letölthető robotok tab frissítése (reload)');
-    window.location.reload();
+    fetch('/api/refresh')
+        .then(r => r.json())
+        .then(repos => {
+            updateAvailableRobotsTab(repos);
+        })
+        .catch(err => {
+            console.warn('Letölthető robotok frissítése sikertelen:', err);
+        });
+}
+
+// Letölthető robotok tab tartalmának frissítése
+function updateAvailableRobotsTab(repos) {
+    const container = document.getElementById('repoContainerAvailable');
+    if (!container) return;
+    let html = '';
+    repos.forEach(repo => {
+        const availableBranches = repo.available_branches || [];
+        if (availableBranches.length > 0) {
+            html += `
+                <div class="col-lg-6 col-xl-4 mb-4 repo-item-available" data-repo-name="${repo.name}">
+                    <div class="card repo-card h-100">
+                        <div class="card-header text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-github"></i>
+                                <a href="${repo.html_url}" target="_blank" class="text-white text-decoration-none">
+                                    ${repo.name}
+                                </a>
+                            </h5>
+                            ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">${repo.description || 'Nincs leírás'}</p>
+                            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
+                            <div class="branches-container">
+            `;
+            availableBranches.forEach(branch => {
+                html += `
+                    <div class="branch-checkbox d-flex align-items-center" id="branch-available-${repo.name}-${branch}">
+                        <button class="btn btn-warning btn-sm me-2 text-dark"
+                            type="button"
+                            title="Azonnali letöltés"
+                            onclick='installRobot("${repo.name}", "${branch}", this)'>
+                            <i class="bi bi-download"></i>
+                        </button>
+                        <span>${branch}</span>
+                    </div>
+                `;
+            });
+            html += `
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    container.innerHTML = html;
+    // Tooltipek újrainicializálása
+    const tooltipTriggerList = [].slice.call(container.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        try { new bootstrap.Tooltip(tooltipTriggerEl); } catch(e) {}
+    });
+    updateTabCounts();
 }
 
 </script>

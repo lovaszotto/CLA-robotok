@@ -21,29 +21,28 @@ ${BRANCH}    CPS-Mezo-ellenor
 ${BRANCH_PATH}    ${EMPTY}
 
 # Felhasználó HOME könyvtárának dinamikus beállítása
-${USER_HOME}    %{USERPROFILE}
 # a gyökér könyvtár, ahol a robotok telepítve vannak
-${ROOT_FOLDER}    ${USER_HOME}/MyRobotFramework/
+${ROOT_FOLDER}    ~/MyRobotFramework/
 
 
 #developer módban csak letöltjük a robotokat, de nem telepítjük
 ${SANDBOX_MODE}         ${False}
-${SANDBOX_ROBOTS}       ${USER_HOME}/MyRobotFramework/SandboxRobots/
+${SANDBOX_ROBOTS}       ~/MyRobotFramework/SandboxRobots/
 
 
 # A robotok letöltési könyvtárai
-${DOWNLOADED_ROBOTS}    ${USER_HOME}/MyRobotFramework/DownloadedRobots/
+${DOWNLOADED_ROBOTS}    ~/MyRobotFramework/DownloadedRobots/
 
 # Automatikus start.bat futtatás engedélyezése
 ${AUTO_LAUNCH_START_BAT}    ${True}
 
 
 # A telepítési könyvtárai
-${INSTALLED_ROBOTS}     ${USER_HOME}/MyRobotFramework/InstalledRobots/
+${INSTALLED_ROBOTS}     ~/MyRobotFramework/InstalledRobots/
 
 
 # A kuka könyvtár helye
-${TRASH_DIR}            ${USER_HOME}/MyRobotFramework/Trash/
+${TRASH_DIR}            ~/MyRobotFramework/Trash/
 
 # Python executable változó (dinamikusan meghatározva)
 # Prioritási sorrend: 1. rf_env virtuális környezet, 2. rendszer python
