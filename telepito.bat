@@ -37,14 +37,6 @@ if errorlevel 1 (
 echo Python verzio:
 python --version
 
-REM Python verzió ellenőrzés (3.8+ ajánlott)
-for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
-echo Talalt Python verzio: %PYTHON_VERSION%
-
-echo.
-echo Python modullok ellenorzese...
-python -c "import sys; print('Python executable:', sys.executable)"
-echo.
 
 REM Virtualis kornyezet letrehozasa
 echo Virtualis kornyezet letrehozasa...
@@ -64,13 +56,9 @@ echo.
 REM Virtualis kornyezet aktivalasa es csomagok telepitese
 echo CLA-ssistant csomagok telepitese...
 REM .venv\Scripts\activate (nem szükséges, pip elérési út miatt)
+
 rem .venv\Scripts\pip.exe install --upgrade pip
-.venv\Scripts\pip.exe install robotframework
-.venv\Scripts\pip.exe install robotframework-seleniumlibrary
-.venv\Scripts\pip.exe install requests
-.venv\Scripts\pip.exe install flask
-.venv\Scripts\pip.exe install selenium
-.venv\Scripts\pip.exe install webdriver-manager
+.venv\Scripts\pip.exe install -r requirements.txt
 
 if errorlevel 1 (
     echo HIBA: Csomagok telepitese sikertelen!
