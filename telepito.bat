@@ -10,19 +10,13 @@ echo.
 echo =====================================================
 echo   CLA-SSISTANT TELEPITO v3.0
 echo   
-echo   Funkcionalitas:
-echo   - GitHub repository letoltes es kezeles
-echo   - Robot Framework automatizacio  
-echo   - Git parancsok vezerles
-echo   - Web interfesz tamogatas
-echo   - Repository lista lekeres API-val
 echo =====================================================
 echo.
 
 
 REM Automatikus telepitesi konyvtar beallitasa: az aktualis folder nevében a DownloadedRobots kifejezést InstalledRobots-ra cseréljük
 set "CURDIR=%CD%"
-echo [INFO] Alapértelmezett telepítési konyvtár: %TARGET_DIR%
+echo [INFO] Alapértelmezett telepítési konyvtár: %CURDIR%
 
 
 REM Ellenorizzuk a Python megletet es verziot
@@ -87,8 +81,7 @@ if errorlevel 1 (
 echo.
 echo =========================================
 echo CLA-SSISTANT TELEPITES SIKERES!
-echo.
-echo Telepitesi hely: %TARGET_DIR%
+echo Telepitesi hely: %CURDIR%
 echo.
 exit 0
 
