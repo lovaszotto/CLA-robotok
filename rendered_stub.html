@@ -521,58 +521,61 @@ function installSelectedRobots() {
     }));
     console.log('[WORKFLOW] Letöltési kérés elküldése a backendnek');
     fetch('/api/install_selected', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ robots })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            console.log('[WORKFLOW] Sikeres letöltés, telepített robotok:', data.installed);
-            showToast('A kijelölt robotok letöltése sikeres.', 'success');
-            // Sikeres telepítés után eltávolítjuk a telepített robotokat a kiválasztottak közül
-            const installed = data.installed || [];
-            // A kiválasztott robotokat teljesen eltávolítjuk a listából (kártyák is)
-            installed.forEach(inst => {
-                removeRobotFromExecutionList(inst.repo, inst.branch);
-                const cb = document.querySelector(`.robot-checkbox-available[data-repo="${inst.repo}"][data-branch="${inst.branch}"]`);
-                if (cb) cb.checked = false;
-            });
-            // Futtatható robotok tab frissítése
-            refreshRunnableRobots();
-            // Letölthető robotok tab frissítése
-            if (typeof refreshAvailableRobots === 'function') {
-                refreshAvailableRobots();
-            }
-        } else {
-            console.log('[WORKFLOW] Sikertelen letöltés vagy részleges hiba', data);
-            // Sikertelen telepítésnél a hibát az adott robot paneljébe írjuk
-            if (data.errors && data.errors.length > 0) {
-                data.errors.forEach(err => {
-                    const card = document.querySelector(
-                        `.card[data-repo="${err.repo}"][data-branch="${err.branch}"]`
-                    );
-                    if (card) {
-                        let errorDiv = card.querySelector('.install-error-msg');
-                        if (!errorDiv) {
-                            errorDiv = document.createElement('div');
-                            errorDiv.className = 'alert alert-danger install-error-msg mt-2 mb-0';
-                            card.querySelector('.card-body').appendChild(errorDiv);
-                        }
-                        errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Letöltési hiba: ${err.error || 'Ismeretlen hiba'}`;
-                    }
-                });
+        .then(data => {
+            if (data.success) {
+                console.log('[WORKFLOW] Sikeres letöltés, telepített robotok:', data.installed);
+                showToast('A kijelölt robotok letöltése sikeres.', 'success');
             } else {
-                showToast('Hiba a letöltés során: ' + (data.error || 'Ismeretlen hiba'), 'danger');
+                console.log('[WORKFLOW] Sikertelen letöltés vagy részleges hiba', data);
+                // Sikertelen telepítésnél a hibát az adott robot paneljébe írjuk
+                if (data.errors && data.errors.length > 0) {
+                    data.errors.forEach(err => {
+                        const card = document.querySelector(
+                            `.card[data-repo="${err.repo}"][data-branch="${err.branch}"]`
+                        );
+                        if (card) {
+                            let errorDiv = card.querySelector('.install-error-msg');
+                            if (!errorDiv) {
+                                errorDiv = document.createElement('div');
+                                errorDiv.className = 'alert alert-danger install-error-msg mt-2 mb-0';
+                                card.querySelector('.card-body').appendChild(errorDiv);
+                            }
+                            errorDiv.innerHTML = `<i class=\"bi bi-exclamation-triangle\"></i> Letöltési hiba: ${err.error || 'Ismeretlen hiba'}`;
+                        }
+                    });
+                } else {
+                    showToast('Hiba a letöltés során: ' + (data.error || 'Ismeretlen hiba'), 'danger');
+                }
             }
-        }
-    if (installBtn) installBtn.disabled = false;
-    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
-    })
-    .catch(err => {
-        showToast('Hálózati vagy szerverhiba: ' + err, 'danger');
-    if (installBtn) installBtn.disabled = false;
-    if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+            if (installBtn) installBtn.disabled = false;
+            if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+        })
+        .catch(err => {
+            const msg = 'Hálózati vagy szerverhiba: ' + err;
+            showToast(msg, 'danger');
+            // Logolás a backendnek
+            fetch('/api/log_client_error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            });
+            if (installBtn) installBtn.disabled = false;
+            if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+        })
+        .finally(() => {
+            // Sikeres letöltés után a Letölthető robotok tabot frissítjük, nem reloadolunk
+            setTimeout(() => {
+                if (typeof updateAvailableRobotsTab === 'function') {
+                    updateAvailableRobotsTab();
+                } else {
+                    window.location.reload(); // fallback, ha valamiért nincs ilyen függvény
+                }
+            }, 3000);
+        });
+        });
+        if (installBtn) installBtn.disabled = false;
+        if (runBtn) runBtn.disabled = SANDBOX_MODE ? true : false;
+        setTimeout(() => { window.location.reload(); }, 3000);
     });
 }
 // Törlési funkció - mindenképpen legyen elérhető
@@ -1820,7 +1823,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Futtatható robotok lista frissítése (újra lekéri és frissíti a DOM-ot)
 function refreshRunnableRobots() {
-    fetch('/api/refresh')
+    const ts = Date.now();
+    fetch(`/api/refresh?ts=${ts}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(repos => {
             // Frissítsük a "Futtatható robotok" tab tartalmát
@@ -2074,17 +2078,37 @@ function addBranchToAvailableTab(repoName, branchName) {
 function updateAvailableRobotsTab() {
     const container = document.getElementById('repoContainerAvailable');
     if (!container) return;
+    // Logoljuk a frissítés indulását
+    console.log('[INFO] Letölthető robotok tab frissítés indul');
+    fetch('/api/log_client_error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: '[INFO] Letölthető robotok tab frissítés indul' })
+    });
     // Lekérjük a repókat és a telepítetteket
+    const ts = Date.now();
     Promise.all([
-        fetch('/api/refresh').then(r => r.json()),
-        fetch('/api/debug/installed').then(r => r.json())
+        fetch(`/api/refresh?ts=${ts}`, { cache: 'no-store' }).then(r => { console.log('[INFO] /api/refresh lekérve'); return r.json(); }),
+        fetch(`/api/debug/installed?ts=${ts}`, { cache: 'no-store' }).then(r => { console.log('[INFO] /api/debug/installed lekérve'); return r.json(); })
     ]).then(([repos, installed]) => {
+        fetch('/api/log_client_error', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: '[INFO] /api/refresh és /api/debug/installed lekérve' })
+        });
+        console.log('[DEBUG] updateAvailableRobotsTab repos:', repos);
+        console.log('[DEBUG] updateAvailableRobotsTab installed:', installed);
         const installedSet = new Set(installed.installed_keys || []);
         let html = '';
+        let foundAny = false;
+        // Logoljuk a letölthető branch-eket szerverre is
+        const downloadableBranchesLog = [];
         repos.forEach(repo => {
             // Csak azokat a brancheket mutatjuk, amelyek NINCSENEK telepítve
             const availableBranches = (repo.branches || []).filter(branch => !installedSet.has(`${repo.name}|${branch}`));
             if (availableBranches.length === 0) return;
+            downloadableBranchesLog.push({ repo: repo.name, branches: availableBranches });
+            foundAny = true;
             html += `
                 <div class="col-lg-6 col-xl-4 mb-4 repo-item-available" data-repo-name="${repo.name}">
                     <div class="card repo-card h-100">
@@ -2125,6 +2149,19 @@ function updateAvailableRobotsTab() {
                 </div>
             `;
         });
+        if (!foundAny) {
+            html = `<div class='alert alert-info mt-4'><i class='bi bi-info-circle'></i> Nincs letölthető robot egyik repository-ban sem.</div>`;
+        }
+        // Logolás konzolra
+        console.log('[INFO] Letölthető robotok tab branch-ek:', downloadableBranchesLog);
+        // Logolás szerverre
+        if (downloadableBranchesLog.length > 0) {
+            fetch('/api/log_client_error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: '[INFO] Letölthető robotok tab branch-ek: ' + JSON.stringify(downloadableBranchesLog) })
+            });
+        }
         container.innerHTML = html;
         // Tooltipek újrainicializálása
         const tooltipTriggerList = [].slice.call(container.querySelectorAll('[data-bs-toggle="tooltip"]'));

@@ -1,3 +1,6 @@
+# --- Kliensoldali logolás endpoint (app példányosítás után, route-ok között) ---
+# --- Kliensoldali hibák logolása ---
+# (A Flask példányosítás után kell lennie!)
 from flask import Flask, render_template_string, jsonify, request, send_from_directory, session
 import json
 import subprocess
@@ -27,16 +30,32 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
 PYTHON_EXECUTABLE = sys.executable or 'python'
 
 
-# Logging beállítás: minden log menjen a server.log fájlba is, konzolra is
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] %(levelname)s %(message)s',
-    handlers=[
-        logging.FileHandler('server.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
+
+# --- Logging beállítás: minden log menjen a server.log fájlba is, konzolra is ---
+log_formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(message)s')
+file_handler = logging.FileHandler('server.log', encoding='utf-8')
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.INFO)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.INFO)
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+# Dupla handler elkerülése
+if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == file_handler.baseFilename for h in root_logger.handlers):
+    root_logger.addHandler(file_handler)
+if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+    root_logger.addHandler(console_handler)
+
+# Saját logger, propagate nélkül
+logger = logging.getLogger("cla-ssistant")
+logger.propagate = False
+logger.setLevel(logging.INFO)
+if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == file_handler.baseFilename for h in logger.handlers):
+    logger.addHandler(file_handler)
+if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+    logger.addHandler(console_handler)
 
 
 def get_sandbox_mode() -> bool:
@@ -108,7 +127,7 @@ def get_installed_robots_dir() -> str:
         logger.info(f"[ROBOT ELLENŐRZÉS] SANDBOX módban ellenőrzés, könyvtár: {os.path.abspath(dir_path)}")
         return dir_path
     dir_path = _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
-    logger.info(f"[ROBOT ELLENŐRZÉS] NEM sandbox módban ellenőrzés, könyvtár: {os.path.abspath(dir_path)}")
+    logger.info(f"[ROBOT ELLENŐRZÉS] könyvtár ellenőrzés: {os.path.abspath(dir_path)}")
     return dir_path
 
 def get_downloaded_robots_dir() -> str:
@@ -217,6 +236,7 @@ def get_branches_for_repo(repo_name):
                             branches.append(branch_name)
             return branches
         else:
+            logger.error(f"[BRANCH-QUERY] git ls-remote returncode={result.returncode}, stderr={result.stderr}")
             return []
     except Exception as e:
         logger.error(f"Hiba a branch-ek lekérésében: {e}")
@@ -555,11 +575,10 @@ def index():
 @app.route('/api/refresh')
 def refresh_data():
     """API endpoint az adatok frissítéséhez"""
-    repos = get_repository_data()
-    
+    # Mindig friss adatokat olvasunk, semmilyen cache-t nem használunk
+    repos = get_repository_data()  # Ez mindig újraolvassa a repo metaadatokat
     for repo in repos:
-        repo['branches'] = get_branches_for_repo(repo['name'])
-    
+        repo['branches'] = get_branches_for_repo(repo['name'])  # Mindig újraolvassa a branch-eket
     return jsonify(repos)
 
 @app.route('/api/execute', methods=['POST'])
@@ -712,6 +731,7 @@ def api_install_selected():
             logger.error(f"[INSTALL_SELECTED] Hibák a letöltés során: {errors}")
             return jsonify({'success': False, 'installed': installed, 'errors': errors}), 500
         logger.info(f"[INSTALL_SELECTED] Sikeres letöltés: {installed}")
+        # --- Automatikus újraindítás eltávolítva, csak logolás marad ---
         return jsonify({'success': True, 'installed': installed})
     except Exception as e:
         logger.exception(f"[INSTALL_SELECTED] Váratlan szerverhiba: {e}")
@@ -903,8 +923,9 @@ def debug_results():
 @app.route('/api/debug/installed')
 def debug_installed():
     """Debug endpoint: mutatja a 'futtatható' robotok forrását és kulcsait."""
+    # Mindig friss könyvtár- és branch-információkat adunk vissza
     base_inst = get_installed_robots_dir()
-    keys = sorted(list(get_installed_keys()))
+    keys = sorted(list(get_installed_keys()))  # Ez mindig újraolvassa a könyvtárakat
     return jsonify({
         'sandbox_mode': get_sandbox_mode(),
         'installed_base_dir': base_inst,
