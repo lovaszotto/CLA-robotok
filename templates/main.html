@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>{{ page_title }} - Robot Kezelő v2.1</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+.tab-content > .row { margin-bottom: 0 !important; }
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: white; min-height: 100vh; }
+main-container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
+page-header { background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%); color: white; padding: 30px; display: flex; align-items: center; justify-content: space-between; }
+page-header .header-content { display: flex; flex-direction: column; align-items: center; flex: 1; }
+page-header h1 { margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
+.nav-tabs {
+    border-bottom: 3px solid {{ primary_color }};
+    background: #f8f9fa;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-end;
+    gap: 2px;
+}
+.nav-tabs .nav-item {
+    flex: 0 0 auto;
+}
+.nav-tabs .nav-link {
+    color: #495057;
+    border: none;
+    padding: 8px 16px;
+    font-weight: 600;
+    border-radius: 0;
+    white-space: nowrap;
+    min-width: 0;
+    width: auto;
+    text-align: center;
+}
+.nav-tabs .nav-link.active {
+    background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%);
+    color: white;
+    border-bottom: 3px solid {{ primary_color }};
+}
+.nav-tabs .nav-link:hover {
+    background: linear-gradient(135deg, {{ tertiary_color }} 0%, {{ light_color }} 100%);
+    color: {{ primary_color }};
+}
+.tab-content {
+    padding: 8px 0 0 0;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 300px;
+}
+.tab-pane {
+    min-height: 200px;
+}
+.page-section {
+    min-height: 200px;
+    /* display: none; */
+}
+.card, .repo-card {
+    background-color: #e3f2fd !important;
+    border: 1px solid #b0bec5 !important;
+}
+.card.bg-white, .card.bg-light, .repo-card.bg-white, .repo-card.bg-light {
+    background-color: #e3f2fd !important;
+}
+.actions { text-align: center; margin: 25px 0; padding: 20px; background: #f8f9fa; border-radius: 10px; }
+.btn-custom { background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%); color: white; padding: 12px 25px; border: none; border-radius: 8px; margin: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 3px 6px rgba(0,0,0,0.1); }
+.btn-custom:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, {{ hover_color }} 0%, {{ primary_color }} 50%, {{ tertiary_color }} 100%); }
+.repo-card { transition: all 0.3s ease; }
+.repo-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(220,53,69,0.25) !important; border-color: {{ primary_color }}; }
+.repo-card .card-header { background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ dark_color }} 100%) !important; color: white !important; }
+.repo-card .card-title a:hover { text-decoration: underline !important; }
+.branches-container { max-height: 300px; overflow-y: auto; }
+.branch-checkbox { padding: 8px 12px; margin: 2px 0; border-radius: 6px; transition: background-color 0.2s; }
+.branch-checkbox:hover { background-color: #f8f9fa; }
+.branch-checkbox input:checked + label { font-weight: bold; color: {{ primary_color }}; }
+.branch-checkbox .form-check-input[type="checkbox"] {
+    border: 2px solid #888;
+    background-color: #fff;
+    box-shadow: none;
+    -webkit-appearance: checkbox;
+         -moz-appearance: checkbox;
+                    appearance: checkbox;
+}
+.branch-checkbox .form-check-input[type="checkbox"]:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.15rem rgba(0,123,255,.25);
+}
+#repoSearch:focus, #branchFilter:focus { border-color: {{ primary_color }}; box-shadow: 0 0 0 0.2rem rgba({{ rgba_color }}, 0.25); }
+.input-group-text.bg-primary { background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%) !important; }
+.input-group-text.bg-success { background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%) !important; }
+.hidden { display: none !important; }
+.spinning { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="p-4 rounded shadow" style="background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%); color: white;">
+                <h1 class="mb-0">{{ page_title }}</h1>
+                <div class="timestamp">{{ datetime.now().strftime('%Y.%m.%d. %H:%M:%S') }}</div>
+            </div>
+        </div>
+    </div>
+    <ul class="nav nav-tabs mb-3" id="mainTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="repos-tab" data-bs-toggle="tab" data-bs-target="#repos" type="button" role="tab" aria-controls="repos" aria-selected="true">
+                <i class="bi bi-git"></i> Elérhető robotok
+            </button>
+        </li>
+           <li class="nav-item" role="presentation">
+               <button class="nav-link" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="false">
+                   <i class="bi bi-play-circle"></i> Futtatható robotok
+               </button>
+           </li>
+           <li class="nav-item" role="presentation">
+               <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results" type="button" role="tab" aria-controls="results" aria-selected="false">
+                   <i class="bi bi-bar-chart"></i> Eredmények
+               </button>
+           </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false">
+                    <i class="bi bi-gear"></i> Beállítások
+                </button>
+            </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="exit-tab" data-bs-toggle="tab" data-bs-target="#exit" type="button" role="tab" aria-controls="exit" aria-selected="false">
+                <i class="bi bi-box-arrow-right"></i> Kilépés
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="about-tab" data-bs-toggle="tab" data-bs-target="#about" type="button" role="tab" aria-controls="about" aria-selected="false">
+                <i class="bi bi-info-circle"></i> Névjegy
+            </button>
+        </li>
+    </ul>
+    <div class="tab-content" id="mainTabContent">
+        <div class="tab-pane fade show active" id="repos" role="tabpanel" aria-labelledby="repos-tab">
+            <div class="row mb-3">
+                <div class="col-12">
+                    <div class="actions">
+                        <input type="text" id="repoSearch" class="form-control" placeholder="Keresés a robotok között..." style="max-width: 350px; display: inline-block;">
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="repo-list">
+                {% for repo in repos %}
+                <div class="col-md-6 col-lg-4 mb-4 repo-card-col">
+                    <div class="card repo-card h-100">
+                        <div class="card-header">
+                            <span class="card-title"><a href="#" class="repo-link" data-repo="{{ repo.name }}">{{ repo.name }}</a></span>
+                        </div>
+                        <div class="card-body">
+                            <p>{{ repo.description or 'Nincs leírás.' }}</p>
+                            <div class="branches-container">
+                                <strong>Elérhető branchek:</strong>
+                                <ul class="list-unstyled">
+                                    {% for branch in repo.branches %}
+                                    <li class="branch-checkbox">
+                                        <input class="form-check-input" type="checkbox" id="{{ repo.name }}-{{ branch }}" {% if repo.name ~ '|' ~ branch in downloaded_keys %}checked{% endif %}>
+                                        <label for="{{ repo.name }}-{{ branch }}">{{ branch }}</label>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+           <div class="tab-pane fade" id="runnable" role="tabpanel" aria-labelledby="runnable-tab">
+               <div class="page-section py-4">
+                   <h2>Futtatható robotok</h2>
+                   <div class="row" id="runnable-list">
+                       {% set found = false %}
+                       {% for repo in repos %}
+                           {% set runnable_branches = [] %}
+                           {% for branch in repo.branches %}
+                               {% if repo.name ~ '|' ~ branch in downloaded_keys %}
+                                   {% set _ = runnable_branches.append(branch) %}
+                               {% endif %}
+                           {% endfor %}
+                           {% if runnable_branches %}
+                               {% set found = true %}
+                               <div class="col-md-6 col-lg-4 mb-4 repo-card-col">
+                                   <div class="card repo-card h-100">
+                                       <div class="card-header bg-success text-white">
+                                           <span class="card-title"><i class="bi bi-robot"></i> {{ repo.name }}</span>
+                                       </div>
+                                       <div class="card-body">
+                                           <div class="branches-container">
+                                               <strong>Telepített branchek:</strong>
+                                               <ul class="list-unstyled">
+                                                   {% for branch in runnable_branches %}
+                                                   <li class="branch-checkbox">
+                                                       <label for="runnable-{{ repo.name }}-{{ branch }}">{{ branch }}</label>
+                                                       <button class="btn btn-success btn-sm ms-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}">
+                                                           <i class="bi bi-play-fill"></i>
+                                                       </button>
+                                                   </li>
+                                                   {% endfor %}
+                                               </ul>
+                                           </div>
+                                       </div>
+                                   </div>
+                               </div>
+                           {% endif %}
+                       {% endfor %}
+                       {% if not found %}
+                           <div class="col-12"><p class="text-muted">Nincs telepített, futtatható robot.</p></div>
+                       {% endif %}
+                   </div>
+               </div>
+           </div>
+           <div class="tab-pane fade" id="results" role="tabpanel" aria-labelledby="results-tab">
+               <div class="page-section py-4">
+                   <h2>Futási eredmények</h2>
+                   {% if execution_results %}
+                       <ul class="list-group">
+                           {% for result in execution_results %}
+                               <li class="list-group-item">
+                                   <strong>{{ result['robot'] }}</strong> &mdash; {{ result['status'] }}<br>
+                                   <small>{{ result['timestamp'] }}</small>
+                                   {% if result['log_url'] %}<br><a href="{{ result['log_url'] }}" target="_blank">Log megnyitása</a>{% endif %}
+                               </li>
+                           {% endfor %}
+                       </ul>
+                   {% else %}
+                       <p>Nincs elérhető futási eredmény.</p>
+                   {% endif %}
+               </div>
+           </div>
+            <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+                <div class="page-section py-4">
+                    <h2>Beállítások</h2>
+                    <p>Itt tudod módosítani a rendszer alapvető beállításait (pl. sandbox mód, színséma, stb.).</p>
+                    <!-- Ide jöhetnek a beállítási űrlapok, kapcsolók, stb. -->
+                </div>
+            </div>
+            <div class="tab-pane fade" id="exit" role="tabpanel" aria-labelledby="exit-tab">
+                <div class="page-section py-4 text-center">
+                    <h2>Kilépés</h2>
+                    <p>Bezárhatod a webes felületet, vagy leállíthatod a szervert.</p>
+                    <button class="btn btn-danger btn-lg mt-3" onclick="exitApp()">
+                        <i class="bi bi-box-arrow-right"></i> Kilépés
+                    </button>
+                </div>
+            </div>
+        <div class="tab-pane fade" id="about" role="tabpanel" aria-labelledby="about-tab">
+            <div class="page-section py-4">
+                <h2>Névjegy</h2>
+                <p>CLA-ssistant &copy; {{ datetime.now().year }}<br>Verzió: {{ version }}<br>Build: {{ build_date }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Egyszerű kereső a repo-listához
+document.getElementById('repoSearch').addEventListener('input', function() {
+    var filter = this.value.toLowerCase();
+    document.querySelectorAll('.repo-card-col').forEach(function(card) {
+        var name = card.querySelector('.repo-link').textContent.toLowerCase();
+        card.style.display = name.includes(filter) ? '' : 'none';
+    });
+});
+
+// Kilépés gomb működése
+function exitApp() {
+    if (confirm('Biztosan ki szeretnél lépni?')) {
+        window.open('', '_self', '');
+        window.close();
+        // Ha a böngésző nem engedi bezárni, jelenítsünk meg egy üzenetet
+        setTimeout(function() {
+            document.body.innerHTML = '<div class="text-center mt-5"><h1>Az alkalmazás bezárult</h1><p>Ha az ablak nyitva marad, zárd be kézzel ezt a böngészőfület.</p></div>';
+        }, 350);
+    }
+}
+</script>
+</body>
+</html>
