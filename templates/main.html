@@ -116,11 +116,16 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <i class="bi bi-git"></i> Elérhető robotok
             </button>
         </li>
-           <li class="nav-item" role="presentation">
-               <button class="nav-link" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="false">
-                   <i class="bi bi-play-circle"></i> Futtatható robotok
-               </button>
-           </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false">
+                <i class="bi bi-download"></i> Letölthető robotok
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="false">
+                <i class="bi bi-play-circle"></i> Futtatható robotok
+            </button>
+        </li>
            <li class="nav-item" role="presentation">
                <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results" type="button" role="tab" aria-controls="results" aria-selected="false">
                    <i class="bi bi-bar-chart"></i> Eredmények
@@ -143,38 +148,132 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         </li>
     </ul>
     <div class="tab-content" id="mainTabContent">
-        <div class="tab-pane fade show active" id="repos" role="tabpanel" aria-labelledby="repos-tab">
-            <div class="row mb-3">
-                <div class="col-12">
-                    <div class="actions">
-                        <input type="text" id="repoSearch" class="form-control" placeholder="Keresés a robotok között..." style="max-width: 350px; display: inline-block;">
+        <!-- Futtatható robotok TAB -->
+        <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
+            <div class="row mb-4 align-items-center">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="repoSearch" placeholder="Repository keresése..." onkeyup="filterRepos()">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
+                        <input type="text" class="form-control" id="branchFilter" placeholder="Robot szűrése..." onkeyup="filterRepos()">
+                    </div>
+                </div>
+                <div class="col-md-4 d-flex align-items-center">
+                    <div class="text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Indítsa a robotokat a bal oldali Play gombbal
                     </div>
                 </div>
             </div>
-            <div class="row" id="repo-list">
-                {% for repo in repos %}
-                <div class="col-md-6 col-lg-4 mb-4 repo-card-col">
+            <div class="row" id="repoContainer">
+            {% for repo in repos %}
+                {% if repo.downloaded_branches|length > 0 %}
+                <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="{{ repo.name }}">
                     <div class="card repo-card h-100">
-                        <div class="card-header">
-                            <span class="card-title"><a href="#" class="repo-link" data-repo="{{ repo.name }}">{{ repo.name }}</a></span>
+                        <div class="card-header text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-github"></i>
+                                <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
+                                    {{ repo.name }}
+                                </a>
+                            </h5>
+                            {% if repo.updated_at %}
+                            <small class="opacity-75">{{ repo.updated_at[:10] }}</small>
+                            {% endif %}
                         </div>
                         <div class="card-body">
-                            <p>{{ repo.description or 'Nincs leírás.' }}</p>
+                            <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
+                            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
                             <div class="branches-container">
-                                <strong>Elérhető branchek:</strong>
-                                <ul class="list-unstyled">
-                                    {% for branch in repo.branches %}
-                                    <li class="branch-checkbox">
-                                        <input class="form-check-input" type="checkbox" id="{{ repo.name }}-{{ branch }}" {% if repo.name ~ '|' ~ branch in downloaded_keys %}checked{% endif %}>
-                                        <label for="{{ repo.name }}-{{ branch }}">{{ branch }}</label>
-                                    </li>
-                                    {% endfor %}
-                                </ul>
+                                {% for branch in repo.downloaded_branches %}
+                                    <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;" id="branch-{{ repo.name }}-{{ branch }}">
+                                        <button class="btn btn-success btn-sm me-2" title="Futtatás"
+                                            data-repo="{{ repo.name }}"
+                                            data-branch="{{ branch }}"
+                                            onclick="executeSingleRobot(this)">
+                                            <i class="bi bi-play-fill"></i>
+                                        </button>
+                                        <i class="bi bi-trash text-danger me-2" 
+                                           style="cursor: pointer;" 
+                                           onclick='deleteRunnableBranch({{ repo.name | tojson }}, {{ branch | tojson }})'
+                                           data-bs-toggle="tooltip" 
+                                           data-bs-placement="top" 
+                                           title="Eltávolítás a futtathatók közül"></i>
+                                        <span>{{ branch }}</span>
+                                    </div>
+                                {% endfor %}
                             </div>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
+                {% endif %}
+            {% endfor %}
+            </div>
+        </div>
+        <!-- Letölthető robotok TAB -->
+        <div class="tab-pane fade" id="available-pane" role="tabpanel">
+            <div class="row mb-4 align-items-center">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="repoSearchAvailable" placeholder="Repository keresése..." onkeyup="filterReposAvailable()">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
+                        <input type="text" class="form-control" id="branchFilterAvailable" placeholder="Robot szűrése..." onkeyup="filterReposAvailable()">
+                    </div>
+                </div>
+                <div class="col-md-4 d-flex align-items-center">
+                    <div class="text-muted small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Kattintson a letöltés gombra azonnali telepítéshez
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="repoContainerAvailable">
+            {% for repo in repos %}
+                {% if repo.available_branches|length > 0 %}
+                <div class="col-lg-6 col-xl-4 mb-4 repo-item-available" data-repo-name="{{ repo.name }}">
+                    <div class="card repo-card h-100">
+                        <div class="card-header text-white">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-github"></i>
+                                <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
+                                    {{ repo.name }}
+                                </a>
+                            </h5>
+                            {% if repo.updated_at %}
+                            <small class="opacity-75">{{ repo.updated_at[:10] }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
+                            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
+                            <div class="branches-container">
+                                {% for branch in repo.available_branches %}
+                                    <div class="branch-checkbox d-flex align-items-center" id="branch-available-{{ repo.name }}-{{ branch }}">
+                                        <button class="btn btn-warning btn-sm me-2 text-dark"
+                                            type="button"
+                                            title="Azonnali letöltés"
+                                            onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                        <span>{{ branch }}</span>
+                                     </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
             </div>
         </div>
            <div class="tab-pane fade" id="runnable" role="tabpanel" aria-labelledby="runnable-tab">
@@ -242,8 +341,43 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
                 <div class="page-section py-4">
                     <h2>Beállítások</h2>
-                    <p>Itt tudod módosítani a rendszer alapvető beállításait (pl. sandbox mód, színséma, stb.).</p>
-                    <!-- Ide jöhetnek a beállítási űrlapok, kapcsolók, stb. -->
+                    <form id="settingsForm" onsubmit="event.preventDefault(); saveSettings();">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="darkMode">
+                            <label class="form-check-label" for="darkMode">Sötét mód</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="compactView">
+                            <label class="form-check-label" for="compactView">Kompakt nézet</label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="pageSize" class="form-label">Oldalankénti elemszám</label>
+                            <input type="number" class="form-control" id="pageSize" min="1" max="100" value="10">
+                        </div>
+                        <div class="mb-3">
+                            <label for="executionMode" class="form-label">Futtatási mód</label>
+                            <select class="form-select" id="executionMode">
+                                <option value="sequential">Szekvenciális</option>
+                                <option value="parallel">Párhuzamos</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="timeout" class="form-label">Futtatási timeout (mp)</label>
+                            <input type="number" class="form-control" id="timeout" min="10" max="3600" value="300">
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="generateReport" checked>
+                            <label class="form-check-label" for="generateReport">Futtatás után jelentés generálása</label>
+                        </div>
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
+                            <label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
+                        </div>
+                        <div class="d-flex gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">Beállítások mentése</button>
+                            <button type="button" class="btn btn-secondary" onclick="resetSettings()">Alapértelmezett visszaállítás</button>
+                        </div>
+                    </form>
                 </div>
             </div>
             <div class="tab-pane fade" id="exit" role="tabpanel" aria-labelledby="exit-tab">
@@ -265,26 +399,219 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// Egyszerű kereső a repo-listához
-document.getElementById('repoSearch').addEventListener('input', function() {
-    var filter = this.value.toLowerCase();
-    document.querySelectorAll('.repo-card-col').forEach(function(card) {
-        var name = card.querySelector('.repo-link').textContent.toLowerCase();
-        card.style.display = name.includes(filter) ? '' : 'none';
+// --- Keresés/szűrés ---
+function filterRepos() {
+    const searchTerm = document.getElementById('repoSearch').value.toLowerCase();
+    const branchFilter = document.getElementById('branchFilter').value.toLowerCase();
+    const repoItems = document.querySelectorAll('.repo-item');
+    repoItems.forEach(item => {
+        const repoName = item.getAttribute('data-repo-name').toLowerCase();
+        const branches = item.querySelectorAll('.branch-checkbox span');
+        let hasMatchingBranch = false;
+        branches.forEach(branch => {
+            const branchName = branch.textContent.toLowerCase().trim();
+            if (branchName.includes(branchFilter)) {
+                hasMatchingBranch = true;
+            }
+        });
+        if (repoName.includes(searchTerm) && (branchFilter === '' || hasMatchingBranch)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
     });
-});
+}
+function filterReposAvailable() {
+    const searchTerm = document.getElementById('repoSearchAvailable').value.toLowerCase();
+    const branchFilter = document.getElementById('branchFilterAvailable').value.toLowerCase();
+    const repoItems = document.querySelectorAll('.repo-item-available');
+    repoItems.forEach(item => {
+        const repoName = item.getAttribute('data-repo-name').toLowerCase();
+        const branches = item.querySelectorAll('.branch-checkbox span');
+        let hasMatchingBranch = false;
+        branches.forEach(branch => {
+            const branchName = branch.textContent.toLowerCase().trim();
+            if (branchName.includes(branchFilter)) {
+                hasMatchingBranch = true;
+            }
+        });
+        if (repoName.includes(searchTerm) && (branchFilter === '' || hasMatchingBranch)) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
 
-// Kilépés gomb működése
-function exitApp() {
-    if (confirm('Biztosan ki szeretnél lépni?')) {
-        window.open('', '_self', '');
-        window.close();
-        // Ha a böngésző nem engedi bezárni, jelenítsünk meg egy üzenetet
-        setTimeout(function() {
-            document.body.innerHTML = '<div class="text-center mt-5"><h1>Az alkalmazás bezárult</h1><p>Ha az ablak nyitva marad, zárd be kézzel ezt a böngészőfület.</p></div>';
-        }, 350);
+// --- Robot futtatás ---
+function executeSingleRobot(button) {
+    const repo = button.getAttribute('data-repo');
+    const branch = button.getAttribute('data-branch');
+    const msg = `Valóban futtassam a robotot?\n\nRepo: ${repo}\nBranch: ${branch}`;
+    if (!confirm(msg)) return;
+    try {
+        showToast(`Robot futtatása indult: ${repo}/${branch}`, 'info');
+        if (button) {
+            button.disabled = true;
+            button._originalInnerHTML = button.innerHTML;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        }
+        executeRobot(repo, branch, button);
+    } catch (e) {
+        showToast('Robot indítás hiba: ' + String(e), 'danger');
+        if (button) {
+            button.disabled = false;
+            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
+        }
     }
 }
+function executeRobot(repo, branch, button) {
+    const container = document.getElementById('selectedRobotsContainer') || document.body;
+    const currentTime = new Date().toLocaleString('hu-HU');
+    if (container) {
+        const tempMsg = document.createElement('div');
+        tempMsg.className = 'alert alert-info mt-3';
+        tempMsg.id = `status-${repo}-${branch}`;
+        tempMsg.innerHTML = `<i class="bi bi-arrow-clockwise spinning"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small><div class="mt-2"><span class="badge bg-primary">Státusz: Fut</span></div>`;
+        container.appendChild(tempMsg);
+    }
+    fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo, branch })
+    })
+    .then(r => r.json())
+    .then(data => {
+        const tempMsg = document.getElementById(`status-${repo}-${branch}`);
+        if (tempMsg) tempMsg.remove();
+        if (button) {
+            button.disabled = false;
+            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
+        }
+        const msg = document.createElement('div');
+        const currentTime = new Date().toLocaleString('hu-HU');
+        msg.className = `alert alert-info mt-3`;
+        msg.innerHTML = `<i class="bi bi-check-circle"></i> Futtatás befejezve: <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small>`;
+        container.appendChild(msg);
+        setTimeout(() => msg.remove(), 10000);
+    })
+    .catch(err => {
+        alert('Hiba történt a szerver hívása közben.');
+        if (button) {
+            button.disabled = false;
+            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
+        }
+    });
+}
+
+// --- Letöltés ---
+function installRobot(repo, branch, buttonElement) {
+    const msg = `Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ${repo}\nBranch: ${branch}\n\nEz a művelet hosszabb ideig is eltarthat!`;
+    if (!confirm(msg)) return;
+    installRobots([{ repo, branch }], { triggerButton: buttonElement });
+}
+function installSelectedRobots() {
+    const robots = Array.from(document.querySelectorAll('.robot-checkbox-available:checked')).map(cb => ({
+        repo: cb.getAttribute('data-repo'),
+        branch: cb.getAttribute('data-branch')
+    }));
+    installRobots(robots);
+}
+function installRobots(robots, options = {}) {
+    const { triggerButton = null } = options;
+    const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
+    if (installBtn) installBtn.disabled = true;
+    let triggerOriginalHtml = null;
+    if (triggerButton) {
+        triggerOriginalHtml = triggerButton.innerHTML;
+        triggerButton.disabled = true;
+        triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+    }
+    if (!robots || robots.length === 0) {
+        showToast('Nincs kijelölt robot a letöltéshez.', 'warning');
+        if (installBtn) installBtn.disabled = false;
+        if (triggerButton) {
+            triggerButton.disabled = false;
+            triggerButton.innerHTML = triggerOriginalHtml || '<i class="bi bi-download"></i>';
+        }
+        return;
+    }
+    fetch('/api/install_selected', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ robots })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showToast('A kijelölt robotok letöltése sikeres.', 'success');
+        } else {
+            showToast('Hiba a letöltés során: ' + (data.error || 'Ismeretlen hiba'), 'danger');
+        }
+    })
+    .catch(err => {
+        showToast('Hálózati vagy szerverhiba: ' + err, 'danger');
+    })
+    .finally(() => {
+        if (installBtn) installBtn.disabled = false;
+        if (triggerButton) {
+            triggerButton.disabled = false;
+            triggerButton.innerHTML = triggerOriginalHtml || '<i class="bi bi-download"></i>';
+        }
+    });
+}
+
+// --- Branch törlés ---
+function deleteRunnableBranch(repo, branch) {
+    if (confirm('Valóban törölni szeretnéd a futtathatók közül?\n\nRepository: ' + repo + '\nBranch: ' + branch)) {
+        // TODO: Backend törlés hívás
+        showToast('Törlés elküldve: ' + repo + '/' + branch, 'info');
+    }
+}
+
+// --- Toast segédfüggvény ---
+function showToast(message, type = 'info') {
+    // Egyszerű Bootstrap 5 toast helyettesítő
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+    toast.style.zIndex = 9999;
+    toast.innerHTML = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+}
+
+// --- Kilépés gomb működése ---
+function exitApp() {
+    if (!confirm('Biztos, hogy ki szeretnél lépni és leállítani a szervert?')) {
+        return;
+    }
+    const exitBtn = document.querySelector('#exit button, .btn-danger.btn-lg');
+    if (exitBtn) {
+        exitBtn.disabled = true;
+        exitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Leállítás...';
+    }
+    showToast('Kilépés folyamatban, a szerver leáll.', 'info');
+    fetch('/shutdown', { method: 'POST' })
+        .then(() => {
+            showToast('A szerver leállt, az ablak bezáródik.', 'success');
+        })
+        .catch((error) => {
+            console.warn('Kilépés közbeni hiba:', error);
+            showToast('Kilépés közben hiba történt. Ha az ablak nyitva marad, zárd be kézzel.', 'warning');
+        })
+        .finally(() => {
+            setTimeout(function() {
+                try {
+                    window.open('', '_self');
+                    window.close();
+                } catch (e) {
+                    console.warn('A böngésző nem engedte bezárni az ablakot:', e);
+                }
+                document.body.innerHTML = '<div class="text-center mt-5"><h1>Az alkalmazás bezárult</h1><p>Ha az ablak nyitva marad, zárd be kézzel ezt a böngészőfület.</p></div>';
+            }, 350);
+        });
+}
+</script>
 </script>
 </body>
 </html>
