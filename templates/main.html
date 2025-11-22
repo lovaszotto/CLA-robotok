@@ -111,21 +111,16 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         </div>
     </div>
     <ul class="nav nav-tabs mb-3" id="mainTab" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="repos-tab" data-bs-toggle="tab" data-bs-target="#repos" type="button" role="tab" aria-controls="repos" aria-selected="true">
-                <i class="bi bi-git"></i> Elérhető robotok
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false">
-                <i class="bi bi-download"></i> Letölthető robotok
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="false">
-                <i class="bi bi-play-circle"></i> Futtatható robotok
-            </button>
-        </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="true">
+                        <i class="bi bi-play-circle"></i> Telepített robotok
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false">
+                        <i class="bi bi-download"></i> Letölthető robotok
+                    </button>
+                </li>
            <li class="nav-item" role="presentation">
                <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results" type="button" role="tab" aria-controls="results" aria-selected="false">
                    <i class="bi bi-bar-chart"></i> Eredmények
@@ -148,72 +143,50 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         </li>
     </ul>
     <div class="tab-content" id="mainTabContent">
-        <!-- Futtatható robotok TAB -->
-        <div class="tab-pane fade show active" id="download-pane" role="tabpanel">
-            <div class="row mb-4 align-items-center">
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control" id="repoSearch" placeholder="Repository keresése..." onkeyup="filterRepos()">
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
-                        <input type="text" class="form-control" id="branchFilter" placeholder="Robot szűrése..." onkeyup="filterRepos()">
-                    </div>
-                </div>
-                <div class="col-md-4 d-flex align-items-center">
-                    <div class="text-muted small">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Indítsa a robotokat a bal oldali Play gombbal
-                    </div>
-                </div>
-            </div>
-            <div class="row" id="repoContainer">
-            {% for repo in repos %}
-                {% if repo.downloaded_branches|length > 0 %}
-                <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="{{ repo.name }}">
-                    <div class="card repo-card h-100">
-                        <div class="card-header text-white">
-                            <h5 class="card-title mb-0">
-                                <i class="bi bi-github"></i>
-                                <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
-                                    {{ repo.name }}
-                                </a>
-                            </h5>
-                            {% if repo.updated_at %}
-                            <small class="opacity-75">{{ repo.updated_at[:10] }}</small>
-                            {% endif %}
-                        </div>
-                        <div class="card-body">
-                            <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
-                            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
-                            <div class="branches-container">
-                                {% for branch in repo.downloaded_branches %}
-                                    <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;" id="branch-{{ repo.name }}-{{ branch }}">
-                                        <button class="btn btn-success btn-sm me-2" title="Futtatás"
-                                            data-repo="{{ repo.name }}"
-                                            data-branch="{{ branch }}"
-                                            onclick="executeSingleRobot(this)">
-                                            <i class="bi bi-play-fill"></i>
-                                        </button>
-                                        <i class="bi bi-trash text-danger me-2" 
-                                           style="cursor: pointer;" 
-                                           onclick='deleteRunnableBranch({{ repo.name | tojson }}, {{ branch | tojson }})'
-                                           data-bs-toggle="tooltip" 
-                                           data-bs-placement="top" 
-                                           title="Eltávolítás a futtathatók közül"></i>
-                                        <span>{{ branch }}</span>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
-            {% endfor %}
-            </div>
+        <!-- Telepített robotok TAB -->
+        <div class="tab-pane fade show active" id="runnable" role="tabpanel" aria-labelledby="runnable-tab">
+           <div class="page-section py-4">
+               <h2>Telepített robotok</h2>
+               <div class="row" id="runnable-list">
+                   {% set found = false %}
+                   {% for repo in repos %}
+                       {% set runnable_branches = [] %}
+                       {% for branch in repo.branches %}
+                           {% if repo.name ~ '|' ~ branch in downloaded_keys %}
+                               {% set _ = runnable_branches.append(branch) %}
+                           {% endif %}
+                       {% endfor %}
+                       {% if runnable_branches %}
+                           {% set found = true %}
+                           <div class="col-md-6 col-lg-4 mb-4 repo-card-col">
+                               <div class="card repo-card h-100">
+                                   <div class="card-header bg-success text-white">
+                                       <span class="card-title"><i class="bi bi-robot"></i> {{ repo.name }}</span>
+                                   </div>
+                                   <div class="card-body">
+                                       <div class="branches-container">
+                                           <strong>Telepített robotok:</strong>
+                                           <ul class="list-unstyled">
+                                               {% for branch in runnable_branches %}
+                                               <li class="branch-checkbox">
+                                                   <label for="runnable-{{ repo.name }}-{{ branch }}">{{ branch }}</label>
+                                                   <button class="btn btn-success btn-sm ms-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}">
+                                                       <i class="bi bi-play-fill"></i>
+                                                   </button>
+                                               </li>
+                                               {% endfor %}
+                                           </ul>
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                       {% endif %}
+                   {% endfor %}
+                   {% if not found %}
+                       <div class="col-12"><p class="text-muted">Nincs telepített, futtatható robot.</p></div>
+                   {% endif %}
+               </div>
+           </div>
         </div>
         <!-- Letölthető robotok TAB -->
         <div class="tab-pane fade" id="available-pane" role="tabpanel">
@@ -276,50 +249,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             {% endfor %}
             </div>
         </div>
-           <div class="tab-pane fade" id="runnable" role="tabpanel" aria-labelledby="runnable-tab">
-               <div class="page-section py-4">
-                   <h2>Futtatható robotok</h2>
-                   <div class="row" id="runnable-list">
-                       {% set found = false %}
-                       {% for repo in repos %}
-                           {% set runnable_branches = [] %}
-                           {% for branch in repo.branches %}
-                               {% if repo.name ~ '|' ~ branch in downloaded_keys %}
-                                   {% set _ = runnable_branches.append(branch) %}
-                               {% endif %}
-                           {% endfor %}
-                           {% if runnable_branches %}
-                               {% set found = true %}
-                               <div class="col-md-6 col-lg-4 mb-4 repo-card-col">
-                                   <div class="card repo-card h-100">
-                                       <div class="card-header bg-success text-white">
-                                           <span class="card-title"><i class="bi bi-robot"></i> {{ repo.name }}</span>
-                                       </div>
-                                       <div class="card-body">
-                                           <div class="branches-container">
-                                               <strong>Telepített branchek:</strong>
-                                               <ul class="list-unstyled">
-                                                   {% for branch in runnable_branches %}
-                                                   <li class="branch-checkbox">
-                                                       <label for="runnable-{{ repo.name }}-{{ branch }}">{{ branch }}</label>
-                                                       <button class="btn btn-success btn-sm ms-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}">
-                                                           <i class="bi bi-play-fill"></i>
-                                                       </button>
-                                                   </li>
-                                                   {% endfor %}
-                                               </ul>
-                                           </div>
-                                       </div>
-                                   </div>
-                               </div>
-                           {% endif %}
-                       {% endfor %}
-                       {% if not found %}
-                           <div class="col-12"><p class="text-muted">Nincs telepített, futtatható robot.</p></div>
-                       {% endif %}
-                   </div>
-               </div>
-           </div>
            <div class="tab-pane fade" id="results" role="tabpanel" aria-labelledby="results-tab">
                <div class="page-section py-4">
                    <h2>Futási eredmények</h2>
