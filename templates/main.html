@@ -146,7 +146,27 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <!-- Telepített robotok TAB -->
         <div class="tab-pane fade show active" id="runnable" role="tabpanel" aria-labelledby="runnable-tab">
            <div class="page-section py-4">
-               <h2>Telepített robotok</h2>
+               <!-- Szűrő blokk a Telepített robotokhoz -->
+               <div class="row mb-4 align-items-center">
+                   <div class="col-md-4">
+                       <div class="input-group">
+                           <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
+                           <input type="text" class="form-control" id="repoSearchRunnable" placeholder="Repository keresése..." onkeyup="filterReposRunnable()">
+                       </div>
+                   </div>
+                   <div class="col-md-4">
+                       <div class="input-group">
+                           <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
+                           <input type="text" class="form-control" id="branchFilterRunnable" placeholder="Robot szűrése..." onkeyup="filterReposRunnable()">
+                       </div>
+                   </div>
+                   <div class="col-md-4 d-flex align-items-center">
+                       <div class="text-muted small">
+                           <i class="bi bi-info-circle me-1"></i>
+                           Kattintson a futtatás gombra a robot indításához
+                       </div>
+                   </div>
+               </div>
                <div class="row" id="runnable-list">
                    {% set runnable_repos = [] %}
                    {% for repo in repos %}
@@ -170,11 +190,13 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                            <ul class="list-unstyled">
                                                {% for branch in runnable_branches %}
                                                <li class="branch-checkbox d-flex align-items-center">
-                                                   <label for="runnable-{{ repo.name }}-{{ branch }}" class="me-2 mb-0">{{ branch }}</label>
-                                                   <button class="btn btn-success btn-sm ms-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}">
+                                                   <button class="btn btn-success btn-sm me-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}" onclick="executeSingleRobot(this)">
                                                        <i class="bi bi-play-fill"></i>
                                                    </button>
-                                                   <i class="bi bi-trash text-danger ms-2" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"></i>
+                                                   <label for="runnable-{{ repo.name }}-{{ branch }}" class="mb-0">{{ branch }}</label>
+                                                   <span class="ms-auto">
+                                                       <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"></i>
+                                                   </span>
                                                </li>
                                                {% endfor %}
                                            </ul>
@@ -513,8 +535,13 @@ function executeRobot(repo, branch, button) {
 
 // --- Letöltés ---
 function installRobot(repo, branch, buttonElement) {
+    console.log('[DOWNLOAD] Gomb megnyomva:', {repo, branch, buttonElement});
     const msg = `Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ${repo}\nBranch: ${branch}\n\nEz a művelet hosszabb ideig is eltarthat!`;
-    if (!confirm(msg)) return;
+    if (!confirm(msg)) {
+        console.log('[DOWNLOAD] Letöltés megszakítva a felhasználó által.');
+        return;
+    }
+    console.log('[DOWNLOAD] Letöltési folyamat indítása...');
     installRobots([{ repo, branch }], { triggerButton: buttonElement });
 }
 function installSelectedRobots() {
@@ -535,6 +562,7 @@ function installRobots(robots, options = {}) {
         triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
     }
     if (!robots || robots.length === 0) {
+        console.log('[DOWNLOAD] Nincs kijelölt robot a letöltéshez.');
         showToast('Nincs kijelölt robot a letöltéshez.', 'warning');
         if (installBtn) installBtn.disabled = false;
         if (triggerButton) {
@@ -543,6 +571,7 @@ function installRobots(robots, options = {}) {
         }
         return;
     }
+    console.log('[DOWNLOAD] Letöltési kérés elküldése a backendnek:', robots);
     fetch('/api/install_selected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -551,15 +580,28 @@ function installRobots(robots, options = {}) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
+            console.log('[DOWNLOAD] Sikeres letöltés:', data.installed);
             showToast('A kijelölt robotok letöltése sikeres.', 'success');
+            const installed = data.installed || [];
+            installed.forEach(inst => {
+                // Checkbox visszaállítása, ha van
+                const cb = document.querySelector(`.robot-checkbox-available[data-repo="${inst.repo}"][data-branch="${inst.branch}"]`);
+                if (cb) cb.checked = false;
+            });
+            // Mindkét tab frissítése AJAX-szal, ha létezik a függvény
+            if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots();
+            if (typeof refreshAvailableRobots === 'function') refreshAvailableRobots();
         } else {
+            console.log('[DOWNLOAD] Hiba a letöltés során:', data.error || 'Ismeretlen hiba');
             showToast('Hiba a letöltés során: ' + (data.error || 'Ismeretlen hiba'), 'danger');
         }
     })
     .catch(err => {
+        console.log('[DOWNLOAD] Hálózati vagy szerverhiba:', err);
         showToast('Hálózati vagy szerverhiba: ' + err, 'danger');
     })
     .finally(() => {
+        console.log('[DOWNLOAD] Letöltési folyamat vége.');
         if (installBtn) installBtn.disabled = false;
         if (triggerButton) {
             triggerButton.disabled = false;

@@ -90,5 +90,15 @@
     "returncode": 1,
     "results_dir": "SzotarRobi__Szó-kikérdező__20251122_170607",
     "type": "bulk"
+  },
+  {
+    "id": 9,
+    "timestamp": "2025-11-23 03:51:58",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251123_035158",
+    "type": "bulk"
   }
 ]
