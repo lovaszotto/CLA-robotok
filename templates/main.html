@@ -148,7 +148,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
            <div class="page-section py-4">
                <h2>Telepített robotok</h2>
                <div class="row" id="runnable-list">
-                   {% set found = false %}
+                   {% set runnable_repos = [] %}
                    {% for repo in repos %}
                        {% set runnable_branches = [] %}
                        {% for branch in repo.branches %}
@@ -157,22 +157,24 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                            {% endif %}
                        {% endfor %}
                        {% if runnable_branches %}
-                           {% set found = true %}
+                           {% set _ = runnable_repos.append(repo.name) %}
                            <div class="col-md-6 col-lg-4 mb-4 repo-card-col">
                                <div class="card repo-card h-100">
                                    <div class="card-header bg-success text-white">
                                        <span class="card-title"><i class="bi bi-robot"></i> {{ repo.name }}</span>
                                    </div>
                                    <div class="card-body">
+                                       <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
                                        <div class="branches-container">
                                            <strong>Telepített robotok:</strong>
                                            <ul class="list-unstyled">
                                                {% for branch in runnable_branches %}
-                                               <li class="branch-checkbox">
-                                                   <label for="runnable-{{ repo.name }}-{{ branch }}">{{ branch }}</label>
+                                               <li class="branch-checkbox d-flex align-items-center">
+                                                   <label for="runnable-{{ repo.name }}-{{ branch }}" class="me-2 mb-0">{{ branch }}</label>
                                                    <button class="btn btn-success btn-sm ms-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}">
                                                        <i class="bi bi-play-fill"></i>
                                                    </button>
+                                                   <i class="bi bi-trash text-danger ms-2" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"></i>
                                                </li>
                                                {% endfor %}
                                            </ul>
@@ -182,8 +184,8 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                            </div>
                        {% endif %}
                    {% endfor %}
-                   {% if not found %}
-                       <div class="col-12"><p class="text-muted">Nincs telepített, futtatható robot.</p></div>
+                   {% if runnable_repos|length == 0 %}
+                       <div class="col-12 text-center"><h2 class="text-muted mt-5">Nincs telepített, futtatható robot.</h2></div>
                    {% endif %}
                </div>
            </div>
@@ -569,8 +571,28 @@ function installRobots(robots, options = {}) {
 // --- Branch törlés ---
 function deleteRunnableBranch(repo, branch) {
     if (confirm('Valóban törölni szeretnéd a futtathatók közül?\n\nRepository: ' + repo + '\nBranch: ' + branch)) {
-        // TODO: Backend törlés hívás
-        showToast('Törlés elküldve: ' + repo + '/' + branch, 'info');
+        fetch('/delete_runnable_branch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo_name: repo, branch_name: branch })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.deleted) {
+                showToast('Sikeres törlés: ' + repo + '/' + branch, 'success');
+            } else {
+                showToast('Nem sikerült törölni: ' + repo + '/' + branch, 'danger');
+            }
+            if (typeof refreshRunnableRobots === 'function') {
+                refreshRunnableRobots();
+            } else {
+                // Oldal újratöltése fallbackként
+                setTimeout(() => location.reload(), 1000);
+            }
+        })
+        .catch(err => {
+            showToast('Hiba a törlés során: ' + err, 'danger');
+        });
     }
 }
 
