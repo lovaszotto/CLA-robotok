@@ -1,6 +1,4 @@
-# --- Kliensoldali logolás endpoint (app példányosítás után, route-ok között) ---
-# --- Kliensoldali hibák logolása ---
-# (A Flask példányosítás után kell lennie!)
+# --- Szükséges importok ---
 from flask import Flask, render_template, render_template_string, jsonify, request, send_from_directory, session
 import json
 import subprocess
@@ -8,6 +6,12 @@ import os
 import sys
 import re
 import shutil
+import html
+import time
+import threading
+from datetime import datetime
+import logging
+
 import html
 import time
 import threading
@@ -1098,6 +1102,42 @@ def install_robot_with_params(repo: str, branch: str):
         logger.info(f"[INSTALL] .venv mappa már létezik: {venv_dir}")
     logger.info(f"[INSTALL] install_robot_with_params sikeresen lefutott: repo='{repo}', branch='{branch}', branch_dir='{branch_dir}'")
     return 0, branch_dir, 'Install OK', ''
+# --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
+
+# --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
+@app.route('/api/runnable_repos', methods=['GET'])
+def api_runnable_repos():
+    """Csak a futtatható (telepített, .venv mappával rendelkező) branch-ek repo-nként."""
+    repos = get_repository_data()
+    installed_keys = get_installed_keys()
+    result = []
+    for repo in repos:
+        repo_copy = dict(repo)
+        repo_copy['branches'] = [
+            branch for branch in repo.get('branches', get_branches_for_repo(repo['name']))
+            if f"{repo['name']}|{branch}" in installed_keys
+        ]
+        # Csak akkor adjuk vissza, ha van legalább 1 futtatható branch
+        if repo_copy['branches']:
+            result.append(repo_copy)
+    return jsonify(result)
+
+@app.route('/api/available_repos', methods=['GET'])
+def api_available_repos():
+    """Csak a letölthető (még nem telepített) branch-ek repo-nként."""
+    repos = get_repository_data()
+    installed_keys = get_installed_keys()
+    result = []
+    for repo in repos:
+        repo_copy = dict(repo)
+        repo_copy['branches'] = [
+            branch for branch in repo.get('branches', get_branches_for_repo(repo['name']))
+            if f"{repo['name']}|{branch}" not in installed_keys
+        ]
+        # Csak akkor adjuk vissza, ha van legalább 1 letölthető branch
+        if repo_copy['branches']:
+            result.append(repo_copy)
+    return jsonify(result)
 
 if __name__ == "__main__":
     # Indítsd a Flask szervert, hogy kívülről is elérhető legyen, ne csak localhostról
