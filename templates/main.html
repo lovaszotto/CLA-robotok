@@ -744,14 +744,19 @@ function deleteRunnableBranch(repo, branch) {
         .then(data => {
             if (data.deleted) {
                 showToast('Sikeres törlés: ' + repo + '/' + branch, 'success');
+                if (typeof refreshRunnableRobots === 'function') {
+                    refreshRunnableRobots();
+                }
+                if (typeof refreshAvailableRobots === 'function') {
+                    refreshAvailableRobots();
+                }
             } else {
                 showToast('Nem sikerült törölni: ' + repo + '/' + branch, 'danger');
-            }
-            if (typeof refreshRunnableRobots === 'function') {
-                refreshRunnableRobots();
-            } else {
-                // Oldal újratöltése fallbackként
-                setTimeout(() => location.reload(), 1000);
+                if (typeof refreshRunnableRobots === 'function') {
+                    refreshRunnableRobots();
+                } else {
+                    setTimeout(() => location.reload(), 1000);
+                }
             }
         })
         .catch(err => {

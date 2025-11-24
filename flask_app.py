@@ -712,29 +712,32 @@ def clear_results():
 @app.route('/delete_runnable_branch', methods=['POST'])
 def delete_runnable_branch():
     """Törli a megadott branch-et a futtathatók közül"""
+    import logging
+    logger = logging.getLogger("delete_runnable_branch")
     try:
         data = request.get_json()
-        repo_name = data.get('repo')
-        branch_name = data.get('branch')
-        
+        logger.info(f"[DELETE] Request data: {data}")
+        repo_name = data.get('repo') or data.get('repo_name')
+        branch_name = data.get('branch') or data.get('branch_name')
+        logger.info(f"[DELETE] repo_name: {repo_name}, branch_name: {branch_name}")
         if not repo_name or not branch_name:
+            logger.warning("[DELETE] Hiányzó repo vagy branch név!")
             return jsonify({'success': False, 'error': 'Repository és branch név szükséges'})
-        
-    
         # Letöltött robot könyvtár törlése a DownloadedRobots alól
+        logger.info(f"[DELETE] delete_downloaded_robot_directory hívás: repo={repo_name}, branch={branch_name}")
         deleted_downloaded, info_down = delete_downloaded_robot_directory(repo_name, branch_name)
         status_down = 'törölve' if deleted_downloaded else 'nem található, nincs mit törölni'
-        print(f"[DELETE] DownloadedRobots: {repo_name}/{branch_name}: {status_down}. {info_down}")
-        
-        return jsonify({
-            'success': True,
-            'message': f'Branch {repo_name}/{branch_name} eltávolítva',
-            'deleted': deleted_downloaded,  # csak DownloadedRobots számít
+        logger.info(f"[DELETE] DownloadedRobots: {repo_name}/{branch_name}: {status_down}. {info_down}")
+        response = {
+            'success': deleted_downloaded,
+            'message': f'Branch {repo_name}/{branch_name} eltávolítva' if deleted_downloaded else info_down,
+            'deleted': deleted_downloaded,
             'deleted_downloaded': deleted_downloaded
-        })
-        
+        }
+        logger.info(f"[DELETE] Válasz: {response}")
+        return jsonify(response)
     except Exception as e:
-        print(f"Hiba a branch törlésében: {e}")
+        logger.error(f"Hiba a branch törlésében: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/debug/results')

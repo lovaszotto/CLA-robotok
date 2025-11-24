@@ -1,36 +1,12 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-24 05:11:03",
+    "timestamp": "2025-11-24 05:29:03",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\DownloadedRobots\\SzotarRobi\\Szó-kikérdező",
-    "type": "install",
-    "stdout": "Install OK",
-    "stderr": ""
-  },
-  {
-    "id": 2,
-    "timestamp": "2025-11-24 05:16:30",
-    "repo": "SzotarRobi",
-    "branch": "Szó-kikérdező",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251124_051522",
-    "type": "install",
-    "stdout": "Install OK",
-    "stderr": ""
-  },
-  {
-    "id": 3,
-    "timestamp": "2025-11-24 05:18:04",
-    "repo": "SzotarRobi",
-    "branch": "Szó-kikérdező",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251124_051659",
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251124_052814",
     "type": "install",
     "stdout": "Install OK",
     "stderr": ""
