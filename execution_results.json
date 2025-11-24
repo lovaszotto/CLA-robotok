@@ -1,12 +1,22 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-24 07:48:35",
+    "timestamp": "2025-11-24 07:52:59",
     "repo": "KBSZ-robotok",
     "branch": "KB01-Közbeszerzési-Értesítő",
     "status": "failed",
     "returncode": 1,
-    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251124_074835",
+    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251124_075259",
+    "type": "bulk"
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-11-24 07:57:29",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251124_075729",
     "type": "bulk"
   }
 ]

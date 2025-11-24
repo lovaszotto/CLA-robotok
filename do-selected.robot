@@ -18,7 +18,7 @@ Feloldott könyvtár változók
 
 
 *** Test Cases ***
-    Feloldott könyvtár változók
+    # Feloldott könyvtár változók (kulcsszó, nem teszteset)
 Kiírás konzolra paraméterekből
     # Dinamikus könyvtár változók beállítása a környezeti USERPROFILE alapján
     ${USERPROFILE}=    Get Environment Variable    USERPROFILE
