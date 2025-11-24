@@ -705,6 +705,14 @@ function installRobots(robots, options = {}) {
             // Mindkét tab frissítése AJAX-szal, ha létezik a függvény
             if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots();
             if (typeof refreshAvailableRobots === 'function') refreshAvailableRobots();
+            // Váltás a Telepített robotok tab-ra
+            const tabEl = document.getElementById('runnable-tab');
+            if (tabEl && window.bootstrap) {
+                const tab = window.bootstrap.Tab.getOrCreateInstance(tabEl);
+                tab.show();
+            } else if (tabEl) {
+                tabEl.click();
+            }
         } else {
             console.log('[DOWNLOAD] Hiba a letöltés során:', data.error || 'Ismeretlen hiba');
             showToast('Hiba a letöltés során: ' + (data.error || 'Ismeretlen hiba'), 'danger');
@@ -844,9 +852,17 @@ function displayResults(results) {
         const statusBadge = result.status === 'success' 
             ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Sikeres</span>'
             : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sikertelen</span>';
-        const typeBadge = result.type === 'bulk'
-            ? '<span class="badge bg-info ms-1">Tömeges</span>'
-            : '<span class="badge bg-secondary ms-1">Egyedi</span>';
+        // Letöltés/Futtatás badge logika
+        let typeBadge = '';
+        if (result.type === 'bulk') {
+            typeBadge = '<span class="badge bg-info ms-1">Futtatás</span>';
+        } else if (result.type === 'single') {
+            typeBadge = '<span class="badge bg-secondary ms-1">Futtatás</span>';
+        } else if (result.type === 'install' || result.type === 'download') {
+            typeBadge = '<span class="badge bg-warning text-dark ms-1">Letöltés</span>';
+        } else {
+            typeBadge = '<span class="badge bg-light text-dark ms-1">Ismeretlen</span>';
+        }
         const resultsDisplay = result.results_dir 
             ? '<small class="text-muted">' + result.results_dir + '</small>' 
             : '-';
@@ -945,7 +961,13 @@ function openResults(resultsDir) {
             return;
         }
         let dir = resultsDir || '';
-        dir = dir.replace(/^results[\\/]+/, '');
+        // Ha abszolút Windows elérési út, csak a 'results' utáni részt tartsuk meg
+        // Pl. C:/Users/valami/.../results/valami__valami__dátum -> valami__valami__dátum
+        const resultsIdx = dir.toLowerCase().lastIndexOf('results');
+        if (resultsIdx !== -1) {
+            dir = dir.substring(resultsIdx + 'results'.length);
+        }
+        dir = dir.replace(/^([\\/])+/,''); // Távolítsuk el az elején lévő / vagy \
         const segments = dir.split(/[\\/]+/).filter(Boolean);
         const encoded = segments.map(s => encodeURIComponent(s)).join('/');
         const staticUrl = `/results/${encoded}/log.html`;

@@ -1,3 +1,8 @@
+
+# --- Maintenance endpoint: Remove execution_results entries with missing results_dir ---
+# (A Flask app példányosítás UTÁN kell lennie!)
+
+# ...existing code...
 # --- Szükséges importok ---
 from flask import Flask, render_template, render_template_string, jsonify, request, send_from_directory, session
 import json
@@ -681,7 +686,20 @@ def save_execution_results():
         print(f"[WARNING] Hiba az eredmények mentésénél: {e}")
 
 # Eredmények betöltése alkalmazás indításkor
+
+# Eredmények betöltése alkalmazás indításkor
 execution_results = load_execution_results()
+# Indulás után automatikusan töröljük a nem létező results_dir-re mutató bejegyzéseket
+def _auto_cleanup_execution_results():
+    global execution_results
+    before = len(execution_results)
+    cleaned = [r for r in execution_results if r.get('results_dir') and os.path.isdir(r['results_dir'])]
+    removed = before - len(cleaned)
+    if removed > 0:
+        execution_results = cleaned
+        save_execution_results()
+        print(f"[CLEANUP] {removed} execution_results törölve, mert a results_dir nem létezik.")
+_auto_cleanup_execution_results()
 
 @app.route('/api/clear-results', methods=['POST'])
 def clear_results():
@@ -966,6 +984,8 @@ def api_install_selected():
             return jsonify({'success': False, 'error': 'Nincs kiválasztott robot.'}), 400
         installed = []
         errors = []
+        from datetime import datetime
+        global execution_results
         for r in robots:
             repo = (r.get('repo') or '').strip()
             branch = (r.get('branch') or '').strip()
@@ -975,21 +995,36 @@ def api_install_selected():
                 continue
             try:
                 logger.info(f"[INSTALL_SELECTED] install_robot_with_params hívás: repo='{repo}', branch='{branch}'")
-                rc, out_dir, _stdout, _stderr = install_robot_with_params(repo, branch)
-                logger.info(f"[INSTALL_SELECTED] install_robot_with_params eredmény: rc={rc}, out_dir={out_dir}")
+                rc, results_dir_rel, _stdout, _stderr = install_robot_with_params(repo, branch)
+                logger.info(f"[INSTALL_SELECTED] install_robot_with_params eredmény: rc={rc}, results_dir_rel={results_dir_rel}")
                 if rc == 0:
-                    installed.append({'repo': repo, 'branch': branch, 'results_dir': out_dir})
+                    installed.append({'repo': repo, 'branch': branch, 'results_dir': results_dir_rel})
+                    # ÚJ: execution_results-ba is bekerül
+                    result_entry = {
+                        'id': len(execution_results) + 1,
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'repo': repo,
+                        'branch': branch,
+                        'status': 'success',
+                        'returncode': rc,
+                        'results_dir': results_dir_rel,
+                        'type': 'install',
+                        'stdout': _stdout,
+                        'stderr': _stderr
+                    }
+                    execution_results.append(result_entry)
                 else:
                     logger.error(f"[INSTALL_SELECTED] Installáció sikertelen, rc={rc}, repo={repo}, branch={branch}, stdout={_stdout}, stderr={_stderr}")
                     errors.append({'repo': repo, 'branch': branch, 'error': f'Installáció sikertelen, rc={rc}', 'stdout': _stdout, 'stderr': _stderr})
             except Exception as e:
                 logger.exception(f"[INSTALL_SELECTED] Kivétel installálás közben: repo={repo}, branch={branch}, error={e}")
                 errors.append({'repo': repo, 'branch': branch, 'error': str(e)})
+        if installed:
+            save_execution_results()
         if errors:
             logger.error(f"[INSTALL_SELECTED] Hibák a letöltés során: {errors}")
             return jsonify({'success': False, 'installed': installed, 'errors': errors}), 500
         logger.info(f"[INSTALL_SELECTED] Sikeres letöltés: {installed}")
-        # --- Automatikus újraindítás eltávolítva, csak logolás marad ---
         return jsonify({'success': True, 'installed': installed})
     except Exception as e:
         logger.exception(f"[INSTALL_SELECTED] Váratlan szerverhiba: {e}")
@@ -1101,7 +1136,29 @@ def install_robot_with_params(repo: str, branch: str):
     else:
         logger.info(f"[INSTALL] .venv mappa már létezik: {venv_dir}")
     logger.info(f"[INSTALL] install_robot_with_params sikeresen lefutott: repo='{repo}', branch='{branch}', branch_dir='{branch_dir}'")
-    return 0, branch_dir, 'Install OK', ''
+    # --- Eredmény log generálása a results mappába ---
+    try:
+        results_dir_name = f"{safe_repo}__{safe_branch}__{timestamp}"
+        results_dir_abs = os.path.abspath(os.path.join('results', results_dir_name))
+        os.makedirs(results_dir_abs, exist_ok=True)
+        log_path = os.path.join(results_dir_abs, 'log.html')
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write(f"""
+                <html><head><meta charset='utf-8'><title>Letöltési log</title></head><body>
+                <h2>Robot letöltés sikeres</h2>
+                <ul>
+                    <li>Repo: {repo}</li>
+                    <li>Branch: {branch}</li>
+                    <li>Időpont: {timestamp}</li>
+                    <li>Könyvtár: {branch_dir}</li>
+                </ul>
+                <p style='color:green;'>A robot sikeresen le lett töltve és telepítve.</p>
+                </body></html>
+            """)
+        logger.info(f"[INSTALL] Letöltési log.html létrehozva: {log_path}")
+    except Exception as e:
+        logger.error(f"[INSTALL][ERROR] Nem sikerült letöltési logot írni: {e}")
+    return 0, results_dir_name, 'Install OK', ''
 # --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
 
 # --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
