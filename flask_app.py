@@ -285,9 +285,26 @@ def run_robot_with_params(repo: str, branch: str):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     safe_repo = (repo or 'unknown').replace('/', '_')
     safe_branch = (branch or 'unknown').replace('/', '_')
+
     results_dir_rel = f'{safe_repo}__{safe_branch}__{timestamp}'
-    results_dir_abs = os.path.abspath(os.path.join('results', results_dir_rel))
+    # Log könyvtár beolvasása variables.robot-ból
+    log_files_dir = _normalize_dir_from_vars('LOG_FILES')
+    # Ha a LOG_FILES változóban %USERPROFILE% vagy ~ szerepel, cseréljük ki a tényleges home könyvtárra
+    if '%USERPROFILE%' in log_files_dir or '~' in log_files_dir:
+        home = os.path.expanduser('~')
+        log_files_dir = log_files_dir.replace('%USERPROFILE%', home).replace('~', home)
+    results_dir_abs = os.path.abspath(os.path.join(log_files_dir, results_dir_rel))
     os.makedirs(results_dir_abs, exist_ok=True)
+
+    # Mentsük el a relatív log könyvtár nevét a LOG_FILES/current_log_dir.txt fájlba
+    try:
+        current_log_dir_file = os.path.join(log_files_dir, 'current_log_dir.txt')
+        logger.info(f"[LOGDIR] current_log_dir.txt létrehozása: {current_log_dir_file} (érték: {results_dir_rel})")
+        with open(current_log_dir_file, 'w', encoding='utf-8') as f:
+            f.write(results_dir_rel)
+        logger.info(f"[LOGDIR] current_log_dir.txt sikeresen létrejött: {current_log_dir_file}")
+    except Exception as e:
+        logger.warning(f"[LOGDIR] Nem sikerült current_log_dir.txt-t írni: {e}")
 
     suite_path = os.path.abspath('do-selected.robot')
     # Ellenőrzések futtatás előtt
@@ -319,8 +336,9 @@ def run_robot_with_params(repo: str, branch: str):
     cmd = [
         PYTHON_EXECUTABLE, '-m', 'robot.run',
         '-d', results_dir_abs,
-        '--log', 'log.html',
-        '--report', 'report.html',
+        '--log', os.path.join(results_dir_abs, 'log.html'),
+        '--report', os.path.join(results_dir_abs, 'report.html'),
+        '--output', os.path.join(results_dir_abs, 'output.xml'),
         '-v', f'REPO:{repo}',
         '-v', f'BRANCH:{branch}',
         suite_path
@@ -921,13 +939,19 @@ def fetch_log():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/results/<path:subpath>')
-def serve_results(subpath):
-    """Serve files from the results directory securely.
+
+# ÚJ: log.html kiszolgálása a LOG_FILES könyvtárból
+@app.route('/logfiles/<path:subpath>')
+def serve_logfiles(subpath):
+    """Serve files from the LOG_FILES directory securely.
 
     If a directory is requested, try to serve its log.html. Otherwise, serve the specific file.
     """
-    base = os.path.abspath('results')
+    log_files_dir = _normalize_dir_from_vars('LOG_FILES')
+    if '%USERPROFILE%' in log_files_dir or '~' in log_files_dir:
+        home = os.path.expanduser('~')
+        log_files_dir = log_files_dir.replace('%USERPROFILE%', home).replace('~', home)
+    base = os.path.abspath(log_files_dir)
     requested = os.path.abspath(os.path.join(base, subpath))
 
     try:

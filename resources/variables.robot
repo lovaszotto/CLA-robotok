@@ -33,6 +33,9 @@ ${SANDBOX_ROBOTS}       %USERPROFILE%/MyRobotFramework/SandboxRobots
 # A robotok letöltési könyvtárai
 ${DOWNLOADED_ROBOTS}    %USERPROFILE%/MyRobotFramework/DownloadedRobots
 
+# A robotok log könyvtárai
+${LOG_FILES}    %USERPROFILE%/MyRobotFramework/RobotResults
+
 # Automatikus start.bat futtatás engedélyezése
 ${AUTO_LAUNCH_START_BAT}    ${True}
 

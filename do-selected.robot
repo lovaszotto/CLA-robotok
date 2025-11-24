@@ -1,21 +1,137 @@
 *** Settings ***
-Library           OperatingSystem
+
+Suite Setup    Feloldott könyvtár változók
+Library    OperatingSystem
 Library    Process
 Library    String
 Resource    ./resources/keywords.robot
 Resource    ./resources/variables.robot
+Suite Teardown    Log fájlok összefűzése
 
 *** Variables ***
 
 *** Keywords ***
+Log fájlok összefűzése
+    [Documentation]    A futtatás után összefűzi a log fájlokat rebot --rpa paranccsal, a futás elején eltárolt log könyvtárat használva.
+    #
+    # Log fájlok összefűzése
+    # rebot  --rpa output_master.xml output_slave.xml
+
+    # output.xml összefűzése rebot --rpa paranccsal, a futás elején eltárolt log könyvtárat használva
+    # Aktuális log könyvtár beolvasása a backend által generált fájlból (mindig frissítsd Suite Teardown-ban is)
+    ${CURRENT_LOG_DIR_FILE}=    Set Variable    ${LOG_FILES}/current_log_dir.txt
+    ${EXISTS}=    OperatingSystem.File Should Exist    ${CURRENT_LOG_DIR_FILE}
+    ${TMP_LOG_DIR}=    Set Variable    MISSING_LOG_DIR
+    Run Keyword If    ${EXISTS}    Set Variable    ${TMP_LOG_DIR}    ${EMPTY}
+    Run Keyword If    ${EXISTS}    Set Variable    ${TMP_LOG_DIR}    Get File    ${CURRENT_LOG_DIR_FILE}
+    ${CURRENT_LOG_DIR}=    Strip String    ${TMP_LOG_DIR}
+    Log Everywhere    [LOGDIR][TEARDOWN] Aktuális log könyvtár: ${CURRENT_LOG_DIR}
+    ${LOG_OUTPUT_DIR}=    Set Variable    ${LOG_FILES}/${CURRENT_LOG_DIR}
+    # Ellenőrzés: ha a log könyvtár név hiányzik vagy hibás, ne folytasd!
+    IF    '${CURRENT_LOG_DIR}' == '' or '${CURRENT_LOG_DIR}' == 'MISSING_LOG_DIR'
+        Log Everywhere    [HIBÁZOTT] A log könyvtár neve hiányzik vagy hibás (CURRENT_LOG_DIR = ${CURRENT_LOG_DIR}), log merge kihagyva!
+        RETURN
+    END
+    ${LOG_OUTPUT_XML}=    Set Variable    ${LOG_OUTPUT_DIR}/output.xml
+    ${ROBOT_OUTPUT_XML}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/output.xml
+    ${LOG_OUTPUT_XML_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_XML}
+    ${ROBOT_OUTPUT_XML_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${ROBOT_OUTPUT_XML}
+    Log Everywhere    [REBOT][ELLENŐRZÉS] ${LOG_OUTPUT_XML} létezik: ${LOG_OUTPUT_XML_EXISTS}
+    Log Everywhere    [REBOT][ELLENŐRZÉS] ${ROBOT_OUTPUT_XML} létezik: ${ROBOT_OUTPUT_XML_EXISTS}
+
+    # --- output.xml stabilitás ellenőrzése race condition elkerülésére ---
+    ${max_wait_sec}=    Set Variable    10
+    ${check_interval}=    Set Variable    0.5
+    ${stable_count_needed}=    Set Variable    3
+    ${last_size}=    Set Variable    -1
+    ${stable_count}=    Set Variable    0
+    ${elapsed}=    Set Variable    0
+    Log Everywhere    [REBOT][WAIT] output.xml stabilitás ellenőrzése indul: max ${max_wait_sec} másodperc
+    WHILE    ${elapsed} < ${max_wait_sec} and ${stable_count} < ${stable_count_needed}
+        ${exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_XML}
+        IF    ${exists}
+            ${size}=    Get File Size    ${LOG_OUTPUT_XML}
+            IF    ${size} == ${last_size}
+                ${stable_count}=    Evaluate    ${stable_count} + 1
+            ELSE
+                ${stable_count}=    Set Variable    1
+                ${last_size}=    Set Variable    ${size}
+            END
+            Log Everywhere    [REBOT][WAIT] output.xml méret: ${size}, stabil: ${stable_count}/${stable_count_needed}
+        ELSE
+            Log Everywhere    [REBOT][WAIT] output.xml még nem létezik
+            ${stable_count}=    Set Variable    0
+            ${last_size}=    Set Variable    -1
+        END
+        Sleep    ${check_interval}
+        ${elapsed}=    Evaluate    ${elapsed} + ${check_interval}
+    END
+    Log Everywhere    [REBOT][WAIT] output.xml stabilitás ellenőrzés vége, stabil: ${stable_count} (max: ${stable_count_needed})
+    # output.xml tartalom ellenőrzése IF/END blokkokkal
+    ${log_output_xml_valid}=    Set Variable    True
+    IF    ${LOG_OUTPUT_XML_EXISTS}
+        ${log_output_xml_size}=    Get File Size    ${LOG_OUTPUT_XML}
+        Log Everywhere    [REBOT][ELLENŐRZÉS] ${LOG_OUTPUT_XML} mérete: ${log_output_xml_size}
+        ${log_output_xml_content}=    Get File    ${LOG_OUTPUT_XML}
+        ${log_output_xml_valid}=    Run Keyword And Return Status    Should Contain    ${log_output_xml_content}    </robot>
+        IF    not ${log_output_xml_valid}
+            Log Everywhere    [HIBÁZOTT] ${LOG_OUTPUT_XML} hibás vagy csonka! Hiányzik a </robot> záró tag!
+        END
+        IF    ${log_output_xml_size} == 0
+            Log Everywhere    [HIBÁZOTT] ${LOG_OUTPUT_XML} üres fájl!
+        END
+    END
+    # Ugyanez a másik output.xml-re
+    ${robot_output_xml_valid}=    Set Variable    True
+    IF    ${ROBOT_OUTPUT_XML_EXISTS}
+        ${robot_output_xml_size}=    Get File Size    ${ROBOT_OUTPUT_XML}
+        Log Everywhere    [REBOT][ELLENŐRZÉS] ${ROBOT_OUTPUT_XML} mérete: ${robot_output_xml_size}
+        ${robot_output_xml_content}=    Get File    ${ROBOT_OUTPUT_XML}
+        ${robot_output_xml_valid}=    Run Keyword And Return Status    Should Contain    ${robot_output_xml_content}    </robot>
+        IF    not ${robot_output_xml_valid}
+            Log Everywhere    [HIBÁZOTT] ${ROBOT_OUTPUT_XML} hibás vagy csonka! Hiányzik a </robot> záró tag!
+        END
+        IF    ${robot_output_xml_size} == 0
+            Log Everywhere    [HIBÁZOTT] ${ROBOT_OUTPUT_XML} üres fájl!
+        END
+    END
+    Log Everywhere    [REBOT] Fájlok összefűzése: ${LOG_OUTPUT_XML} + ${ROBOT_OUTPUT_XML}
+    ${log_output_dir_exists}=    Run Keyword And Return Status    OperatingSystem.Directory Should Exist    ${LOG_OUTPUT_DIR}
+    IF    ${log_output_dir_exists}
+        ${rebot_result}=    Run Process    rebot    --rpa    --log    ${LOG_OUTPUT_DIR}/mergedlog.html    --report    ${LOG_OUTPUT_DIR}/mergedreport.html    ${LOG_OUTPUT_XML}    ${ROBOT_OUTPUT_XML}    shell=True    cwd=${LOG_OUTPUT_DIR}    timeout=60s
+        Run Keyword If    '${rebot_result}' == 'None'    Log Everywhere    [HIBÁZOTT] rebot_result None! A rebot processz nem indult el vagy hibás paramétereket kapott.
+        Run Keyword If    '${rebot_result}' != 'None'    Log Everywhere    [REBOT] rc: ${rebot_result.rc}
+        Run Keyword If    '${rebot_result}' != 'None'    Log Everywhere    [REBOT] stdout: ${rebot_result.stdout}
+        Run Keyword If    '${rebot_result}' != 'None'    Log Everywhere    [REBOT] stderr: ${rebot_result.stderr}
+        ${MERGED_LOG_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_DIR}/mergedlog.html
+        Run Keyword If    not ${MERGED_LOG_EXISTS} and '${rebot_result}' != 'None'    Log Everywhere    [HIBÁZOTT] mergedlog.html NEM jött létre! stdout: ${rebot_result.stdout} stderr: ${rebot_result.stderr}
+        Run Keyword If    not ${MERGED_LOG_EXISTS}    Log Everywhere    [HIBÁZOTT] Ellenőrizd, hogy a bemeneti output.xml fájlok léteznek-e!
+    ELSE
+        Log Everywhere    [HIBÁZOTT] A log könyvtár nem létezik: ${LOG_OUTPUT_DIR}, rebot futtatás kihagyva!
+    END
+    Log Everywhere     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
+    Log Everywhere     WORKFLOW_STATUS = ${WORKFLOW_STATUS}
+
 Feloldott könyvtár változók
-    ${DOWNLOADED_ROBOTS}=    Expand Environment Variables    ${DOWNLOADED_ROBOTS}
+
+    ${USERPROFILE}=    Get Environment Variable    USERPROFILE
+    ${DOWNLOADED_ROBOTS}=    Set Variable    ${USERPROFILE}/MyRobotFramework/DownloadedRobots
     Set Suite Variable    ${DOWNLOADED_ROBOTS}
-    ${SANDBOX_ROBOTS}=       Expand Environment Variables    ${SANDBOX_ROBOTS}
+    ${SANDBOX_ROBOTS}=    Set Variable    ${USERPROFILE}/MyRobotFramework/SandboxRobots
     Set Suite Variable    ${SANDBOX_ROBOTS}
+    ${LOG_FILES}=    Set Variable    ${USERPROFILE}/MyRobotFramework/RobotResults
+    Set Suite Variable    ${LOG_FILES}
 
-
-
+    # Aktuális log könyvtár beolvasása a backend által generált fájlból
+    ${CURRENT_LOG_DIR_FILE}=    Set Variable    ${LOG_FILES}/current_log_dir.txt
+    ${EXISTS}=    OperatingSystem.File Should Exist    ${CURRENT_LOG_DIR_FILE}
+    ${TMP_LOG_DIR}=    Set Variable    MISSING_LOG_DIR
+    Run Keyword If    ${EXISTS}    Set Variable    ${TMP_LOG_DIR}    ${EMPTY}
+    Run Keyword If    ${EXISTS}    Set Variable    ${TMP_LOG_DIR}    Get File    ${CURRENT_LOG_DIR_FILE}
+    ${CURRENT_LOG_DIR}=    Strip String    ${TMP_LOG_DIR}
+    Set Suite Variable    ${CURRENT_LOG_DIR}
+    Set Global Variable    ${CURRENT_LOG_DIR}    ${CURRENT_LOG_DIR}
+    Log Everywhere    [LOGDIR] Aktuális log könyvtár: ${CURRENT_LOG_DIR}
 
 *** Test Cases ***
     # Feloldott könyvtár változók (kulcsszó, nem teszteset)
@@ -226,8 +342,9 @@ Telepítés sikeresség ellenőrzése
         END
     END
     
+
 Robot futtatása
-  [Documentation]    Futtatjuk a start.bat fájlt
+  [Documentation]    Futtatjuk a start.bat fájlt, és elmentjük a log könyvtár nevét.
   #Log To Console     \n=== ROBOT FUTTATÁSA, ha 'READY_TO_RUN' ===${WORKFLOW_STATUS}
   IF    ${AUTO_LAUNCH_START_BAT} == True
       IF    ${WORKFLOW_STATUS} == 'READY_TO_RUN'    
@@ -235,9 +352,18 @@ Robot futtatása
           Log Everywhere     [FUTTATÁS] WORKFLOW_STATUS: ${WORKFLOW_STATUS}
           Log Everywhere     [FUTTATÁS] REPO: ${REPO}
           Log Everywhere     [FUTTATÁS] BRANCH: ${BRANCH}
-                ${RUN_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
-            Log Everywhere     [FUTTATÁS] start.bat elérési út: ${RUN_SCRIPT}
-            Log Everywhere     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+          ${RUN_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+          Log Everywhere     [FUTTATÁS] start.bat elérési út: ${RUN_SCRIPT}
+          Log Everywhere     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+
+
+          # Új log könyvtár létrehozása timestamp alapján
+          ${timestamp}=    Evaluate    __import__('datetime').datetime.now().strftime('%Y%m%d_%H%M%S')
+          ${CURRENT_LOG_DIR}=    Set Variable    ${REPO}__${BRANCH}__${timestamp}
+          ${LOG_OUTPUT_DIR}=    Set Variable    ${LOG_FILES}/${CURRENT_LOG_DIR}
+          Create Directory    ${LOG_OUTPUT_DIR}
+          Set Suite Variable    ${CURRENT_LOG_DIR}
+          Log Everywhere     [FUTTATÁS] Új log könyvtár létrehozva: ${CURRENT_LOG_DIR}
 
           Log Everywhere     [FUTTATÁS] Robot script indítása blokkoló módon: ${RUN_SCRIPT}
           ${WORKDIR}=    Evaluate    os.path.normpath(r'''${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}''')    modules=os
@@ -250,20 +376,18 @@ Robot futtatása
           ELSE
               Log Everywhere     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás futtatása sikertelen: ${run_result.stderr}
           END
+
           Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
           Log Everywhere    [FUTTATÁS] Robot indítása befejezve, a szerver tényleg megvárta a futás végét    
-        ELSE IF    ${SANDBOX_MODE} == True and ${WORKFLOW_STATUS} == 'ALL_DONE'
+      ELSE IF    ${SANDBOX_MODE} == True and ${WORKFLOW_STATUS} == 'ALL_DONE'
           # SANDBOX módban közvetlenül futtatás a letöltött könyvtárból
           Log Everywhere     \n=== SANDBOX ROBOT FUTTATÁSA ===
-        ${SANDBOX_RUN_SCRIPT}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}/start.bat
+          ${SANDBOX_RUN_SCRIPT}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}/start.bat
           ${sandbox_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${SANDBOX_RUN_SCRIPT}
-          
           IF    ${sandbox_script_exists}
               Log Everywhere     Robot futtatása SANDBOX módban: ${SANDBOX_RUN_SCRIPT}
-              
               # Popup ablakban futtatás: a CWD-ben lévő start.bat-ot indítjuk
               ${sandbox_run_result}=    Run Process    cmd    /c    start    ""    start.bat    shell=True    cwd=${SANDBOX_ROBOTS}/${REPO}/${BRANCH}    timeout=60s
-              
               IF    ${sandbox_run_result.rc} == 0
                   Log Everywhere     ${REPO}/${BRANCH} SANDBOX alkalmazás sikeresen elindult popup ablakban
               ELSE
@@ -287,5 +411,56 @@ Robot futtatása
       Log Everywhere     [FUTTATÁS] start.bat automatikus indítása kihagyva (AUTO_LAUNCH_START_BAT = ${AUTO_LAUNCH_START_BAT})
       Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
   END
+
+#Log fájlok összefűzése
+#    [Documentation]    A futtatás után összefűzi a log fájlokat rebot --rpa paranccsal, a futás elején eltárolt log könyvtárat használva.
+#    #
+#    # Log fájlok összefűzése
+#    # rebot  --rpa output_master.xml output_slave.xml
+
+    # output.xml összefűzése rebot --rpa paranccsal, a futás elején eltárolt log könyvtárat használva
+#    ${LOG_OUTPUT_DIR}=    Set Variable    ${LOG_FILES}/${CURRENT_LOG_DIR}
+#    ${LOG_OUTPUT_XML}=    Set Variable    ${LOG_OUTPUT_DIR}/output.xml
+#    ${ROBOT_OUTPUT_XML}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/output.xml
+#    ${LOG_OUTPUT_XML_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_XML}
+#    ${ROBOT_OUTPUT_XML_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${ROBOT_OUTPUT_XML}
+#    Log Everywhere    [REBOT][ELLENŐRZÉS] ${LOG_OUTPUT_XML} létezik: ${LOG_OUTPUT_XML_EXISTS}
+#    Log Everywhere    [REBOT][ELLENŐRZÉS] ${ROBOT_OUTPUT_XML} létezik: ${ROBOT_OUTPUT_XML_EXISTS}
+    # output.xml tartalom ellenőrzése IF/END blokkokkal
+#    ${log_output_xml_valid}=    Set Variable    True
+#    IF    ${LOG_OUTPUT_XML_EXISTS}
+#        ${log_output_xml_size}=    Get File Size    ${LOG_OUTPUT_XML}
+#        Log Everywhere    [REBOT][ELLENŐRZÉS] ${LOG_OUTPUT_XML} mérete: ${log_output_xml_size}
+#        ${log_output_xml_content}=    Get File    ${LOG_OUTPUT_XML}
+#        ${log_output_xml_valid}=    Run Keyword And Return Status    Should Contain    ${log_output_xml_content}    </robot>
+#        IF    not ${log_output_xml_valid}
+#            Log Everywhere    [HIBÁZOTT] ${LOG_OUTPUT_XML} hibás vagy csonka! Hiányzik a </robot> záró tag!
+#        END
+#        IF    ${log_output_xml_size} == 0
+#            Log Everywhere    [HIBÁZOTT] ${LOG_OUTPUT_XML} üres fájl!
+#        END
+#    END
+#    # Ugyanez a másik output.xml-re
+#    ${robot_output_xml_valid}=    Set Variable    True
+#    IF    ${ROBOT_OUTPUT_XML_EXISTS}
+#        ${robot_output_xml_size}=    Get File Size    ${ROBOT_OUTPUT_XML}
+#        Log Everywhere    [REBOT][ELLENŐRZÉS] ${ROBOT_OUTPUT_XML} mérete: ${robot_output_xml_size}
+#        ${robot_output_xml_content}=    Get File    ${ROBOT_OUTPUT_XML}
+#        ${robot_output_xml_valid}=    Run Keyword And Return Status    Should Contain    ${robot_output_xml_content}    </robot>
+#        IF    not ${robot_output_xml_valid}
+#            Log Everywhere    [HIBÁZOTT] ${ROBOT_OUTPUT_XML} hibás vagy csonka! Hiányzik a </robot> záró tag!
+#        END
+#        IF    ${robot_output_xml_size} == 0
+#            Log Everywhere    [HIBÁZOTT] ${ROBOT_OUTPUT_XML} üres fájl!
+#        END
+#    END
+#    Log Everywhere    [REBOT] Fájlok összefűzése: ${LOG_OUTPUT_XML} + ${ROBOT_OUTPUT_XML}
+#    ${rebot_result}=    Run Process    rebot    --rpa    --log    ${LOG_OUTPUT_DIR}/mergedlog.html    --report    ${LOG_OUTPUT_DIR}/mergedreport.html    ${LOG_OUTPUT_XML}    ${ROBOT_OUTPUT_XML}    shell=True    cwd=${LOG_OUTPUT_DIR}    timeout=60s
+#    Log Everywhere    [REBOT] rc: ${rebot_result.rc}
+#    Log Everywhere    [REBOT] stdout: ${rebot_result.stdout}
+#    Log Everywhere    [REBOT] stderr: ${rebot_result.stderr}
+#    ${MERGED_LOG_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_DIR}/mergedlog.html
+#    Run Keyword If    not ${MERGED_LOG_EXISTS}    Log Everywhere    [HIBÁZOTT] mergedlog.html NEM jött létre! stdout: ${rebot_result.stdout} stderr: ${rebot_result.stderr}
+#    Run Keyword If    not ${MERGED_LOG_EXISTS}    Log Everywhere    [HIBÁZOTT] Ellenőrizd, hogy a bemeneti output.xml fájlok léteznek-e!
     Log Everywhere     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log Everywhere     WORKFLOW_STATUS = ${WORKFLOW_STATUS}
