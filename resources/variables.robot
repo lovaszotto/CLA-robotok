@@ -27,11 +27,11 @@ ${ROOT_FOLDER}    ~/MyRobotFramework/
 
 #developer módban csak letöltjük a robotokat, de nem telepítjük
 ${SANDBOX_MODE}         ${False}
-${SANDBOX_ROBOTS}       ~/MyRobotFramework/SandboxRobots/
+${SANDBOX_ROBOTS}       %USERPROFILE%/MyRobotFramework/SandboxRobots
 
 
 # A robotok letöltési könyvtárai
-${DOWNLOADED_ROBOTS}    ~/MyRobotFramework/DownloadedRobots/
+${DOWNLOADED_ROBOTS}    %USERPROFILE%/MyRobotFramework/DownloadedRobots
 
 # Automatikus start.bat futtatás engedélyezése
 ${AUTO_LAUNCH_START_BAT}    ${True}

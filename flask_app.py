@@ -582,18 +582,18 @@ def api_start_robot():
 
         safe_repo = repo.replace('/', '_')
         safe_branch = branch.replace('/', '_')
-        target_dir = os.path.join(base_dir, safe_repo, safe_branch)
+        target_dir = os.path.normpath(os.path.join(base_dir, safe_repo, safe_branch))
         start_bat = os.path.join(target_dir, 'start.bat')
         logger.info(f"[ROBOT ELLENŐRZÉS] Indítás target_dir: {target_dir}, start_bat: {start_bat}")
 
         if not os.path.isdir(target_dir):
-            print(f"[START_ROBOT] HIBA: Könyvtár nem található: {target_dir}")
+            logger.error(f"[START_ROBOT] HIBA: Könyvtár nem található vagy érvénytelen: {target_dir}")
             return jsonify({
                 'success': False,
-                'error': f'Könyvtár nem található: {target_dir}'
+                'error': f'Érvénytelen vagy nem létező könyvtár: {target_dir}'
             }), 404
         if not os.path.exists(start_bat):
-            print(f"[START_ROBOT] HIBA: start.bat nem található: {start_bat}")
+            logger.error(f"[START_ROBOT] HIBA: start.bat nem található: {start_bat}")
             return jsonify({
                 'success': False,
                 'error': f'start.bat nem található: {start_bat}'

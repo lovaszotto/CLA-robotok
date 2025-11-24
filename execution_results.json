@@ -1,14 +1,12 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-24 05:29:03",
-    "repo": "SzotarRobi",
-    "branch": "Szó-kikérdező",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251124_052814",
-    "type": "install",
-    "stdout": "Install OK",
-    "stderr": ""
+    "timestamp": "2025-11-24 07:48:35",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251124_074835",
+    "type": "bulk"
   }
 ]

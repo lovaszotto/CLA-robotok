@@ -7,10 +7,27 @@ Resource    ./resources/variables.robot
 
 *** Variables ***
 
+*** Keywords ***
+Feloldott könyvtár változók
+    ${DOWNLOADED_ROBOTS}=    Expand Environment Variables    ${DOWNLOADED_ROBOTS}
+    Set Suite Variable    ${DOWNLOADED_ROBOTS}
+    ${SANDBOX_ROBOTS}=       Expand Environment Variables    ${SANDBOX_ROBOTS}
+    Set Suite Variable    ${SANDBOX_ROBOTS}
+
+
 
 
 *** Test Cases ***
+    Feloldott könyvtár változók
 Kiírás konzolra paraméterekből
+    # Dinamikus könyvtár változók beállítása a környezeti USERPROFILE alapján
+    ${USERPROFILE}=    Get Environment Variable    USERPROFILE
+    ${DOWNLOADED_ROBOTS}=    Set Variable    ${USERPROFILE}/MyRobotFramework/DownloadedRobots
+    ${SANDBOX_ROBOTS}=       Set Variable    ${USERPROFILE}/MyRobotFramework/SandboxRobots
+    Set Suite Variable    ${DOWNLOADED_ROBOTS}
+    Set Suite Variable    ${SANDBOX_ROBOTS}
+    Set Suite Variable    ${DOWNLOADED_ROBOTS}
+    Set Suite Variable    ${SANDBOX_ROBOTS}
     [Documentation]    A kapott REPO és BRANCH változók értékeinek kiírása.
     Log Everywhere     \n=== KIVÁLASZTOTT ROBOT ===
     Log Everywhere     [DEBUG] SANDBOX_MODE értéke: ${SANDBOX_MODE}
@@ -223,7 +240,8 @@ Robot futtatása
             Log Everywhere     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
 
           Log Everywhere     [FUTTATÁS] Robot script indítása blokkoló módon: ${RUN_SCRIPT}
-          ${run_result}=    Run Process    ${RUN_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=600s
+          ${WORKDIR}=    Evaluate    os.path.normpath(r'''${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}''')    modules=os
+          ${run_result}=    Run Process    ${RUN_SCRIPT}    shell=True    cwd=${WORKDIR}    timeout=600s
           Log Everywhere     [FUTTATÁS] Run Process rc: ${run_result.rc}
           Log Everywhere     [FUTTATÁS] Run Process stdout: ${run_result.stdout}
           Log Everywhere     [FUTTATÁS] Run Process stderr: ${run_result.stderr}
