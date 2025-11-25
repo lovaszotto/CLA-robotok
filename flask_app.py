@@ -299,12 +299,19 @@ def run_robot_with_params(repo: str, branch: str):
     # Mentsük el a relatív log könyvtár nevét a LOG_FILES/current_log_dir.txt fájlba
     try:
         current_log_dir_file = os.path.join(log_files_dir, 'current_log_dir.txt')
-        logger.info(f"[LOGDIR] current_log_dir.txt létrehozása: {current_log_dir_file} (érték: {results_dir_rel})")
+        logger.info(f"[LOGDIR] current_log_dir.txt írási kísérlet: {current_log_dir_file} (érték: {results_dir_rel})")
+        file_existed = os.path.exists(current_log_dir_file)
         with open(current_log_dir_file, 'w', encoding='utf-8') as f:
             f.write(results_dir_rel)
-        logger.info(f"[LOGDIR] current_log_dir.txt sikeresen létrejött: {current_log_dir_file}")
+        if not file_existed:
+            logger.info(f"[LOGDIR] current_log_dir.txt ÚJ fájl létrehozva: {current_log_dir_file}")
+        else:
+            logger.info(f"[LOGDIR] current_log_dir.txt felülírva: {current_log_dir_file}")
+        logger.info(f"[LOGDIR] current_log_dir.txt sikeresen kiírva: {current_log_dir_file}")
     except Exception as e:
-        logger.warning(f"[LOGDIR] Nem sikerült current_log_dir.txt-t írni: {e}")
+        logger.error(f"[LOGDIR][ERROR] current_log_dir.txt írása sikertelen! Elérési út: {current_log_dir_file}, érték: {results_dir_rel}, hiba: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
     suite_path = os.path.abspath('do-selected.robot')
     # Ellenőrzések futtatás előtt
