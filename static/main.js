@@ -62,7 +62,11 @@ function refreshServerLog() {
                 const pre = document.getElementById('serverLogPre');
                 console.log('[LOGTAB] pre elem:', pre);
                 if (pre) {
-                    pre.textContent = text || '[üres]';
+                    if (text && text.trim().length > 0) {
+                        pre.textContent = text;
+                    } else {
+                        pre.textContent = '[Nincs log tartalom]';
+                    }
                 } else {
                     console.warn('[LOGTAB] Nincs pre elem!');
                 }

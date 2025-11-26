@@ -4,6 +4,7 @@ Suite Setup    Feloldott könyvtár változók
 Library    OperatingSystem
 Library    Process
 Library    String
+Library     ./libraries/RealtimeProcess.py
 Resource    ./resources/keywords.robot
 Resource    ./resources/variables.robot
 Suite Teardown    Log fájlok összefűzése
@@ -306,22 +307,33 @@ Robot futtatása
           Log     [FUTTATÁS] WORKFLOW_STATUS: ${WORKFLOW_STATUS}
           Log     [FUTTATÁS] REPO: ${REPO}
           Log     [FUTTATÁS] BRANCH: ${BRANCH}
-          ${RUN_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
-          Log     [FUTTATÁS] start.bat elérési út: ${RUN_SCRIPT}
-          Log     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
-
+        
+        
           # Log könyvtár nevét csak a backend (flask_app.py) generálja és írja current_log_dir.txt-be
           # Itt csak olvassuk a Suite Setup-ban beállított CURRENT_LOG_DIR értéket
           ${LOG_OUTPUT_DIR}=    Set Variable    ${LOG_FILES}/${CURRENT_LOG_DIR}
           Log     [FUTTATÁS] Log könyvtár: ${LOG_OUTPUT_DIR}
+          Log     [FUTTATÁS] Futtatás könyvtára: ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
 
-          Log     [FUTTATÁS] Robot script indítása blokkoló módon: ${RUN_SCRIPT}
           ${WORKDIR}=    Evaluate    os.path.normpath(r'''${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}''')    modules=os
-          ${run_result}=    Run Process    ${RUN_SCRIPT}      shell=True    cwd=${WORKDIR}    timeout=600s
-          Log     [FUTTATÁS] Run Process rc: ${run_result.rc}
-          Log     [FUTTATÁS] Run Process stdout: ${run_result.stdout}
-          Log     [FUTTATÁS] Run Process stderr: ${run_result.stderr}
-          IF    ${run_result.rc} == 0
+          #${SERVERLOG_FILE}=    Evaluate    os.path.normpath(r'''./serverlog.log''')    modules=os
+          #adja össze a SERVERLOG_FILE elérési útját a log könyvtárral
+          ${SERVERLOG_FILE}=    Evaluate    os.path.normpath(r'''${WORKDIR}/server.log''')    modules=os
+         Log     [FUTTATÁS] WORKDIR:${WORKDIR}   
+         Log     [FUTTATÁS] SERVERLOG_FILE:${SERVERLOG_FILE}   
+         
+
+          #${RUN_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat | tee  ${SERVERLOG_FILE}serverlog.log
+          ${RUN_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat 
+          Log     [FUTTATÁS] Robot script indítása blokkoló módon: ${RUN_SCRIPT}
+          
+          #${run_result}=    Run Process    ${RUN_SCRIPT}      shell=True    cwd=${WORKDIR}    timeout=600s     stdout=${SERVERLOG_FILE}    stderr=${SERVERLOG_FILE}    
+          ${run_result}=    Run Realtime To Log    ${RUN_SCRIPT}    ${SERVERLOG_FILE}    cwd=${WORKDIR}
+         #${run_result}=    Run Process    ${RUN_SCRIPT}      shell=True    cwd=${WORKDIR}    timeout=600s 
+          #${run_result}=    Run Process    cmd    /c    start    ""    "${RUN_SCRIPT}"    shell=True       cwd=${WORKDIR}    timeout=600s
+          Log     [FUTTATÁS] Run Process rc: ${run_result}
+          # stdout és stderr nem elérhető, mert csak returncode van
+          IF    ${run_result} == 0
               Log     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás sikeresen lefutott.
           ELSE
               Log     [FUTTATÁS] ${REPO}/${BRANCH} alkalmazás futtatása sikertelen: ${run_result.stderr}
@@ -361,56 +373,5 @@ Robot futtatása
     Log     [FUTTATÁS] start.bat automatikus indítása kihagyva (AUTO_LAUNCH_START_BAT = ${AUTO_LAUNCH_START_BAT})
       Set Global Variable    ${WORKFLOW_STATUS}    'ALL_DONE'
   END
-
-#Log fájlok összefűzése
-#    [Documentation]    A futtatás után összefűzi a log fájlokat rebot --rpa paranccsal, a futás elején eltárolt log könyvtárat használva.
-#    #
-#    # Log fájlok összefűzése
-#    # rebot  --rpa output_master.xml output_slave.xml
-
-    # output.xml összefűzése rebot --rpa paranccsal, a futás elején eltárolt log könyvtárat használva
-#    ${LOG_OUTPUT_DIR}=    Set Variable    ${LOG_FILES}/${CURRENT_LOG_DIR}
-#    ${LOG_OUTPUT_XML}=    Set Variable    ${LOG_OUTPUT_DIR}/output.xml
-#    ${ROBOT_OUTPUT_XML}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/output.xml
-#    ${LOG_OUTPUT_XML_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_XML}
-#    ${ROBOT_OUTPUT_XML_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${ROBOT_OUTPUT_XML}
-#    Log    [REBOT][ELLENŐRZÉS] ${LOG_OUTPUT_XML} létezik: ${LOG_OUTPUT_XML_EXISTS}
-#    Log    [REBOT][ELLENŐRZÉS] ${ROBOT_OUTPUT_XML} létezik: ${ROBOT_OUTPUT_XML_EXISTS}
-    # output.xml tartalom ellenőrzése IF/END blokkokkal
-#    ${log_output_xml_valid}=    Set Variable    True
-#    IF    ${LOG_OUTPUT_XML_EXISTS}
-#        ${log_output_xml_size}=    Get File Size    ${LOG_OUTPUT_XML}
-#        Log    [REBOT][ELLENŐRZÉS] ${LOG_OUTPUT_XML} mérete: ${log_output_xml_size}
-#        ${log_output_xml_content}=    Get File    ${LOG_OUTPUT_XML}
-#        ${log_output_xml_valid}=    Run Keyword And Return Status    Should Contain    ${log_output_xml_content}    </robot>
-#        IF    not ${log_output_xml_valid}
-#            Log    [HIBÁZOTT] ${LOG_OUTPUT_XML} hibás vagy csonka! Hiányzik a </robot> záró tag!
-#        END
-#        IF    ${log_output_xml_size} == 0
-#            Log    [HIBÁZOTT] ${LOG_OUTPUT_XML} üres fájl!
-#        END
-#    END
-#    # Ugyanez a másik output.xml-re
-#    ${robot_output_xml_valid}=    Set Variable    True
-#    IF    ${ROBOT_OUTPUT_XML_EXISTS}
-#        ${robot_output_xml_size}=    Get File Size    ${ROBOT_OUTPUT_XML}
-#        Log    [REBOT][ELLENŐRZÉS] ${ROBOT_OUTPUT_XML} mérete: ${robot_output_xml_size}
-#        ${robot_output_xml_content}=    Get File    ${ROBOT_OUTPUT_XML}
-#        ${robot_output_xml_valid}=    Run Keyword And Return Status    Should Contain    ${robot_output_xml_content}    </robot>
-#        IF    not ${robot_output_xml_valid}
-#            Log    [HIBÁZOTT] ${ROBOT_OUTPUT_XML} hibás vagy csonka! Hiányzik a </robot> záró tag!
-#        END
-#        IF    ${robot_output_xml_size} == 0
-#            Log    [HIBÁZOTT] ${ROBOT_OUTPUT_XML} üres fájl!
-#        END
-#    END
-#    Log    [REBOT] Fájlok összefűzése: ${LOG_OUTPUT_XML} + ${ROBOT_OUTPUT_XML}
-#    ${rebot_result}=    Run Process    rebot    --rpa    --log    ${LOG_OUTPUT_DIR}/mergedlog.html    --report    ${LOG_OUTPUT_DIR}/mergedreport.html    ${LOG_OUTPUT_XML}    ${ROBOT_OUTPUT_XML}    shell=True    cwd=${LOG_OUTPUT_DIR}    timeout=60s
-#    Log    [REBOT] rc: ${rebot_result.rc}
-#    Log    [REBOT] stdout: ${rebot_result.stdout}
-#    Log    [REBOT] stderr: ${rebot_result.stderr}
-#    ${MERGED_LOG_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_DIR}/mergedlog.html
-#    Run Keyword If    not ${MERGED_LOG_EXISTS}    Log    [HIBÁZOTT] mergedlog.html NEM jött létre! stdout: ${rebot_result.stdout} stderr: ${rebot_result.stderr}
-#    Run Keyword If    not ${MERGED_LOG_EXISTS}    Log    [HIBÁZOTT] Ellenőrizd, hogy a bemeneti output.xml fájlok léteznek-e!
     Log     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log     WORKFLOW_STATUS = ${WORKFLOW_STATUS}

@@ -1,42 +1,12 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-26 03:54:17",
+    "timestamp": "2025-11-26 14:38:06",
     "repo": "KBSZ-robotok",
     "branch": "KB01-Közbeszerzési-Értesítő",
     "status": "success",
     "returncode": 0,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
-    "type": "bulk"
-  },
-  {
-    "id": 2,
-    "timestamp": "2025-11-26 03:58:55",
-    "repo": "KBSZ-robotok",
-    "branch": "KB01-Közbeszerzési-Értesítő",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
-    "type": "bulk"
-  },
-  {
-    "id": 3,
-    "timestamp": "2025-11-26 04:13:04",
-    "repo": "KBSZ-robotok",
-    "branch": "KB01-Közbeszerzési-Értesítő",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
-    "type": "bulk"
-  },
-  {
-    "id": 4,
-    "timestamp": "2025-11-26 04:17:29",
-    "repo": "IKK-Robotok",
-    "branch": "IKK01_Duplikáció-ellenőrzés",
-    "status": "failed",
-    "returncode": 9,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_143806",
     "type": "bulk"
   }
 ]

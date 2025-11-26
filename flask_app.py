@@ -306,6 +306,27 @@ def run_robot_with_params(repo: str, branch: str):
     Visszatér: (returncode, results_dir_rel, stdout, stderr)
     """
     # A log/result könyvtár nevét és a CURRENT_LOG_DIR-t a backend generálja, nem a Robot Framework.
+
+    # --- Töröljük a server.log tartalmát minden futtatás előtt ---
+    try:
+        backend_log_path = _get_backend_log_path()
+        with open(backend_log_path, 'w', encoding='utf-8') as f:
+            f.write('')
+    except Exception:
+        pass
+
+    # --- Töröljük a LOG_FILES/current_log_dir.txt fájlt is ---
+    try:
+        log_files_dir = _normalize_dir_from_vars('LOG_FILES')
+        if '%USERPROFILE%' in log_files_dir or '~' in log_files_dir:
+            home = os.path.expanduser('~')
+            log_files_dir = log_files_dir.replace('%USERPROFILE%', home).replace('~', home)
+        current_log_dir_path = os.path.join(log_files_dir, 'current_log_dir.txt')
+        if os.path.exists(current_log_dir_path):
+            os.remove(current_log_dir_path)
+    except Exception:
+        pass
+
     log_files_dir = _normalize_dir_from_vars('LOG_FILES')
     # Ha %USERPROFILE% vagy ~ szerepel, cseréljük ki a tényleges home könyvtárra
     if '%USERPROFILE%' in log_files_dir or '~' in log_files_dir:
@@ -1012,6 +1033,24 @@ def get_html_template(is_sandbox, page_title):
 def api_install_selected():
     """Kijelölt robotok letöltése és telepítése, de nem futtatja őket."""
     try:
+        # --- Töröljük a server.log tartalmát minden letöltés előtt ---
+        try:
+            backend_log_path = _get_backend_log_path()
+            with open(backend_log_path, 'w', encoding='utf-8') as f:
+                f.write('')
+        except Exception:
+            pass
+        # --- Töröljük a LOG_FILES/current_log_dir.txt fájlt is ---
+        try:
+            log_files_dir = _normalize_dir_from_vars('LOG_FILES')
+            if '%USERPROFILE%' in log_files_dir or '~' in log_files_dir:
+                home = os.path.expanduser('~')
+                log_files_dir = log_files_dir.replace('%USERPROFILE%', home).replace('~', home)
+            current_log_dir_path = os.path.join(log_files_dir, 'current_log_dir.txt')
+            if os.path.exists(current_log_dir_path):
+                os.remove(current_log_dir_path)
+        except Exception:
+            pass
         data = request.get_json(silent=True) or {}
         robots = data.get('robots') or []
         logger.info(f"[INSTALL_SELECTED] Download gomb lenyomva, robots param: {robots}")
