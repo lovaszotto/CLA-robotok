@@ -18,5 +18,15 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
     "type": "bulk"
+  },
+  {
+    "id": 3,
+    "timestamp": "2025-11-26 04:13:04",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
+    "type": "bulk"
   }
 ]
