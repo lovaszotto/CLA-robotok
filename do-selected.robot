@@ -101,13 +101,38 @@ Log fájlok összefűzése
         Log    [HIBÁZOTT] A log könyvtár neve hiányzik vagy hibás (CURRENT_LOG_DIR = ${CURRENT_LOG_DIR}), log merge kihagyva!
         RETURN
     END
+
+
     ${LOG_OUTPUT_XML}=    Evaluate    __import__('os').path.normpath(r'''${LOG_OUTPUT_DIR}/output.xml''')    modules=os
+    ${LOG_OUTPUT_LOG}=    Evaluate    __import__('os').path.normpath(r'''${LOG_OUTPUT_DIR}/log.html''')    modules=os
+    ${LOG_OUTPUT_REPORT}=    Evaluate    __import__('os').path.normpath(r'''${LOG_OUTPUT_DIR}/report.html''')    modules=os
+    
     ${ROBOT_OUTPUT_XML}=    Evaluate    __import__('os').path.normpath(r'''${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/output.xml''')    modules=os
     ${ROBOT_OUTPUT_LOG}=    Evaluate    __import__('os').path.normpath(r'''${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/log.html''')    modules=os
    ${ROBOT_OUTPUT_REPORT}=    Evaluate    __import__('os').path.normpath(r'''${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/report.html''')    modules=os
+ 
+  Log    [REBOT][LOG_OUTPUT_LOG] ${LOG_OUTPUT_LOG} 
+  Log    [REBOT][LOG_OUTPUT_REPORT] ${LOG_OUTPUT_REPORT} 
+  Log    [REBOT][ROBOT_OUTPUT_LOG] ${ROBOT_OUTPUT_LOG} 
+  Log    [REBOT][ROBOT_OUTPUT_REPORT] ${ROBOT_OUTPUT_REPORT} 
+   
    #Másolás a log és report fájlok a log könyvtárba
+
     Copy File    ${ROBOT_OUTPUT_LOG}    ${LOG_OUTPUT_DIR}/r_log.html
     Copy File    ${ROBOT_OUTPUT_REPORT}    ${LOG_OUTPUT_DIR}/r_report.html
+   
+    # Az r_log.html fájlban cseréljük ki a log.html hivatkozásokat r_log.html-re
+    ${r_log_content}=    Get File    ${LOG_OUTPUT_DIR}/r_log.html
+    ${r_log_content_modified}=    Replace String    ${r_log_content}    report.html    r_report.html
+    Create File    ${LOG_OUTPUT_DIR}/r_log.html    ${r_log_content_modified}
+    Log    [REBOT][r_log.html] log.html hivatkozások cserélve r_log.html-re a ${LOG_OUTPUT_DIR}/r_log.html fájlban.
+   
+    # cseréljük log.html hivatkozásokat r_log.html-re a report.html fájlban is
+    ${report_content}=    Get File    ${LOG_OUTPUT_DIR}/r_report.html
+    ${report_content_modified}=    Replace String    ${report_content}    log.html    r_log.html
+    Create File    ${LOG_OUTPUT_DIR}/r_report.html    ${report_content_modified}
+    Log    [REBOT][r_report.html] log.html hivatkozások cserélve r_log.html-re a ${LOG_OUTPUT_DIR}/r_report.html fájlban.
+
     RETURN
   
     ${LOG_OUTPUT_XML_EXISTS}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${LOG_OUTPUT_XML}
