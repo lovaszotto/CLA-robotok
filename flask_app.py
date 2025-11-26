@@ -399,15 +399,31 @@ def run_robot_with_params(repo: str, branch: str):
     try:
         # Windows hibadoboz elkerülése: CREATE_NO_WINDOW flag
         creationflags = 0x08000000 if os.name == 'nt' else 0
-        result = subprocess.run(
+        #result = subprocess.run(
+        #    cmd,
+        #    capture_output=True,
+        #    text=True,
+        #    encoding='utf-8',
+        #    errors='ignore',
+        #    check=False,
+        #    creationflags=creationflags
+        #)
+        result = subprocess.Popen(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            encoding='utf-8',
-            errors='ignore',
-            check=False,
-            creationflags=creationflags
+            bufsize=1,
+            encoding="utf-8",
+            errors="ignore"
         )
+
+        for line in result.stdout:
+           # print(line, end="")   
+            logger.info(f"[RUN]: {line.strip()}")
+
+        result.wait()
+
         logger.info(f"[RUN] Return code: {result.returncode}")
         logger.info(f"[RUN] Robot stdout: {result.stdout[:500] if result.stdout else ''}")
         logger.info(f"[RUN] Robot stderr: {result.stderr[:500] if result.stderr else ''}")
