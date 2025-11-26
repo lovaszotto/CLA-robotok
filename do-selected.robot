@@ -266,7 +266,7 @@ Telepítés futtatása
 
         # Felugró ablakban futtatás - cmd /c start paranccsal új ablakot nyit, /c bezárja a lefutás után
         Log     [TELEPÍTŐ] Telepítő script futtatása új ablakban (automatikus bezárással)...
-        ${install_result}=    Run Process    cmd    /c    start    /wait    cmd    /c    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
+        ${install_result}=    Run Process    cmd    /c    start    "Telepítés"    cmd    /k    ${INSTALL_SCRIPT}    shell=True    cwd=${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}    timeout=120s
             IF    ${install_result.rc} != 0    
                 Log    Telepítés nem sikerült (timeout vagy hiba): ${install_result.stderr}
                 Fail    A telepítés sikertelen volt, a telepito.bat nem található:\n ${INSTALL_SCRIPT}

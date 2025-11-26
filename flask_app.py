@@ -28,15 +28,8 @@ import logging
 
 # --- LOG OUTPUT DIR beállítása ---
 def _get_backend_log_path():
-    try:
-        log_dir = _normalize_dir_from_vars('LOG_FILES')
-        if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-            return os.path.join(log_dir, 'server.log')
-    except Exception as e:
-        pass
-    # Fallback: root directory
-    return 'server.log'
+    # Mindig a futtató könyvtár/server.log fájlt használjuk
+    return os.path.join(os.getcwd(), 'server.log')
 
 # Töröljük a server.log tartalmát a futás elején (új helyen)
 try:
@@ -47,7 +40,21 @@ except Exception:
     pass
 
 app = Flask(__name__)
+# Csak WARNING szinttől logoljon a werkzeug (HTTP kérések ne menjenek a server.log-ba)
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
+
+# --- /server-log végpont: log tartalom szövegként ---
+@app.route('/server-log')
+def server_log():
+    """Visszaadja a server.log tartalmát szövegként (plain/text), mindig a futtató könyvtárból."""
+    log_path = os.path.join(os.getcwd(), 'server.log')
+    try:
+        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        return content, 200, {'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache'}
+    except Exception as e:
+        return f'Hiba a log olvasásakor: {e}', 500, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
 PYTHON_EXECUTABLE = sys.executable or 'python'
