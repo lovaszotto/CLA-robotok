@@ -1,12 +1,22 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-26 03:48:19",
+    "timestamp": "2025-11-26 03:54:17",
     "repo": "KBSZ-robotok",
     "branch": "KB01-Közbeszerzési-Értesítő",
     "status": "success",
     "returncode": 0,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_034819",
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
+    "type": "bulk"
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-11-26 03:58:55",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_035417",
     "type": "bulk"
   }
 ]

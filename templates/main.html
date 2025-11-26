@@ -869,7 +869,7 @@ function displayResults(results) {
             typeBadge = '<span class="badge bg-light text-dark ms-1">Ismeretlen</span>';
         }
         const resultsDisplay = result.results_dir 
-            ? '<small class="text-muted">' + result.results_dir + '</small>' 
+            ? '<small class="text-muted">' + (result.results_dir.split(/[\\\/]/).filter(Boolean).pop() || result.results_dir) + '</small>' 
             : '-';
         const encDir = encodeURIComponent(result.results_dir || '');
         const actionButton = result.results_dir
