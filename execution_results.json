@@ -1,12 +1,12 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-25 03:58:33",
+    "timestamp": "2025-11-26 03:07:26",
     "repo": "KBSZ-robotok",
     "branch": "KB01-Közbeszerzési-Értesítő",
     "status": "success",
     "returncode": 0,
-    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251125_035833",
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251126_030726",
     "type": "bulk"
   }
 ]

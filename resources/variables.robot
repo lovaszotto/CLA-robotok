@@ -35,6 +35,8 @@ ${DOWNLOADED_ROBOTS}    %USERPROFILE%/MyRobotFramework/DownloadedRobots
 
 # A robotok log könyvtárai
 ${LOG_FILES}    %USERPROFILE%/MyRobotFramework/RobotResults
+#aktuális log könyvtár (dinamikusan állítjuk be)
+${CURRENT_LOG_DIR}
 
 # Automatikus start.bat futtatás engedélyezése
 ${AUTO_LAUNCH_START_BAT}    ${True}

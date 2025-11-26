@@ -975,7 +975,7 @@ function openResults(resultsDir) {
         dir = dir.replace(/^([\\/])+/,''); // Távolítsuk el az elején lévő / vagy \
         const segments = dir.split(/[\\/]+/).filter(Boolean);
         const encoded = segments.map(s => encodeURIComponent(s)).join('/');
-        const staticUrl = `/logfiles/${encoded}/log.html`;
+        const staticUrl = `/logfiles/${encoded}/r_log.html`;
         console.log('openResults: requesting staticUrl=', staticUrl, 'original resultsDir=', resultsDir);
         try {
             if (window._lastResultsWindow && !window._lastResultsWindow.closed) {

@@ -25,9 +25,23 @@ import logging
 
 
 
-# Töröljük a server.log tartalmát a futás elején
+
+# --- LOG OUTPUT DIR beállítása ---
+def _get_backend_log_path():
+    try:
+        log_dir = _normalize_dir_from_vars('LOG_FILES')
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+            return os.path.join(log_dir, 'server.log')
+    except Exception as e:
+        pass
+    # Fallback: root directory
+    return 'server.log'
+
+# Töröljük a server.log tartalmát a futás elején (új helyen)
 try:
-    with open('server.log', 'w', encoding='utf-8') as f:
+    backend_log_path = _get_backend_log_path()
+    with open(backend_log_path, 'w', encoding='utf-8') as f:
         f.write('')
 except Exception:
     pass
@@ -42,7 +56,8 @@ PYTHON_EXECUTABLE = sys.executable or 'python'
 
 # --- Logging beállítás: minden log menjen a server.log fájlba is, konzolra is ---
 log_formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(message)s')
-file_handler = logging.FileHandler('server.log', encoding='utf-8')
+backend_log_path = _get_backend_log_path()
+file_handler = logging.FileHandler(backend_log_path, encoding='utf-8')
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.INFO)
 console_handler = logging.StreamHandler(sys.stdout)
@@ -278,68 +293,64 @@ def get_repository_data():
 
 
 def run_robot_with_params(repo: str, branch: str):
+
     """Indítja el a Robot Framework futtatást a megadott repo/branch paraméterekkel.
 
     Visszatér: (returncode, results_dir_rel, stdout, stderr)
     """
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_repo = (repo or 'unknown').replace('/', '_')
-    safe_branch = (branch or 'unknown').replace('/', '_')
-
-    results_dir_rel = f'{safe_repo}__{safe_branch}__{timestamp}'
-    # Log könyvtár beolvasása variables.robot-ból
+    # A log/result könyvtár nevét és a CURRENT_LOG_DIR-t a backend generálja, nem a Robot Framework.
     log_files_dir = _normalize_dir_from_vars('LOG_FILES')
-    # Ha a LOG_FILES változóban %USERPROFILE% vagy ~ szerepel, cseréljük ki a tényleges home könyvtárra
+    # Ha %USERPROFILE% vagy ~ szerepel, cseréljük ki a tényleges home könyvtárra
     if '%USERPROFILE%' in log_files_dir or '~' in log_files_dir:
         home = os.path.expanduser('~')
         log_files_dir = log_files_dir.replace('%USERPROFILE%', home).replace('~', home)
-    results_dir_abs = os.path.abspath(os.path.join(log_files_dir, results_dir_rel))
-    os.makedirs(results_dir_abs, exist_ok=True)
 
-    # Mentsük el a relatív log könyvtár nevét a LOG_FILES/current_log_dir.txt fájlba
-    try:
-        current_log_dir_file = os.path.join(log_files_dir, 'current_log_dir.txt')
-        logger.info(f"[LOGDIR] current_log_dir.txt írási kísérlet: {current_log_dir_file} (érték: {results_dir_rel})")
-        file_existed = os.path.exists(current_log_dir_file)
-        with open(current_log_dir_file, 'w', encoding='utf-8') as f:
-            f.write(results_dir_rel)
-        if not file_existed:
-            logger.info(f"[LOGDIR] current_log_dir.txt ÚJ fájl létrehozva: {current_log_dir_file}")
-        else:
-            logger.info(f"[LOGDIR] current_log_dir.txt felülírva: {current_log_dir_file}")
-        logger.info(f"[LOGDIR] current_log_dir.txt sikeresen kiírva: {current_log_dir_file}")
-    except Exception as e:
-        logger.error(f"[LOGDIR][ERROR] current_log_dir.txt írása sikertelen! Elérési út: {current_log_dir_file}, érték: {results_dir_rel}, hiba: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+    safe_repo = (repo or 'unknown').replace('/', '_')
+    safe_branch = (branch or 'unknown').replace('/', '_')
+    current_log_dir_path = os.path.join(log_files_dir, 'current_log_dir.txt')
+    current_log_dir = None
+    # Ha már létezik a current_log_dir.txt, olvassuk be
+    if os.path.exists(current_log_dir_path):
+        try:
+            with open(current_log_dir_path, 'r', encoding='utf-8') as f:
+                current_log_dir = f.read().strip()
+        except Exception as e:
+            logger.warning(f"[RUN][WARNING] Nem sikerült beolvasni a current_log_dir.txt-t: {e}")
+    # Ha nem létezik, generáljunk újat
+    if not current_log_dir:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        current_log_dir = f"{safe_repo}__{safe_branch}__{timestamp}"
+        try:
+            with open(current_log_dir_path, 'w', encoding='utf-8') as f:
+                f.write(current_log_dir + '\n')
+        except Exception as e:
+            logger.warning(f"[RUN][WARNING] Nem sikerült a current_log_dir.txt mentése: {e}")
+    results_dir_abs = os.path.join(log_files_dir, current_log_dir)
+    os.makedirs(results_dir_abs, exist_ok=True)
 
     suite_path = os.path.abspath('do-selected.robot')
     # Ellenőrzések futtatás előtt
     if not os.path.isfile(PYTHON_EXECUTABLE):
         msg = f"Python végrehajtható nem található: {PYTHON_EXECUTABLE}"
-        _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
         logger.error(f"[RUN][ERROR] {msg}")
-        return 1, results_dir_rel, '', msg
+        return 1, '', '', msg
     # Ellenőrizzük, hogy a robot modul elérhető-e
     try:
         import importlib.util
         if importlib.util.find_spec('robot.run') is None:
             msg = "A 'robot' modul nem található a Python környezetben."
-            _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
             logger.error(f"[RUN][ERROR] {msg}")
-            return 1, results_dir_rel, '', msg
+            return 1, '', '', msg
     except Exception as e:
         msg = f"A 'robot' modul ellenőrzése hibát dobott: {e}"
-        _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
         logger.error(f"[RUN][ERROR] {msg}")
-        return 1, results_dir_rel, '', msg
+        return 1, '', '', msg
     if not os.path.isfile(suite_path):
         msg = f"A teszt suite fájl nem található: {suite_path}"
-        _persist_robot_outputs(results_dir_abs, '', msg, note=msg)
         logger.error(f"[RUN][ERROR] {msg}")
-        return 1, results_dir_rel, '', msg
+        return 1, '', '', msg
 
-    # Egyszerűsítés: közvetlenül a robot.run modult hívjuk (__main__ hiány miatti problémák elkerülésére)
+    # A CURRENT_LOG_DIR-t és LOG_OUTPUT_DIR-t átadjuk a Robot Framework-nek
     cmd = [
         PYTHON_EXECUTABLE, '-m', 'robot.run',
         '-d', results_dir_abs,
@@ -369,39 +380,23 @@ def run_robot_with_params(repo: str, branch: str):
             check=False,
             creationflags=creationflags
         )
-        _persist_robot_outputs(
-            results_dir_abs,
-            result.stdout or '',
-            result.stderr or '',
-            note=f"Robot Framework rc={result.returncode}"
-        )
-        try:
-            generated = []
-            if os.path.isdir(results_dir_abs):
-                generated = sorted(os.listdir(results_dir_abs))
-            logger.info(f"[RUN] Return code: {result.returncode}")
-            logger.info(f"[RUN] Generated files in results dir: {generated}")
-            logger.info(f"[RUN] Robot visszatérés: returncode={result.returncode}, results_dir_rel={results_dir_rel}")
-            logger.info(f"[RUN] Robot stdout: {result.stdout[:500] if result.stdout else ''}")
-            logger.info(f"[RUN] Robot stderr: {result.stderr[:500] if result.stderr else ''}")
-        except Exception as e:
-            logger.error(f"[RUN] Post-run inspection failed: {e}")
-        return result.returncode, results_dir_rel, result.stdout, result.stderr
+        logger.info(f"[RUN] Return code: {result.returncode}")
+        logger.info(f"[RUN] Robot stdout: {result.stdout[:500] if result.stdout else ''}")
+        logger.info(f"[RUN] Robot stderr: {result.stderr[:500] if result.stderr else ''}")
+        return result.returncode, results_dir_abs, result.stdout, result.stderr
     except FileNotFoundError as e:
-        _persist_robot_outputs(results_dir_abs, '', f'FileNotFoundError: {e}', note='Robot Framework nem indult (python modul hiányzik)')
         logger.error(f"[RUN][ERROR] FileNotFoundError: {e}")
-        logger.info(f"[RUN] Robot visszatérés: returncode=1, results_dir_rel={results_dir_rel}")
+        logger.info(f"[RUN] Robot visszatérés: returncode=1")
         logger.info(f"[RUN] Robot stdout: '')")
         logger.info(f"[RUN] Robot stderr: FileNotFoundError: {e}")
-        return 1, results_dir_rel, '', f'FileNotFoundError: {e}'
+        return 1, '', '', f'FileNotFoundError: {e}'
     except Exception as e:
         # Windows hibadoboz elkerülése: hiba naplózása, de nem dobunk tovább hibát
-        _persist_robot_outputs(results_dir_abs, '', str(e), note='Robot Framework futtatása kivétellel leállt')
         logger.error(f"[RUN][ERROR] {e}")
-        logger.info(f"[RUN] Robot visszatérés: returncode=1, results_dir_rel={results_dir_rel}")
+        logger.info(f"[RUN] Robot visszatérés: returncode=1")
         logger.info(f"[RUN] Robot stdout: '')")
         logger.info(f"[RUN] Robot stderr: {str(e)}")
-        return 1, results_dir_rel, '', str(e)
+        return 1, '', '', str(e)
 
 
 def _persist_robot_outputs(results_dir_abs: str, stdout_text: str, stderr_text: str, note: str = ''):
