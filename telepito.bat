@@ -1,4 +1,6 @@
 @echo off
+chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
 REM =====================================================
 REM  CLA-SSISTANT TELEPITO v3.0
 REM  GitHub Repository kezelő Robot Framework rendszer
@@ -8,7 +10,7 @@ setlocal EnableDelayedExpansion
 
 echo.
 echo =====================================================
-echo   CLA-SSISTANT TELEPITO v3.1
+echo   TELEPITO v3.1
 echo   
 echo =====================================================
 echo.

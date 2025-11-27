@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul
+set PYTHONIOENCODING=utf-8
 echo ================================================
 echo      CLA Robot Kezelo - Flask Szerver
 echo ================================================

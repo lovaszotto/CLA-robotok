@@ -20,15 +20,20 @@ def RunRealtimeToLog(cmd, log_file, cwd=None):
         # Soronkénti olvasás és logolás
         for line in process.stdout:
             clean = line.rstrip("\n")
+            # Próbáljuk explicit módon UTF-8-ra konvertálni (ha valami miatt nem string)
+            try:
+                clean_utf8 = clean.encode('utf-8', errors='replace').decode('utf-8') if not isinstance(clean, str) else clean
+            except Exception:
+                clean_utf8 = clean
 
             # Konzolra (futás közben látható)
-            logger.console(clean)
+            logger.console(clean_utf8)
 
             # Robot logba
-            logger.info(clean)
+            logger.info(clean_utf8)
 
             # Log file-ba
-            log.write(clean + "\n")
+            log.write(clean_utf8 + "\n")
             log.flush()
 
         # Process lezárása
