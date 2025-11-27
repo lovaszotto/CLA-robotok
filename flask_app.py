@@ -1183,27 +1183,90 @@ def install_robot_with_params(repo: str, branch: str):
                 'git', 'clone', '--branch', branch, '--single-branch', repo_url, branch_dir
             ]
             logger.info(f"[INSTALL] Klónozás indítása: {' '.join(clone_cmd)}")
-            result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=120)
-            logger.info(f"[INSTALL] Klónozás befejezve: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
+            result = subprocess.Popen(
+                clone_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="ignore"
+            )
+            output_lines = []
+            for line in result.stdout:
+                try:
+                    safe_line = line.strip()
+                    if isinstance(safe_line, bytes):
+                        safe_line = safe_line.decode('utf-8', errors='replace')
+                    else:
+                        safe_line = str(safe_line)
+                    logger.info(f"[INSTALL][CLONE]: {safe_line}")
+                    output_lines.append(safe_line)
+                except Exception as e:
+                    logger.warning(f"[INSTALL][CLONE][LOGGING ERROR]: {e}")
+            result.wait()
+            logger.info(f"[INSTALL] Klónozás befejezve: rc={result.returncode}, output={output_lines[:10]}")
             if result.returncode != 0:
-                logger.error(f"[INSTALL][ERROR] Klónozás sikertelen: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
-                return 1, '', result.stdout, result.stderr
+                logger.error(f"[INSTALL][ERROR] Klónozás sikertelen: rc={result.returncode}, output={output_lines[:10]}")
+                return 1, '', '\n'.join(output_lines), ''
         else:
             # Force pull: fetch + reset --hard
             fetch_cmd = ['git', '-C', branch_dir, 'fetch', 'origin']
             logger.info(f"[INSTALL] Fetch indítása: {' '.join(fetch_cmd)}")
-            fetch_result = subprocess.run(fetch_cmd, capture_output=True, text=True, timeout=60)
-            logger.info(f"[INSTALL] Fetch befejezve: rc={fetch_result.returncode}, stdout={fetch_result.stdout[:300]}, stderr={fetch_result.stderr[:300]}")
+            fetch_result = subprocess.Popen(
+                fetch_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="ignore"
+            )
+            fetch_lines = []
+            for line in fetch_result.stdout:
+                try:
+                    safe_line = line.strip()
+                    if isinstance(safe_line, bytes):
+                        safe_line = safe_line.decode('utf-8', errors='replace')
+                    else:
+                        safe_line = str(safe_line)
+                    logger.info(f"[INSTALL][FETCH]: {safe_line}")
+                    fetch_lines.append(safe_line)
+                except Exception as e:
+                    logger.warning(f"[INSTALL][FETCH][LOGGING ERROR]: {e}")
+            fetch_result.wait()
+            logger.info(f"[INSTALL] Fetch befejezve: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
             if fetch_result.returncode != 0:
-                logger.error(f"[INSTALL][ERROR] Fetch sikertelen: rc={fetch_result.returncode}, stdout={fetch_result.stdout[:300]}, stderr={fetch_result.stderr[:300]}")
-                return 1, '', fetch_result.stdout, fetch_result.stderr
+                logger.error(f"[INSTALL][ERROR] Fetch sikertelen: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
+                return 1, '', '\n'.join(fetch_lines), ''
             reset_cmd = ['git', '-C', branch_dir, 'reset', '--hard', f'origin/{branch}']
             logger.info(f"[INSTALL] Reset --hard indítása: {' '.join(reset_cmd)}")
-            reset_result = subprocess.run(reset_cmd, capture_output=True, text=True, timeout=60)
-            logger.info(f"[INSTALL] Reset --hard befejezve: rc={reset_result.returncode}, stdout={reset_result.stdout[:300]}, stderr={reset_result.stderr[:300]}")
+            reset_result = subprocess.Popen(
+                reset_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="ignore"
+            )
+            reset_lines = []
+            for line in reset_result.stdout:
+                try:
+                    safe_line = line.strip()
+                    if isinstance(safe_line, bytes):
+                        safe_line = safe_line.decode('utf-8', errors='replace')
+                    else:
+                        safe_line = str(safe_line)
+                    logger.info(f"[INSTALL][RESET]: {safe_line}")
+                    reset_lines.append(safe_line)
+                except Exception as e:
+                    logger.warning(f"[INSTALL][RESET][LOGGING ERROR]: {e}")
+            reset_result.wait()
+            logger.info(f"[INSTALL] Reset --hard befejezve: rc={reset_result.returncode}, output={reset_lines[:10]}")
             if reset_result.returncode != 0:
-                logger.error(f"[INSTALL][ERROR] Reset --hard sikertelen: rc={reset_result.returncode}, stdout={reset_result.stdout[:300]}, stderr={reset_result.stderr[:300]}")
-                return 1, '', reset_result.stdout, reset_result.stderr
+                logger.error(f"[INSTALL][ERROR] Reset --hard sikertelen: rc={reset_result.returncode}, output={reset_lines[:10]}")
+                return 1, '', '\n'.join(reset_lines), ''
     except Exception as e:
         logger.error(f"[INSTALL][ERROR] Git klónozás/pull hiba: {e}")
         return 1, '', '', f'Git klónozás/pull hiba: {e}'
@@ -1223,8 +1286,31 @@ def install_robot_with_params(repo: str, branch: str):
             return 1, '', '', f'telepito.bat nem található: {telepito_path}'
         try:
             logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir} (szinkron, várakozás)")
-            result = subprocess.run(['telepito.bat'], cwd=branch_dir, capture_output=True, text=True, timeout=300, shell=True)
-            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={result.returncode}, stdout={result.stdout[:300]}, stderr={result.stderr[:300]}")
+            result = subprocess.Popen(
+                ['telepito.bat'],
+                cwd=branch_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="ignore",
+                shell=True
+            )
+            output_lines = []
+            for line in result.stdout:
+                try:
+                    safe_line = line.strip()
+                    if isinstance(safe_line, bytes):
+                        safe_line = safe_line.decode('utf-8', errors='replace')
+                    else:
+                        safe_line = str(safe_line)
+                    logger.info(f"[INSTALL][TELEPITO]: {safe_line}")
+                    output_lines.append(safe_line)
+                except Exception as e:
+                    logger.warning(f"[INSTALL][TELEPITO][LOGGING ERROR]: {e}")
+            result.wait()
+            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={result.returncode}, output={output_lines[:10]}")
         except Exception as e:
             logger.error(f"[INSTALL][ERROR] telepito.bat futtatási hiba: {e}")
             return 1, '', '', f'telepito.bat futtatási hiba: {e}'
