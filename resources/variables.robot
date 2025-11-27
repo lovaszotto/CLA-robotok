@@ -55,4 +55,5 @@ ${PYTHON_EXEC}        ${EMPTY}
 
 # Állapot jelző státusz (dinamikusan állítjuk be)
 ${WORKFLOW_STATUS}         ${EMPTY}
-      
+
+

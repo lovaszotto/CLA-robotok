@@ -1,12 +1,26 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-27 03:03:51",
-    "repo": "KBSZ-robotok",
-    "branch": "KB01-Közbeszerzési-Értesítő",
+    "timestamp": "2025-11-27 05:49:33",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251127_030351",
-    "type": "bulk"
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251127_054815",
+    "type": "install",
+    "stdout": "Install OK",
+    "stderr": ""
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-11-27 05:51:00",
+    "repo": "IKK-Robotok",
+    "branch": "IKK01_Duplikáció-ellenőrzés",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "IKK-Robotok__IKK01_Duplikáció-ellenőrzés__20251127_055002",
+    "type": "install",
+    "stdout": "Install OK",
+    "stderr": ""
   }
 ]
