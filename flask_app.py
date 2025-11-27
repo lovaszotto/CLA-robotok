@@ -418,25 +418,24 @@ def run_robot_with_params(repo: str, branch: str):
             errors="ignore"
         )
 
+        output_lines = []
         for line in result.stdout:
-            # print(line, end="")
             try:
-                # Biztosítsuk, hogy minden karakter utf-8-ként jelenjen meg a logban
                 safe_line = line.strip()
                 if isinstance(safe_line, bytes):
                     safe_line = safe_line.decode('utf-8', errors='replace')
                 else:
                     safe_line = str(safe_line)
                 logger.info(f": {safe_line}")
+                output_lines.append(safe_line)
             except Exception as e:
                 logger.warning(f"[RUN][LOGGING ERROR]: {e}")
 
         result.wait()
 
         logger.info(f"[RUN] Return code: {result.returncode}")
-        logger.info(f"[RUN] Robot stdout: {result.stdout[:500] if result.stdout else ''}")
-        logger.info(f"[RUN] Robot stderr: {result.stderr[:500] if result.stderr else ''}")
-        return result.returncode, results_dir_abs, result.stdout, result.stderr
+        logger.info(f"[RUN] Robot output (first 500 chars): {''.join(output_lines)[:500]}")
+        return result.returncode, results_dir_abs, '\n'.join(output_lines), ''
     except FileNotFoundError as e:
         logger.error(f"[RUN][ERROR] FileNotFoundError: {e}")
         logger.info(f"[RUN] Robot visszatérés: returncode=1")
