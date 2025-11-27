@@ -419,8 +419,17 @@ def run_robot_with_params(repo: str, branch: str):
         )
 
         for line in result.stdout:
-           # print(line, end="")   
-            logger.info(f"[RUN]: {line.strip()}")
+            # print(line, end="")
+            try:
+                # Biztosítsuk, hogy minden karakter utf-8-ként jelenjen meg a logban
+                safe_line = line.strip()
+                if isinstance(safe_line, bytes):
+                    safe_line = safe_line.decode('utf-8', errors='replace')
+                else:
+                    safe_line = str(safe_line)
+                logger.info(f": {safe_line}")
+            except Exception as e:
+                logger.warning(f"[RUN][LOGGING ERROR]: {e}")
 
         result.wait()
 

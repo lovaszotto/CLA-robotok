@@ -1,22 +1,14 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-26 14:59:29",
+    "timestamp": "2025-11-27 02:09:31",
     "repo": "KBSZ-robotok",
     "branch": "KB01-Közbeszerzési-Értesítő",
-    "status": "failed",
-    "returncode": 1,
-    "results_dir": "",
-    "type": "bulk"
-  },
-  {
-    "id": 2,
-    "timestamp": "2025-11-26 15:00:31",
-    "repo": "IKK-Robotok",
-    "branch": "IKK04-Dokumentum-WEB-Ellenőrzés",
-    "status": "failed",
-    "returncode": 1,
-    "results_dir": "",
-    "type": "bulk"
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251127_020839",
+    "type": "install",
+    "stdout": "Install OK",
+    "stderr": ""
   }
 ]
