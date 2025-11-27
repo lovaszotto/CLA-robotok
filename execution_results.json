@@ -1,24 +1,12 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-27 05:49:33",
+    "timestamp": "2025-11-27 06:10:29",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
     "status": "success",
     "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251127_054815",
-    "type": "install",
-    "stdout": "Install OK",
-    "stderr": ""
-  },
-  {
-    "id": 2,
-    "timestamp": "2025-11-27 05:51:00",
-    "repo": "IKK-Robotok",
-    "branch": "IKK01_Duplikáció-ellenőrzés",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "IKK-Robotok__IKK01_Duplikáció-ellenőrzés__20251127_055002",
+    "results_dir": "SzotarRobi__Szó-kikérdező__20251127_060904",
     "type": "install",
     "stdout": "Install OK",
     "stderr": ""

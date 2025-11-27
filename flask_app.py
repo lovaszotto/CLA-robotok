@@ -1085,6 +1085,7 @@ def api_install_selected():
         errors = []
         from datetime import datetime
         global execution_results
+        import html
         for r in robots:
             repo = (r.get('repo') or '').strip()
             branch = (r.get('branch') or '').strip()
@@ -1096,6 +1097,31 @@ def api_install_selected():
                 logger.info(f"[INSTALL_SELECTED] install_robot_with_params hívás: repo='{repo}', branch='{branch}'")
                 rc, results_dir_rel, _stdout, _stderr = install_robot_with_params(repo, branch)
                 logger.info(f"[INSTALL_SELECTED] install_robot_with_params eredmény: rc={rc}, results_dir_rel={results_dir_rel}")
+                # --- r_log.html készítése ---
+                try:
+                    # results_dir_rel pl.: IKK-Robotok__IKK01_Duplikáció-ellenőrzés__20251127_055002
+                    robotresults_dir = os.path.join(os.path.expanduser('~'), 'MyRobotFramework', 'RobotResults')
+                    rlog_dir = os.path.join(robotresults_dir, results_dir_rel) if results_dir_rel else None
+                    if rlog_dir:
+                        os.makedirs(rlog_dir, exist_ok=True)
+                        rlog_path = os.path.join(rlog_dir, 'r_log.html')
+                        with open(rlog_path, 'w', encoding='utf-8') as f:
+                            f.write('<html><head><meta charset="utf-8"><title>Letöltés eredménye</title></head><body>')
+                            f.write(f'<h2>Letöltés eredménye: {html.escape(repo)} / {html.escape(branch)}</h2>')
+                            if rc == 0:
+                                f.write('<p style="color:green;">Sikeres letöltés!</p>')
+                            else:
+                                f.write('<p style="color:red;">Sikertelen letöltés!</p>')
+                            f.write('<h3>Részletek:</h3>')
+                            f.write('<pre>')
+                            f.write(html.escape(_stdout or ''))
+                            if _stderr:
+                                f.write('\n--- STDERR ---\n')
+                                f.write(html.escape(_stderr))
+                            f.write('</pre></body></html>')
+                except Exception as e:
+                    logger.warning(f"[INSTALL_SELECTED] r_log.html írási hiba: {e}")
+                # --- vége r_log.html ---
                 if rc == 0:
                     installed.append({'repo': repo, 'branch': branch, 'results_dir': results_dir_rel})
                     # ÚJ: execution_results-ba is bekerül
