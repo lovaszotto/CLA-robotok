@@ -26,7 +26,9 @@ import logging
 
 
 
+
 # --- LOG OUTPUT DIR beállítása ---
+PYTHON_EXECUTABLE = sys.executable  # Mindig a jelenlegi Python interpreter
 def _get_backend_log_path():
     # Mindig a futtató könyvtár/server.log fájlt használjuk
     return os.path.join(os.getcwd(), 'server.log')
@@ -584,7 +586,7 @@ def api_execute():
         # Tényleges futtatás indítása Robot Framework-kel
         if not repo or not branch:
             logger.warning(f"[EXECUTE] HIBA: Hiányzó paraméterek - data={data}")
-            return jsonify({"status": "error", "message": "Hiányzó repo vagy branch"}), 400
+            return jsonify({"success": False, "error": "Hiányzó repo vagy branch"}), 400
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         logger.info(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
         logger.info(f"[EXECUTE] run_robot_with_params hívás előtt: repo={repo}, branch={branch}")
@@ -607,23 +609,25 @@ def api_execute():
         }
         execution_results.append(result_entry)
 
-        printed.append({
+        result_obj = {
+            'success': rc == 0,
             'repo': repo,
             'branch': branch,
             'returncode': rc,
             'results_dir': out_dir,
             'status': "ok" if rc == 0 else "fail"
-        })
+        }
         save_execution_results()
+        return jsonify(result_obj)
     except Exception as e:
         logger.error(f"[EXECUTE] Hiba a futtatás során: {e}")
-        printed.append({
+        return jsonify({
+            'success': False,
+            'error': str(e),
             'repo': repo if 'repo' in locals() else None,
             'branch': branch if 'branch' in locals() else None,
-            'status': "error",
-            'message': str(e)
+            'status': "error"
         })
-    return jsonify(printed)
 @app.route('/api/start_robot', methods=['POST'])
 def api_start_robot():
     """Indítja a kiválasztott robotot a start.bat futtatásával a megfelelő könyvtárban.

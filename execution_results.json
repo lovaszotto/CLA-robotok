@@ -1,14 +1,32 @@
 [
   {
     "id": 1,
-    "timestamp": "2025-11-27 06:10:29",
-    "repo": "SzotarRobi",
-    "branch": "Szó-kikérdező",
+    "timestamp": "2025-11-27 06:25:55",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
     "status": "success",
     "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20251127_060904",
-    "type": "install",
-    "stdout": "Install OK",
-    "stderr": ""
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251127_062555",
+    "type": "bulk"
+  },
+  {
+    "id": 2,
+    "timestamp": "2025-11-27 06:44:58",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251127_064458",
+    "type": "bulk"
+  },
+  {
+    "id": 3,
+    "timestamp": "2025-11-27 06:48:00",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251127_064800",
+    "type": "bulk"
   }
 ]

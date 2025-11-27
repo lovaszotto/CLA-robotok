@@ -51,7 +51,7 @@ function executeSingleRobot(btn) {
     IS_BUSY = true;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-    fetch('/api/start_robot', {
+    fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo: repo, branch: branch })
