@@ -1,12 +1,62 @@
 [
   {
-    "id": 1,
-    "timestamp": "2025-11-29 04:00:14",
+    "id": 2,
+    "timestamp": "2025-11-27 10:04:14",
+    "repo": "CPS-Robotok",
+    "branch": "CPS-Mezo-ellenor",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS-Mezo-ellenor__20251127_100414",
+    "type": "bulk"
+  },
+  {
+    "id": 4,
+    "timestamp": "2025-11-27 10:07:10",
+    "repo": "CPS-Robotok",
+    "branch": "ORIANA-Mezo-ellenor",
+    "status": "failed",
+    "returncode": 9,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__ORIANA-Mezo-ellenor__20251127_100710",
+    "type": "bulk"
+  },
+  {
+    "id": 6,
+    "timestamp": "2025-11-27 10:21:26",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20251127_102126",
+    "type": "bulk"
+  },
+  {
+    "id": 8,
+    "timestamp": "2025-11-27 10:27:42",
+    "repo": "IKK-Robotok",
+    "branch": "IKK01_Duplikáció-ellenőrzés",
+    "status": "failed",
+    "returncode": 9,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK01_Duplikáció-ellenőrzés__20251127_102742",
+    "type": "bulk"
+  },
+  {
+    "id": 10,
+    "timestamp": "2025-11-27 10:30:39",
     "repo": "IKK-Robotok",
     "branch": "IKK04-Dokumentum-WEB-Ellenőrzés",
     "status": "failed",
     "returncode": 9,
-    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20251129_040014",
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20251127_103039",
+    "type": "bulk"
+  },
+  {
+    "id": 6,
+    "timestamp": "2025-11-27 10:33:58",
+    "repo": "IKK-Robotok",
+    "branch": "IKK04-Dokumentum-WEB-Ellenőrzés",
+    "status": "failed",
+    "returncode": 9,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20251127_103358",
     "type": "bulk"
   }
 ]
