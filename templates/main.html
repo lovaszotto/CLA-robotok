@@ -81,6 +81,14 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     color: rgba(31, 41, 55, 0.75);
 }
 
+/* Olyan panelekhez, ahol nem szeretnénk átlátszó hátteret (pl. Kilépés oldal) */
+.opaque-panel {
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(17, 24, 39, 0.12);
+    border-radius: 12px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
+}
+
 /* Kilépés megerősítő modal: ne legyen átlátszó */
 #exitConfirmModal .modal-content {
     background: #ffffff !important;
@@ -88,8 +96,8 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     opacity: 1 !important;
 }
 /* Kilépés modal backdrop legyen kevésbé áttetsző */
-.modal-backdrop.exit-backdrop.show {
-    opacity: 0.95 !important;
+.modal-backdrop.exit-backdrop {
+    opacity: 1 !important;
     background-color: #000000 !important;
 }
 .nav-tabs .nav-item {
@@ -178,7 +186,8 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             </div>
         </div>
     </div>
-    <ul class="nav nav-tabs mb-3" id="mainTab" role="tablist">
+    <div class="d-flex align-items-center mb-3" style="gap: 1rem;">
+    <ul class="nav nav-tabs flex-grow-1 mb-0" id="mainTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="true">
                 <i class="bi bi-play-circle"></i> Telepített robotok
@@ -211,19 +220,19 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             </button>
         </li>
     </ul>
+    <div class="ms-auto" style="min-width: 280px;">
+        <div class="input-group glass-input-group">
+            <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
+            <input type="text" class="form-control" id="globalBranchFilter" placeholder="Robot szűrése..." onkeyup="filterActiveTabRobots()">
+        </div>
+    </div>
+    </div>
     <div class="tab-content" id="mainTabContent">
         <!-- Telepített robotok TAB -->
         <div class="tab-pane fade show active" id="runnable" role="tabpanel" aria-labelledby="runnable-tab">
            <div class="page-section py-4">
-               <!-- Szűrő blokk a Telepített robotokhoz -->
                <div class="row mb-4 align-items-center">
-                   <div class="col-md-6">
-                       <div class="input-group glass-input-group">
-                           <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
-                           <input type="text" class="form-control" id="branchFilterRunnable" placeholder="Robot szűrése..." onkeyup="filterReposRunnable()">
-                       </div>
-                   </div>
-                   <div class="col-md-6 d-flex align-items-center">
+                   <div class="col-12 d-flex align-items-center">
                        <div class="text-muted small">
                            <i class="bi bi-info-circle me-1"></i>
                            Kattintson a futtatás gombra a robot indításához
@@ -278,13 +287,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <!-- Letölthető robotok TAB -->
         <div class="tab-pane fade" id="available-pane" role="tabpanel">
             <div class="row mb-4 align-items-center">
-                <div class="col-md-6">
-                    <div class="input-group glass-input-group">
-                        <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
-                        <input type="text" class="form-control" id="branchFilterAvailable" placeholder="Robot szűrése..." onkeyup="filterReposAvailable()">
-                    </div>
-                </div>
-                <div class="col-md-6 d-flex align-items-center">
+                <div class="col-12 d-flex align-items-center">
                     <div class="text-muted small">
                         <i class="bi bi-info-circle me-1"></i>
                         Kattintson a letöltés gombra azonnali telepítéshez
@@ -425,7 +428,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                </div>
            </div>
             <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
-                <div class="page-section py-4">
+                <div class="page-section py-4 opaque-panel">
                     <h2>Beállítások</h2>
                     <form id="settingsForm" onsubmit="event.preventDefault(); saveSettings();">
                         <div class="form-check form-switch mb-3">
@@ -492,7 +495,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
             </div>
             <div class="tab-pane fade" id="exit" role="tabpanel" aria-labelledby="exit-tab">
-                <div class="page-section py-4 text-center">
+                    <div class="page-section py-4 text-center opaque-panel">
                     <h2>Kilépés</h2>
                     <p>Bezárhatod a webes felületet, vagy leállíthatod a szervert.</p>
                     <button class="btn btn-danger btn-lg mt-3" onclick="exitApp()">
@@ -501,7 +504,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
             </div>
         <div class="tab-pane fade" id="log" role="tabpanel" aria-labelledby="log-tab">
-            <div class="page-section py-4">
+            <div class="page-section py-4 opaque-panel">
                 <h2>Server Log</h2>
                 <pre id="serverLogPre" style="width:100%;height:60vh;font-family:monospace;font-size:18px;background:#222;color:#eee;overflow:auto;white-space:pre-wrap;"></pre>
             </div>
@@ -786,9 +789,56 @@ function filterRepos() {
         }
     });
 }
+
+function getActiveMainTabId() {
+    const activeBtn = document.querySelector('#mainTab .nav-link.active');
+    return activeBtn ? activeBtn.id : '';
+}
+
+function filterActiveTabRobots() {
+    const activeId = getActiveMainTabId();
+    if (activeId === 'runnable-tab') {
+        filterReposRunnable();
+    } else if (activeId === 'available-tab') {
+        filterReposAvailable();
+    }
+}
+
+function setGlobalFilterEnabledState() {
+    const input = document.getElementById('globalBranchFilter');
+    if (!input) return;
+    const activeId = getActiveMainTabId();
+    const isRobotTab = (activeId === 'runnable-tab' || activeId === 'available-tab');
+    input.disabled = !isRobotTab;
+    if (!isRobotTab) {
+        input.placeholder = 'Robot szűrése...';
+    }
+}
+
+function filterReposRunnable() {
+    const term = (document.getElementById('globalBranchFilter')?.value || '').toLowerCase().trim();
+    const repoItems = document.querySelectorAll('.repo-item');
+    repoItems.forEach(item => {
+        const repoName = (item.getAttribute('data-repo-name') || '').toLowerCase();
+        const branches = item.querySelectorAll('.branch-checkbox span');
+        let hasMatchingBranch = false;
+        branches.forEach(branch => {
+            const branchName = (branch.textContent || '').toLowerCase().trim();
+            if (branchName.includes(term)) {
+                hasMatchingBranch = true;
+            }
+        });
+        const matchesRepo = repoName.includes(term);
+        if (term === '' || matchesRepo || hasMatchingBranch) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
 function filterReposAvailable() {
-    const searchTerm = document.getElementById('repoSearchAvailable').value.toLowerCase();
-    const branchFilter = document.getElementById('branchFilterAvailable').value.toLowerCase();
+    const term = (document.getElementById('globalBranchFilter')?.value || '').toLowerCase().trim();
     const repoItems = document.querySelectorAll('.repo-item-available');
     repoItems.forEach(item => {
         const repoName = item.getAttribute('data-repo-name').toLowerCase();
@@ -796,17 +846,29 @@ function filterReposAvailable() {
         let hasMatchingBranch = false;
         branches.forEach(branch => {
             const branchName = branch.textContent.toLowerCase().trim();
-            if (branchName.includes(branchFilter)) {
+            if (branchName.includes(term)) {
                 hasMatchingBranch = true;
             }
         });
-        if (repoName.includes(searchTerm) && (branchFilter === '' || hasMatchingBranch)) {
+        const matchesRepo = repoName.includes(term);
+        if (term === '' || matchesRepo || hasMatchingBranch) {
             item.style.display = 'block';
         } else {
             item.style.display = 'none';
         }
     });
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    setGlobalFilterEnabledState();
+    const tabButtons = document.querySelectorAll('#mainTab button[data-bs-toggle="tab"]');
+    tabButtons.forEach(btn => {
+        btn.addEventListener('shown.bs.tab', function () {
+            setGlobalFilterEnabledState();
+            filterActiveTabRobots();
+        });
+    });
+});
 
 // --- Robot futtatás ---
 function executeSingleRobot(button) {

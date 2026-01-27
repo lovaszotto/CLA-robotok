@@ -1427,11 +1427,30 @@ def api_repos_branches_tags():
     A tag-eket branch-onként (tags_by_branch) is visszaadja best-effort módon:
     a GitHub API 'branches-where-head' végponttal megkeresi, mely branch(ek) HEAD-je egyezik a tag commit-jával.
     """
+    def _get_github_token() -> str | None:
+        token = (os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN') or '').strip()
+        if token:
+            return token
+        # Fallback: token fájlból (NE commitold; .gitignore-ban van)
+        try:
+            token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'github_token.txt')
+            if os.path.exists(token_path):
+                with open(token_path, 'r', encoding='utf-8', errors='replace') as f:
+                    token_file = (f.read() or '').strip()
+                if token_file:
+                    # Hasznos lehet más hívásoknál is a processen belül
+                    os.environ.setdefault('GITHUB_TOKEN', token_file)
+                    return token_file
+        except Exception as e:
+            logger.info(f"[GITHUB-TOKEN] Token fájl olvasási hiba: {e}")
+        return None
+
     def _github_headers() -> dict:
         headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'CLA-ssistant'}
-        token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+        token = _get_github_token()
         if token:
-            headers['Authorization'] = f'Bearer {token}'
+            # GitHub REST v3: klasszikus PAT-hoz 'token', fine-grained-hez is működik.
+            headers['Authorization'] = f'token {token}'
         return headers
 
     def _parse_owner_repo(repo_obj: dict) -> tuple[str, str]:
@@ -1480,7 +1499,7 @@ def api_repos_branches_tags():
     result = []
     headers = _github_headers()
 
-    token_present = bool(os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN'))
+    token_present = bool(_get_github_token())
 
     for repo in repos:
         repo_name = repo.get('name')
