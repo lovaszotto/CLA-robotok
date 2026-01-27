@@ -43,3 +43,4 @@ releases_cache.json
 # GitHub token (NE commitold!)
 github_token.txt
 .env
+repos_response.json
