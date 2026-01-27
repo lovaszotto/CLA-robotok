@@ -49,6 +49,9 @@ Robot letöltése a központi nyilvántartásból
         IF    '${python_result.stderr}' != ''
             Log To Console    Python hiba: ${python_result.stderr}
         END
+
+     
+
         #jelenítse meg a generált web oldalt és ne zárja be a böngészőt
         Open Browser    file://${CURDIR}/repos.html    chrome
     ELSE

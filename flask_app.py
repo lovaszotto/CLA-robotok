@@ -1,3 +1,4 @@
+import requests
 
 # --- Maintenance endpoint: Remove execution_results entries with missing results_dir ---
 # (A Flask app példányosítás UTÁN kell lennie!)
@@ -1410,6 +1411,263 @@ def api_available_repos():
         if repo_copy['branches']:
             result.append(repo_copy)
     return jsonify(result)
+
+
+# Új oldal: repositoryk, branchek és tagek megjelenítése
+@app.route('/repos_branches_tags')
+def repos_branches_tags_page():
+    return render_template('repos_branches_tags.html')
+
+
+# --- ÚJ API végpont: repositoryk, branchek és tagek listázása ---
+@app.route('/api/repos_branches_tags', methods=['GET'])
+def api_repos_branches_tags():
+    """Visszaadja az összes repo nevét, brancheit és tagjeit.
+
+    A tag-eket branch-onként (tags_by_branch) is visszaadja best-effort módon:
+    a GitHub API 'branches-where-head' végponttal megkeresi, mely branch(ek) HEAD-je egyezik a tag commit-jával.
+    """
+    def _github_headers() -> dict:
+        headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'CLA-ssistant'}
+        token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        return headers
+
+    def _parse_owner_repo(repo_obj: dict) -> tuple[str, str]:
+        full_name = (repo_obj.get('full_name') or '').strip()
+        if '/' in full_name:
+            owner, name = full_name.split('/', 1)
+            return owner, name
+        tags_url_val = repo_obj.get('tags_url') or ''
+        m = re.search(r'/repos/([^/]+)/([^/]+)/tags', tags_url_val)
+        if m:
+            return m.group(1), m.group(2)
+        return 'lovaszotto', (repo_obj.get('name') or '').strip()
+
+    limit_tags_raw = (request.args.get('limit_tags') or '').strip()
+    try:
+        limit_tags = int(limit_tags_raw) if limit_tags_raw else 25
+    except Exception:
+        limit_tags = 25
+    limit_tags = max(0, min(limit_tags, 100))
+
+    release_cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'releases_cache.json')
+
+    def _load_release_cache() -> dict:
+        try:
+            if os.path.exists(release_cache_path):
+                with open(release_cache_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data if isinstance(data, dict) else {}
+        except Exception as e:
+            logger.info(f"[RELEASE-CACHE] Cache olvasási hiba: {e}")
+        return {}
+
+    def _save_release_cache(cache_obj: dict) -> None:
+        try:
+            tmp_path = release_cache_path + '.tmp'
+            with open(tmp_path, 'w', encoding='utf-8') as f:
+                json.dump(cache_obj, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, release_cache_path)
+        except Exception as e:
+            logger.info(f"[RELEASE-CACHE] Cache írási hiba: {e}")
+
+    release_cache = _load_release_cache()
+    release_cache_dirty = False
+
+    repos = get_repository_data()
+    result = []
+    headers = _github_headers()
+
+    token_present = bool(os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN'))
+
+    for repo in repos:
+        repo_name = repo.get('name')
+        owner, api_repo_name = _parse_owner_repo(repo)
+
+        release_meta = {
+            'source': 'none',
+            'status': 'none',
+        }
+
+        # Release adatok (tag -> release title/name és dátum)
+        release_name_by_tag: dict[str, str] = {}
+        release_date_by_tag: dict[str, str] = {}
+
+        # 1) Először próbáljunk cache-ből tölteni (token nélküli futásnál ez a fő útvonal)
+        cache_key = f"{owner}/{api_repo_name}"
+        cached_entry = release_cache.get(cache_key) if isinstance(release_cache, dict) else None
+        if isinstance(cached_entry, dict):
+            cached_releases = cached_entry.get('releases')
+            if isinstance(cached_releases, dict) and cached_releases:
+                for tag_name, meta in cached_releases.items():
+                    if not isinstance(meta, dict):
+                        continue
+                    rel_name = (meta.get('name') or '').strip()
+                    rel_date = (meta.get('date') or '').strip()
+                    if tag_name and rel_name:
+                        release_name_by_tag[tag_name] = rel_name
+                    if tag_name and rel_date:
+                        release_date_by_tag[tag_name] = rel_date
+                release_meta = {'source': 'cache', 'status': 'ok'}
+
+        # 2) Ha van token, frissítsük API-ból (és írjuk a cache-be)
+        if token_present:
+            try:
+                releases_url = f"https://api.github.com/repos/{owner}/{api_repo_name}/releases?per_page=100"
+                rr = requests.get(releases_url, headers=headers, timeout=15)
+                if rr.status_code == 200:
+                    api_release_name_by_tag: dict[str, str] = {}
+                    api_release_date_by_tag: dict[str, str] = {}
+                    releases_for_cache: dict[str, dict[str, str]] = {}
+                    for rel in (rr.json() or []):
+                        tag_name = (rel.get('tag_name') or '').strip()
+                        rel_name = (rel.get('name') or '').strip()
+                        rel_date = (rel.get('published_at') or rel.get('created_at') or '').strip()
+                        if not tag_name:
+                            continue
+                        if rel_name:
+                            api_release_name_by_tag[tag_name] = rel_name
+                        if rel_date:
+                            api_release_date_by_tag[tag_name] = rel_date
+                        releases_for_cache[tag_name] = {
+                            'name': rel_name,
+                            'date': rel_date,
+                        }
+
+                    # API eredmény legyen az elsődleges
+                    release_name_by_tag = api_release_name_by_tag
+                    release_date_by_tag = api_release_date_by_tag
+                    release_meta = {'source': 'api', 'status': 'ok'}
+
+                    if isinstance(release_cache, dict):
+                        release_cache[cache_key] = {
+                            'fetched_at': datetime.now().isoformat(timespec='seconds'),
+                            'releases': releases_for_cache,
+                        }
+                        release_cache_dirty = True
+                else:
+                    if rr.status_code == 403:
+                        release_meta = {'source': release_meta.get('source', 'none'), 'status': 'rate_limited'}
+                    else:
+                        release_meta = {'source': release_meta.get('source', 'none'), 'status': f"http_{rr.status_code}"}
+                    logger.info(f"[RELEASE-QUERY] Release-ek lekérése sikertelen: {releases_url} status={rr.status_code}")
+            except Exception as e:
+                release_meta = {'source': release_meta.get('source', 'none'), 'status': 'error'}
+                logger.info(f"[RELEASE-QUERY] Hiba a release-ek lekérésekor: {owner}/{api_repo_name}: {e}")
+        else:
+            if release_meta.get('status') != 'ok':
+                release_meta = {'source': 'none', 'status': 'missing_token'}
+
+        # Branch-ek és tag-ek git ls-remote alapján (nem GitHub API, így nem fut rate limitbe)
+        branches: list[str] = []
+        branch_heads: dict[str, str] = {}
+        tags: list[str] = []
+        tags_by_branch: dict[str, list[str]] = {}
+
+        try:
+            if get_sandbox_mode():
+                branches = ['main', 'teszt-branch']
+                branch_heads = {}
+            else:
+                git_url = f'https://github.com/lovaszotto/{repo_name}'
+                # branchek SHA-val
+                r_heads = subprocess.run(
+                    ['git', 'ls-remote', '--heads', git_url],
+                    capture_output=True, text=True, encoding='utf-8', timeout=30
+                )
+                if r_heads.returncode == 0:
+                    for line in (r_heads.stdout or '').splitlines():
+                        if not line.strip():
+                            continue
+                        sha, ref = line.split('\t', 1)
+                        if ref.startswith('refs/heads/'):
+                            b = ref.replace('refs/heads/', '')
+                            branches.append(b)
+                            branch_heads[b] = sha
+                else:
+                    logger.warning(f"[BRANCH-QUERY] git ls-remote --heads sikertelen: repo={repo_name} returncode={r_heads.returncode} stderr={r_heads.stderr}")
+
+                # tag-ek SHA-val (annotated tag esetén ^{} sor adja a commit SHA-t)
+                if limit_tags > 0:
+                    r_tags = subprocess.run(
+                        ['git', 'ls-remote', '--tags', git_url],
+                        capture_output=True, text=True, encoding='utf-8', timeout=30
+                    )
+                    if r_tags.returncode == 0:
+                        tag_commit_sha: dict[str, str] = {}
+                        tag_fallback_sha: dict[str, str] = {}
+                        for line in (r_tags.stdout or '').splitlines():
+                            if not line.strip():
+                                continue
+                            sha, ref = line.split('\t', 1)
+                            if not ref.startswith('refs/tags/'):
+                                continue
+                            name = ref.replace('refs/tags/', '')
+                            if name.endswith('^{}'):
+                                tag_name = name[:-3]
+                                tag_commit_sha[tag_name] = sha
+                            else:
+                                tag_name = name
+                                tag_fallback_sha.setdefault(tag_name, sha)
+
+                        tags = sorted(tag_fallback_sha.keys())
+                        if limit_tags:
+                            tags = tags[:limit_tags]
+
+                        # Best-effort hozzárendelés: tag commit SHA == branch head SHA
+                        if branch_heads:
+                            inv_heads: dict[str, list[str]] = {}
+                            for b, sha in branch_heads.items():
+                                inv_heads.setdefault(sha, []).append(b)
+
+                            for t in tags:
+                                sha = tag_commit_sha.get(t) or tag_fallback_sha.get(t)
+                                if not sha:
+                                    continue
+                                for b in inv_heads.get(sha, []):
+                                    tags_by_branch.setdefault(b, []).append(t)
+                    else:
+                        logger.warning(f"[TAG-QUERY] git ls-remote --tags sikertelen: repo={repo_name} returncode={r_tags.returncode} stderr={r_tags.stderr}")
+        except Exception as e:
+            logger.warning(f"[BRANCH/TAG-QUERY] Hiba git ls-remote alatt: repo={repo_name}: {e}")
+
+        # Heurisztikus besorolás: ha a tag neve pl. "IKK04_V1.1.0", akkor a "IKK04..." branch-hez rendeljük.
+        # Ez segít monorepo jellegű repositoryknál, ahol a tag a robot azonosítóját tartalmazza.
+        if tags and branches:
+            mapped_tags: set[str] = set()
+            for bt in tags_by_branch.values():
+                for t in bt:
+                    mapped_tags.add(t)
+
+            for t in tags:
+                if t in mapped_tags:
+                    continue
+                prefix = re.split(r'[_-]', t, 1)[0]
+                if not prefix:
+                    continue
+                matched = [b for b in branches if b.startswith(prefix)]
+                if matched:
+                    for b in matched:
+                        tags_by_branch.setdefault(b, []).append(t)
+                    mapped_tags.add(t)
+
+        result.append({
+            'name': repo_name,
+            'branches': branches,
+            'tags': tags,
+            'tags_by_branch': tags_by_branch,
+            'release_name_by_tag': release_name_by_tag,
+            'release_date_by_tag': release_date_by_tag,
+            'release_meta': release_meta,
+        })
+
+    if release_cache_dirty:
+        _save_release_cache(release_cache)
+
+    return jsonify(result)
+
 
 if __name__ == "__main__":
     # Indítsd a Flask szervert, hogy kívülről is elérhető legyen, ne csak localhostról

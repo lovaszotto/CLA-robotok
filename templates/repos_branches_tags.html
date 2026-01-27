@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <title>Letölthető robotok</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; }
+        h1 { color: #2c3e50; }
+        .repo { margin-bottom: 2em; }
+        .branches, .tags { margin-left: 2em; }
+        .section-title { font-weight: bold; margin-top: 0.5em; }
+        ul { list-style-type: disc; }
+    </style>
+</head>
+<body>
+    <h1>Letölthető robotok</h1>
+    <div id="repos-container">
+        Betöltés...
+    </div>
+    <script>
+        fetch('/api/repos_branches_tags')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('repos-container');
+                container.innerHTML = '';
+                if (data.length === 0) {
+                    container.innerHTML = '<p>Nincs elérhető repository.</p>';
+                    return;
+                }
+                data.forEach(repo => {
+                    const repoDiv = document.createElement('div');
+                    repoDiv.className = 'repo';
+                    repoDiv.innerHTML = `<h2>${repo.name}</h2>`;
+
+                    // Branchek
+                    const branches = repo.branches && repo.branches.length ?
+                        `<div class='branches'><span class='section-title'>Branchek:</span><ul>${repo.branches.map(b => `<li>${b}</li>`).join('')}</ul></div>` :
+                        `<div class='branches'><span class='section-title'>Nincs branch.</span></div>`;
+
+                    // Tag-ek
+                    const tags = repo.tags && repo.tags.length ?
+                        `<div class='tags'><span class='section-title'>Tag-ek:</span><ul>${repo.tags.map(t => `<li>${t}</li>`).join('')}</ul></div>` :
+                        `<div class='tags'><span class='section-title'>Nincs tag.</span></div>`;
+
+                    repoDiv.innerHTML += branches + tags;
+                    container.appendChild(repoDiv);
+                });
+            })
+            .catch(err => {
+                document.getElementById('repos-container').innerHTML = 'Hiba történt az adatok betöltésekor.';
+            });
+    </script>
+</body>
+</html>

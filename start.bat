@@ -13,6 +13,19 @@ cd /d "%~dp0"
 echo Aktualis munkakonyvtar: %CD%
 echo.
 
+:: Opcionális GitHub token betöltése (rate limit elkerüléséhez)
+:: Hozz létre egy github_token.txt fájlt a mappában, és az első sorba írd a tokened.
+if not defined GITHUB_TOKEN (
+    if exist "github_token.txt" (
+        set /p GITHUB_TOKEN=<"github_token.txt"
+    )
+)
+if not defined GH_TOKEN (
+    if defined GITHUB_TOKEN (
+        set "GH_TOKEN=%GITHUB_TOKEN%"
+    )
+)
+
 :: Virtualis kornyezet ellenorzese
 echo [1/3] Virtualis kornyezet ellenorzese...
 
@@ -47,10 +60,16 @@ if %errorlevel% neq 0 (
 echo [3/3] Repository adatok lekerése...
 .venv\Scripts\python.exe fetch_github_repos.py lovaszotto
 if %errorlevel% neq 0 (
-    echo HIBA: fetch_github_repos.py futtatasa sikertelen!
-    pause
-    exit /b 4
+    if exist "repos_response.json" (
+        echo FIGYELEM: repo frissites sikertelen, de a meglévő repos_response.json alapján folytatjuk.
+    ) else (
+        echo HIBA: fetch_github_repos.py futtatasa sikertelen es nincs repos_response.json!
+        pause
+        exit /b 4
+    )
 )
+
+
 
 echo.
 echo ================================================

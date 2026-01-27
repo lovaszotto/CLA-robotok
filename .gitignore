@@ -36,3 +36,10 @@ execution_results.json
 
 # GitHub API cache
 repos_response.json
+
+# GitHub release meta cache
+releases_cache.json
+
+# GitHub token (NE commitold!)
+github_token.txt
+.env

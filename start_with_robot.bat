@@ -7,6 +7,19 @@ echo.
 :: Könyvtár váltás a script helyére
 cd /d "%~dp0"
 
+:: Opcionális GitHub token betöltése (rate limit elkerüléséhez)
+:: Hozz létre egy github_token.txt fájlt a mappában, és az első sorba írd a tokened.
+if not defined GITHUB_TOKEN (
+    if exist "github_token.txt" (
+        set /p GITHUB_TOKEN=<"github_token.txt"
+    )
+)
+if not defined GH_TOKEN (
+    if defined GITHUB_TOKEN (
+        set "GH_TOKEN=%GITHUB_TOKEN%"
+    )
+)
+
 :: 1. Robot Framework teszt futtatása
 echo [1/4] Robot Framework teszt futtatása...
 robot CLA-Developer.robot

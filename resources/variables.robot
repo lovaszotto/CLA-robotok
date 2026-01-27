@@ -1,6 +1,6 @@
 *** Variables ***
 #verzió információ
-${VERSION}    1.1.0
+${VERSION}    1.2.0
 ${BUILD_DATE}    2025-11-23 03:22:00    
 
 # A git repository alap URL-je

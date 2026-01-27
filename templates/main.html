@@ -11,7 +11,41 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
 <style>
 .tab-content > .row { margin-bottom: 0 !important; }
-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background: white; min-height: 100vh; }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+    background-color: #ffffff;
+    background-image: url('https://www.clarity.hu/Digi/wp-content/uploads/2025/08/slide.jpg');
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: cover;
+    background-attachment: fixed;
+}
+
+/* Átlátszó/üvegszerű fejléc háttér (a háttérkép átüssön) */
+.header-glass {
+    position: relative;
+    overflow: hidden;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.header-glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%);
+    opacity: 0.01;
+}
+.header-glass > * {
+    position: relative;
+    z-index: 1;
+}
+
+
 main-container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; }
 page-header { background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%); color: white; padding: 30px; display: flex; align-items: center; justify-content: space-between; }
 page-header .header-content { display: flex; flex-direction: column; align-items: center; flex: 1; }
@@ -19,12 +53,44 @@ page-header h1 { margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 0 
 timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .nav-tabs {
     border-bottom: 3px solid {{ primary_color }};
-    background: #f8f9fa;
+    background: rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-left: 1px solid rgba(255, 255, 255, 0.25);
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
     align-items: flex-end;
     gap: 2px;
+}
+
+/* Üveg/átlátszó input mezők (keresők/szűrők) */
+.glass-input-group .input-group-text,
+.glass-input-group .form-control {
+    background: rgba(255, 255, 255, 0.22) !important;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-color: rgba(255, 255, 255, 0.35) !important;
+}
+.glass-input-group .form-control {
+    color: #1f2937;
+}
+.glass-input-group .form-control::placeholder {
+    color: rgba(31, 41, 55, 0.75);
+}
+
+/* Kilépés megerősítő modal: ne legyen átlátszó */
+#exitConfirmModal .modal-content {
+    background: #ffffff !important;
+    color: #111111 !important;
+    opacity: 1 !important;
+}
+/* Kilépés modal backdrop legyen kevésbé áttetsző */
+.modal-backdrop.exit-backdrop.show {
+    opacity: 0.95 !important;
+    background-color: #000000 !important;
 }
 .nav-tabs .nav-item {
     flex: 0 0 auto;
@@ -104,7 +170,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 <div class="container py-4">
     <div class="row mb-4">
         <div class="col-12">
-            <div class="p-4 rounded shadow" style="background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%); color: white;">
+            <div class="p-4 rounded shadow header-glass">
                 <h1 class="mb-0 bi bi-robot"> {{ page_title }}</h1>
                 <div class="timestamp">
                     <div>CLA-ssistant &copy; {{ datetime.now().year }} / Verzió: {{ version }} </div>
@@ -118,6 +184,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <i class="bi bi-play-circle"></i> Telepített robotok
             </button>
         </li>
+        <!-- Repo/Branch/Tag lista tab-link eltávolítva -->
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false">
                 <i class="bi bi-download"></i> Letölthető robotok
@@ -150,19 +217,13 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
            <div class="page-section py-4">
                <!-- Szűrő blokk a Telepített robotokhoz -->
                <div class="row mb-4 align-items-center">
-                   <div class="col-md-4">
-                       <div class="input-group">
-                           <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
-                           <input type="text" class="form-control" id="repoSearchRunnable" placeholder="Repository keresése..." onkeyup="filterReposRunnable()">
-                       </div>
-                   </div>
-                   <div class="col-md-4">
-                       <div class="input-group">
+                   <div class="col-md-6">
+                       <div class="input-group glass-input-group">
                            <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
                            <input type="text" class="form-control" id="branchFilterRunnable" placeholder="Robot szűrése..." onkeyup="filterReposRunnable()">
                        </div>
                    </div>
-                   <div class="col-md-4 d-flex align-items-center">
+                   <div class="col-md-6 d-flex align-items-center">
                        <div class="text-muted small">
                            <i class="bi bi-info-circle me-1"></i>
                            Kattintson a futtatás gombra a robot indításához
@@ -217,19 +278,13 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <!-- Letölthető robotok TAB -->
         <div class="tab-pane fade" id="available-pane" role="tabpanel">
             <div class="row mb-4 align-items-center">
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <span class="input-group-text bg-primary text-white"><i class="bi bi-search"></i></span>
-                        <input type="text" class="form-control" id="repoSearchAvailable" placeholder="Repository keresése..." onkeyup="filterReposAvailable()">
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="input-group">
+                <div class="col-md-6">
+                    <div class="input-group glass-input-group">
                         <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
                         <input type="text" class="form-control" id="branchFilterAvailable" placeholder="Robot szűrése..." onkeyup="filterReposAvailable()">
                     </div>
                 </div>
-                <div class="col-md-4 d-flex align-items-center">
+                <div class="col-md-6 d-flex align-items-center">
                     <div class="text-muted small">
                         <i class="bi bi-info-circle me-1"></i>
                         Kattintson a letöltés gombra azonnali telepítéshez
@@ -407,7 +462,32 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                         <div class="d-flex gap-2 mt-4">
                             <button type="submit" class="btn btn-primary">Beállítások mentése</button>
                             <button type="button" class="btn btn-secondary" onclick="resetSettings()">Alapértelmezett visszaállítás</button>
+                            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#repoBranchTagModal">
+                                <i class="bi bi-diagram-3"></i> Repo/Branch/Tag lista
+                            </button>
                         </div>
+                    <!-- Repo/Branch/Tag lista MODAL -->
+                    <div class="modal fade" id="repoBranchTagModal" tabindex="-1" aria-labelledby="repoBranchTagModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="repoBranchTagModalLabel">Letölthető robotok</h5>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" id="repoBranchTagRefreshBtn" title="Lista frissítése">
+                                            <i class="bi bi-arrow-clockwise"></i> Frissítés
+                                        </button>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+                                    </div>
+                                </div>
+                                <div class="modal-body">
+                                    <div id="repos-branch-tag-list">Betöltés...</div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bezárás</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     </form>
                 </div>
             </div>
@@ -428,9 +508,148 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         </div>
     </div>
 </div>
+
+<!-- Kilépés megerősítő MODAL (nem átlátszó) -->
+<div class="modal fade" id="exitConfirmModal" tabindex="-1" aria-labelledby="exitConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:#fff; color:#111; opacity:1;">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exitConfirmModalLabel">Kilépés megerősítése</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body">
+                Biztos, hogy ki szeretnél lépni és leállítani a szervert?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégse</button>
+                <button type="button" class="btn btn-danger" id="exitConfirmBtn">Kilépés</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/main.js" defer></script>
 <script>
+// --- Repo/Branch/Tag lista MODAL betöltés ---
+document.addEventListener('DOMContentLoaded', function() {
+    var repoModal = document.getElementById('repoBranchTagModal');
+    var refreshBtn = document.getElementById('repoBranchTagRefreshBtn');
+    if (repoModal) {
+        let isLoading = false;
+
+        const setLoading = (loading) => {
+            isLoading = loading;
+            if (refreshBtn) {
+                refreshBtn.disabled = loading;
+                refreshBtn.innerHTML = loading
+                    ? '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Frissítés'
+                    : '<i class="bi bi-arrow-clockwise"></i> Frissítés';
+            }
+        };
+
+        const loadRepoBranchTagList = () => {
+            if (isLoading) return;
+            const container = document.getElementById('repos-branch-tag-list');
+            if (!container) return;
+            container.innerHTML = 'Betöltés...';
+            setLoading(true);
+            fetch('/api/repos_branches_tags')
+                .then(async response => {
+                    if (!response.ok) {
+                        let body = '';
+                        try { body = await response.text(); } catch (e) { body = ''; }
+                        throw new Error(`HTTP ${response.status} ${response.statusText}${body ? `\n${body}` : ''}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    container.innerHTML = '';
+                    if (data.length === 0) {
+                        container.innerHTML = '<p>Nincs elérhető repository.</p>';
+                        return;
+                    }
+
+                    data.forEach(repo => {
+                        const repoDiv = document.createElement('div');
+                        repoDiv.className = 'repo mb-3';
+                        repoDiv.innerHTML = `<h5 class='mb-2'>${repo.name}</h5>`;
+
+                        const tagsByBranch = repo.tags_by_branch || {};
+                        const allTags = Array.isArray(repo.tags) ? repo.tags : [];
+                        const releaseNameByTag = repo.release_name_by_tag || {};
+                        const releaseDateByTag = repo.release_date_by_tag || {};
+
+                        const formatTag = (t) => {
+                            const rn = releaseNameByTag && releaseNameByTag[t] ? releaseNameByTag[t] : '';
+                            const rdRaw = releaseDateByTag && releaseDateByTag[t] ? releaseDateByTag[t] : '';
+                            const rd = rdRaw ? String(rdRaw).slice(0, 10) : '';
+                            if (rn && rd) return `${t} — ${rn} — ${rd}`;
+                            if (rn) return `${t} — ${rn}`;
+                            if (rd) return `${t} — ${rd}`;
+                            return `${t}`;
+                        };
+
+                        // Repo szintű tag lista elrejtve: a tag-ek branch-onként jelennek meg.
+
+                        // gyűjtsük össze a már besorolt tag-eket
+                        const mappedTags = {};
+                        Object.keys(tagsByBranch).forEach(b => {
+                            const arr = tagsByBranch[b] || [];
+                            arr.forEach(t => { mappedTags[t] = true; });
+                        });
+                        const unmapped = allTags.filter(t => !mappedTags[t]);
+
+                        // Branchek + tag-ek branch-onként (csak azokat a brancheket mutatjuk, ahol van tag)
+                        let branchesHtml = '';
+                        const branches = Array.isArray(repo.branches) ? repo.branches : [];
+                        const visibleBranches = branches.filter(b => {
+                            const bt = Array.isArray(tagsByBranch[b]) ? tagsByBranch[b] : [];
+                            return bt.length > 0;
+                        });
+
+                        // Ha egy repo-ban nincs egyetlen látható branch sem, akkor a repo blokk se jelenjen meg.
+                        if (visibleBranches.length === 0) {
+                            return;
+                        }
+
+                        branchesHtml += `<div class='branches'>`;
+                        visibleBranches.forEach(b => {
+                            const bt = Array.isArray(tagsByBranch[b]) ? tagsByBranch[b] : [];
+                            const tagsHtml = `<ul class='mb-1'>${bt.map(t => `<li>${formatTag(t)}</li>`).join('')}</ul>`;
+                            branchesHtml += `<div class='mt-2'><div class='fw-semibold'>${b}</div>${tagsHtml}</div>`;
+                        });
+                        branchesHtml += `</div>`;
+
+                        // Nem besorolható tag-ek (ha van)
+                        const unmappedHtml = unmapped.length
+                            ? `<div class='tags mt-3'><span class='fw-bold'>Nem besorolható tag-ek:</span><ul>${unmapped.map(t => `<li>${formatTag(t)}</li>`).join('')}</ul></div>`
+                            : '';
+
+                        repoDiv.innerHTML += branchesHtml + unmappedHtml;
+                        container.appendChild(repoDiv);
+                    });
+                })
+                .catch(err => {
+                    const msg = (err && err.message) ? err.message : String(err);
+                    container.innerHTML = `Hiba történt az adatok betöltésekor.<pre class='mt-2 mb-0' style='white-space:pre-wrap'>${msg}</pre>`;
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+        };
+
+        repoModal.addEventListener('show.bs.modal', function () {
+            loadRepoBranchTagList();
+        });
+
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function () {
+                loadRepoBranchTagList();
+            });
+        }
+    }
+});
 // --- Keresés/szűrés ---
 
 // Telepített robotok tab frissítése AJAX-szal
@@ -781,9 +1000,41 @@ function showToast(message, type = 'info') {
 
 // --- Kilépés gomb működése ---
 function exitApp() {
-    if (!confirm('Biztos, hogy ki szeretnél lépni és leállítani a szervert?')) {
-        return;
+    const modalEl = document.getElementById('exitConfirmModal');
+    const confirmBtn = document.getElementById('exitConfirmBtn');
+    if (!modalEl || !confirmBtn || !window.bootstrap) {
+        // Fallback: ha valamiért nincs modal (pl. JS hiba), akkor marad a régi confirm
+        if (!confirm('Biztos, hogy ki szeretnél lépni és leállítani a szervert?')) return;
+        return proceedExit();
     }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+    // Backdrop legyen kevésbé áttetsző ennél a modalnál
+    if (!modalEl.__exitBackdropHooked) {
+        modalEl.addEventListener('shown.bs.modal', function () {
+            const backdrops = document.getElementsByClassName('modal-backdrop');
+            const bd = backdrops && backdrops.length ? backdrops[backdrops.length - 1] : null;
+            if (bd) bd.classList.add('exit-backdrop');
+        });
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            const backdrops = document.getElementsByClassName('modal-backdrop');
+            for (let i = 0; i < (backdrops ? backdrops.length : 0); i++) {
+                backdrops[i].classList.remove('exit-backdrop');
+            }
+        });
+        modalEl.__exitBackdropHooked = true;
+    }
+
+    // Biztosítsuk, hogy ne duplán fusson rá a click handler
+    confirmBtn.onclick = () => {
+        modal.hide();
+        proceedExit();
+    };
+    modal.show();
+}
+
+function proceedExit() {
     const exitBtn = document.querySelector('#exit button, .btn-danger.btn-lg');
     if (exitBtn) {
         exitBtn.disabled = true;
