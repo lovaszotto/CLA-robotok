@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "id": 1,
+    "timestamp": "2026-01-28 05:50:37",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260128_055037",
+    "type": "bulk"
+  },
+  {
+    "id": 2,
+    "timestamp": "2026-01-28 06:05:55",
+    "repo": "IKK-Robotok",
+    "branch": "IKK01_Duplikáció-ellenőrzés",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "IKK-Robotok__IKK01_Duplikáció-ellenőrzés__20260128_060415",
+    "type": "install",
+    "stdout": "Install OK",
+    "stderr": ""
+  }
+]

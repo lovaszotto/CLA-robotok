@@ -1,10 +1,38 @@
 // --- Globális állapot: letöltés/futtatás folyamatban ---
 var IS_BUSY = false;
 
+async function sureConfirm({ title = 'Megerősítés', message = '', okText = 'OK', cancelText = 'Mégse', okVariant = 'primary' } = {}) {
+    if (typeof showSureBox === 'function') {
+        return await showSureBox({ title, message, okText, cancelText, okVariant, showCancel: true });
+    }
+    if (typeof showToast === 'function') {
+        showToast(String(message || ''), 'warning');
+    }
+    return false;
+}
+
+async function sureInfo({ title = 'Információ', message = '', okText = 'OK' } = {}) {
+    if (typeof showInfoBox === 'function') {
+        await showInfoBox(message, title, okText);
+        return true;
+    }
+    if (typeof showToast === 'function') {
+        showToast(String(message || ''), 'info');
+    }
+    return true;
+}
+
 // --- Letöltés gombok kezelése: installRobot ---
-function installRobot(repo, branch, btn) {
+async function installRobot(repo, branch, btn) {
     if (IS_BUSY) return;
-    if (!confirm('Biztosan le szeretnéd tölteni ezt a robotot?\nNév: ' + repo + (branch ? ('\nBranch: ' + branch) : ''))) return;
+    const ok = await sureConfirm({
+        title: 'Robot letöltése',
+        message: 'Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
+        okText: 'Letöltés',
+        cancelText: 'Mégse',
+        okVariant: 'primary'
+    });
+    if (!ok) return;
     IS_BUSY = true;
     if (btn) {
         btn.disabled = true;
@@ -27,11 +55,10 @@ function installRobot(repo, branch, btn) {
     })
     .then(data => {
         let msg = data && data.message ? data.message : 'Letöltés sikeresen befejeződött!';
-        alert(msg);
-        location.reload();
+        return sureInfo({ title: 'Letöltés', message: msg, okText: 'OK' }).then(() => location.reload());
     })
     .catch(err => {
-        alert('Hiba a letöltés során: ' + err);
+        return sureInfo({ title: 'Hiba', message: 'Hiba a letöltés során: ' + err, okText: 'OK' });
     })
     .finally(() => {
         IS_BUSY = false;
@@ -43,11 +70,18 @@ function installRobot(repo, branch, btn) {
 }
 
 // --- Futtatás gomb kezelése: executeSingleRobot ---
-function executeSingleRobot(btn) {
+async function executeSingleRobot(btn) {
     if (IS_BUSY) return;
     const repo = btn.getAttribute('data-repo');
     const branch = btn.getAttribute('data-branch');
-    if (!confirm('Biztosan elindítod ezt a robotot?\nNév: ' + repo + (branch ? ('\nBranch: ' + branch) : ''))) return;
+    const ok = await sureConfirm({
+        title: 'Robot futtatása',
+        message: 'Biztosan elindítod ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
+        okText: 'Futtatás',
+        cancelText: 'Mégse',
+        okVariant: 'primary'
+    });
+    if (!ok) return;
     IS_BUSY = true;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
@@ -59,14 +93,14 @@ function executeSingleRobot(btn) {
     .then(response => response.json())
     .then(data => {
         if (data && data.success) {
-            alert('Futtatás sikeres!');
+            return sureInfo({ title: 'Futtatás', message: 'Futtatás sikeres!', okText: 'OK' });
         } else {
             let msg = (data && data.error) ? data.error : 'Ismeretlen hiba a futtatás során!';
-            alert('Hiba: ' + msg);
+            return sureInfo({ title: 'Hiba', message: 'Hiba: ' + msg, okText: 'OK' });
         }
     })
     .catch(err => {
-        alert('Hiba a futtatás során: ' + err);
+        return sureInfo({ title: 'Hiba', message: 'Hiba a futtatás során: ' + err, okText: 'OK' });
     })
     .finally(() => {
         IS_BUSY = false;

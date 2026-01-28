@@ -691,6 +691,25 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     </div>
 </div>
 
+<!-- Általános megerősítő / üzenet MODAL (Bootstrap "sure box") -->
+<div class="modal fade" id="sureBoxModal" tabindex="-1" aria-labelledby="sureBoxModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:#fff; color:#111; opacity:1;">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sureBoxModalLabel">Megerősítés</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body">
+                <div id="sureBoxModalBody" style="white-space:pre-wrap;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="sureBoxCancelBtn" data-bs-dismiss="modal">Mégse</button>
+                <button type="button" class="btn btn-primary" id="sureBoxOkBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/static/main.js" defer></script>
 <script>
@@ -1070,11 +1089,12 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // --- Robot futtatás ---
-function executeSingleRobot(button) {
+async function executeSingleRobot(button) {
     const repo = button.getAttribute('data-repo');
     const branch = button.getAttribute('data-branch');
     const msg = `Valóban futtassam a robotot?\n\nRepo: ${repo}\nBranch: ${branch}`;
-    if (!confirm(msg)) return;
+    const ok = await showSureBox({ title: 'Robot futtatása', message: msg, okText: 'Futtatás', cancelText: 'Mégse', okVariant: 'primary', showCancel: true });
+    if (!ok) return;
     try {
         showToast(`Robot futtatása indult: ${repo}/${branch}`, 'info');
         if (button) {
@@ -1122,7 +1142,7 @@ function executeRobot(repo, branch, button) {
         setTimeout(() => msg.remove(), 10000);
     })
     .catch(err => {
-        alert('Hiba történt a szerver hívása közben.');
+        showInfoBox('Hiba történt a szerver hívása közben.', 'Hiba');
         if (button) {
             button.disabled = false;
             if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
@@ -1131,10 +1151,11 @@ function executeRobot(repo, branch, button) {
 }
 
 // --- Letöltés ---
-function installRobot(repo, branch, buttonElement) {
+async function installRobot(repo, branch, buttonElement) {
     console.log('[DOWNLOAD] Gomb megnyomva:', {repo, branch, buttonElement});
     const msg = `Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ${repo}\nBranch: ${branch}\n\nEz a művelet hosszabb ideig is eltarthat!`;
-    if (!confirm(msg)) {
+    const ok = await showSureBox({ title: 'Robot letöltése', message: msg, okText: 'Letöltés', cancelText: 'Mégse', okVariant: 'primary', showCancel: true });
+    if (!ok) {
         console.log('[DOWNLOAD] Letöltés megszakítva a felhasználó által.');
         return;
     }
@@ -1216,8 +1237,16 @@ function installRobots(robots, options = {}) {
 }
 
 // --- Branch törlés ---
-function deleteRunnableBranch(repo, branch) {
-    if (confirm('Valóban törölni szeretnéd a futtathatók közül?\n\nRepository: ' + repo + '\nBranch: ' + branch)) {
+async function deleteRunnableBranch(repo, branch) {
+    const ok = await showSureBox({
+        title: 'Törlés megerősítése',
+        message: 'Valóban törölni szeretnéd a futtathatók közül?\n\nRepository: ' + repo + '\nBranch: ' + branch,
+        okText: 'Törlés',
+        cancelText: 'Mégse',
+        okVariant: 'danger',
+        showCancel: true
+    });
+    if (!ok) return;
         fetch('/delete_runnable_branch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1245,7 +1274,6 @@ function deleteRunnableBranch(repo, branch) {
         .catch(err => {
             showToast('Hiba a törlés során: ' + err, 'danger');
         });
-    }
 }
 
 // --- Toast segédfüggvény ---
@@ -1259,8 +1287,84 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 3500);
 }
 
-function clearAllLogs() {
-    if (!confirm('Biztosan törlöd az összes napló bejegyzést?\n\nEz törli a Server Log tartalmát és az Eredmények listát is.')) return;
+// --- Bootstrap "sure box" (alert/confirm helyett) ---
+function showSureBox({
+    title = 'Megerősítés',
+    message = '',
+    okText = 'OK',
+    cancelText = 'Mégse',
+    okVariant = 'primary',
+    showCancel = true
+} = {}) {
+    return new Promise((resolve) => {
+        const settle = (value) => {
+            try { resolve(!!value); } catch (e) { /* ignore */ }
+        };
+
+        try {
+            const modalEl = document.getElementById('sureBoxModal');
+            const titleEl = document.getElementById('sureBoxModalLabel');
+            const bodyEl = document.getElementById('sureBoxModalBody');
+            const okBtn = document.getElementById('sureBoxOkBtn');
+            const cancelBtn = document.getElementById('sureBoxCancelBtn');
+
+            if (!modalEl || !titleEl || !bodyEl || !okBtn || !cancelBtn || !window.bootstrap) {
+                // Fallback: ne használjunk natív alert/confirm ablakokat
+                try {
+                    if (typeof showToast === 'function') {
+                        showToast(String(message || ''), showCancel ? 'warning' : 'info');
+                    }
+                } catch (e) { /* ignore */ }
+                return settle(!showCancel);
+            }
+
+            titleEl.textContent = title || 'Megerősítés';
+            bodyEl.textContent = message || '';
+            okBtn.textContent = okText || 'OK';
+            cancelBtn.textContent = cancelText || 'Mégse';
+            cancelBtn.classList.toggle('d-none', !showCancel);
+
+            okBtn.className = 'btn';
+            okBtn.classList.add(`btn-${okVariant || 'primary'}`);
+
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            let settled = false;
+            const done = (value) => {
+                if (settled) return;
+                settled = true;
+                settle(value);
+            };
+
+            okBtn.onclick = () => { done(true); try { modal.hide(); } catch (e) {} };
+            cancelBtn.onclick = () => { done(false); };
+            modalEl.addEventListener('hidden.bs.modal', () => done(false), { once: true });
+
+            modal.show();
+        } catch (e) {
+            try {
+                if (typeof showToast === 'function') {
+                    showToast(String(message || ''), showCancel ? 'warning' : 'info');
+                }
+            } catch (e2) { /* ignore */ }
+            return settle(!showCancel);
+        }
+    });
+}
+
+function showInfoBox(message, title = 'Információ', okText = 'OK') {
+    return showSureBox({ title, message, okText, showCancel: false, okVariant: 'primary' });
+}
+
+async function clearAllLogs() {
+    const ok = await showSureBox({
+        title: 'Naplók törlése',
+        message: 'Biztosan törlöd az összes napló bejegyzést?\n\nEz törli a Server Log tartalmát és az Eredmények listát is.',
+        okText: 'Törlés',
+        cancelText: 'Mégse',
+        okVariant: 'danger',
+        showCancel: true
+    });
+    if (!ok) return;
     fetch('/api/clear-logs', { method: 'POST' })
         .then(r => r.json().then(j => ({ ok: r.ok, json: j })))
         .then(({ ok, json }) => {
@@ -1288,8 +1392,16 @@ function clearAllLogs() {
         });
 }
 
-function clearResultsFiles() {
-    if (!confirm('Biztosan törlöd a "results" mappa ÖSSZES almappáját?\n\nEz a futási logokat/jelentéseket is törli.')) return;
+async function clearResultsFiles() {
+    const ok = await showSureBox({
+        title: 'Eredmény mappák törlése',
+        message: 'Biztosan törlöd a "results" mappa ÖSSZES almappáját?\n\nEz a futási logokat/jelentéseket is törli.',
+        okText: 'Törlés',
+        cancelText: 'Mégse',
+        okVariant: 'danger',
+        showCancel: true
+    });
+    if (!ok) return;
     fetch('/api/clear-results-files', { method: 'POST' })
         .then(r => r.json().then(j => ({ ok: r.ok, json: j })))
         .then(({ ok, json }) => {
@@ -1371,8 +1483,16 @@ function saveGitHubToken() {
     });
 }
 
-function clearGitHubToken() {
-    if (!confirm('Biztosan törlöd a GitHub tokent a szerverről?')) return;
+async function clearGitHubToken() {
+    const ok = await showSureBox({
+        title: 'GitHub token törlése',
+        message: 'Biztosan törlöd a GitHub tokent a szerverről?',
+        okText: 'Törlés',
+        cancelText: 'Mégse',
+        okVariant: 'danger',
+        showCancel: true
+    });
+    if (!ok) return;
     fetch('/api/set_github_token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1418,9 +1538,19 @@ function exitApp() {
     const modalEl = document.getElementById('exitConfirmModal');
     const confirmBtn = document.getElementById('exitConfirmBtn');
     if (!modalEl || !confirmBtn || !window.bootstrap) {
-        // Fallback: ha valamiért nincs modal (pl. JS hiba), akkor marad a régi confirm
-        if (!confirm('Biztos, hogy ki szeretnél lépni és leállítani a szervert?')) return;
-        return proceedExit();
+        // Fallback: ha valamiért nincs exit modal, használjuk az általános sure box-ot
+        showSureBox({
+            title: 'Kilépés',
+            message: 'Biztos, hogy ki szeretnél lépni és leállítani a szervert?',
+            okText: 'Kilépés',
+            cancelText: 'Mégse',
+            okVariant: 'danger',
+            showCancel: true
+        }).then((ok) => {
+            if (!ok) return;
+            proceedExit();
+        });
+        return;
     }
 
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -1624,14 +1754,14 @@ function sortResults(column) {
     loadResults(currentPage, getCurrentSearch(), getCurrentStatusFilter(), getCurrentDateFilter());
 }
 function viewDetails(resultId) {
-    alert(`Eredmény részletei: ID ${resultId}`);
+    showInfoBox(`Eredmény részletei: ID ${resultId}`, 'Eredmény');
 }
 function openResults(resultsDir) {
     try {
         const modalEl = document.getElementById('resultsModal');
         const iframe = document.getElementById('resultsModalIframe');
         if (!modalEl || !iframe) {
-            alert(resultsDir);
+            showInfoBox(String(resultsDir || ''), 'Eredmények elérési út');
             return;
         }
         let dir = resultsDir || '';
@@ -1719,7 +1849,7 @@ function openResults(resultsDir) {
             });
     } catch (e) {
         console.error('openResults hiba:', e);
-        alert(resultsDir);
+        showInfoBox(String(resultsDir || ''), 'Eredmények elérési út');
     }
 }
 
