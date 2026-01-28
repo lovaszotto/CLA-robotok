@@ -68,13 +68,13 @@
     "deployments_url": "https://api.github.com/repos/lovaszotto/CLA-robotok/deployments",
     "created_at": "2025-09-10T20:14:55Z",
     "updated_at": "2025-10-16T06:49:02Z",
-    "pushed_at": "2026-01-27T13:12:26Z",
+    "pushed_at": "2026-01-27T13:21:13Z",
     "git_url": "git://github.com/lovaszotto/CLA-robotok.git",
     "ssh_url": "git@github.com:lovaszotto/CLA-robotok.git",
     "clone_url": "https://github.com/lovaszotto/CLA-robotok.git",
     "svn_url": "https://github.com/lovaszotto/CLA-robotok",
     "homepage": "",
-    "size": 548,
+    "size": 572,
     "stargazers_count": 0,
     "watchers_count": 0,
     "language": "RobotFramework",
@@ -98,7 +98,14 @@
     "forks": 0,
     "open_issues": 1,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1057782162,
@@ -199,7 +206,14 @@
     "forks": 0,
     "open_issues": 0,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1057648914,
@@ -270,7 +284,7 @@
     "deployments_url": "https://api.github.com/repos/lovaszotto/IKK-Robotok/deployments",
     "created_at": "2025-09-16T02:57:54Z",
     "updated_at": "2025-10-09T13:07:41Z",
-    "pushed_at": "2026-01-27T09:16:36Z",
+    "pushed_at": "2026-01-28T03:30:33Z",
     "git_url": "git://github.com/lovaszotto/IKK-Robotok.git",
     "ssh_url": "git@github.com:lovaszotto/IKK-Robotok.git",
     "clone_url": "https://github.com/lovaszotto/IKK-Robotok.git",
@@ -300,7 +314,14 @@
     "forks": 0,
     "open_issues": 3,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1090750125,
@@ -401,7 +422,14 @@
     "forks": 0,
     "open_issues": 0,
     "watchers": 0,
-    "default_branch": "master"
+    "default_branch": "master",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1050810416,
@@ -502,6 +530,13 @@
     "forks": 0,
     "open_issues": 15,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   }
 ]

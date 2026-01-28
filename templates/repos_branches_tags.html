@@ -32,6 +32,36 @@
                     repoDiv.className = 'repo';
                     repoDiv.innerHTML = `<h2>${repo.name}</h2>`;
 
+                    const releaseNameByTag = repo.release_name_by_tag || {};
+                    const releaseDateByTag = repo.release_date_by_tag || {};
+
+                    const tagDateMs = (t) => {
+                        const raw = releaseDateByTag && releaseDateByTag[t] ? String(releaseDateByTag[t]) : '';
+                        const d = raw ? new Date(raw) : null;
+                        const ms = (d && !isNaN(d.getTime())) ? d.getTime() : 0;
+                        return ms;
+                    };
+
+                    const sortTagsNewestFirst = (arr) => {
+                        const list = Array.isArray(arr) ? arr.slice() : [];
+                        list.sort((a, b) => {
+                            const dm = tagDateMs(b) - tagDateMs(a);
+                            if (dm !== 0) return dm;
+                            return String(b).localeCompare(String(a));
+                        });
+                        return list;
+                    };
+
+                    const formatTag = (t) => {
+                        const rn = releaseNameByTag && releaseNameByTag[t] ? releaseNameByTag[t] : '';
+                        const rdRaw = releaseDateByTag && releaseDateByTag[t] ? releaseDateByTag[t] : '';
+                        const rd = rdRaw ? String(rdRaw).slice(0, 10) : '';
+                        if (rn && rd) return `${t} — ${rn} — ${rd}`;
+                        if (rn) return `${t} — ${rn}`;
+                        if (rd) return `${t} — ${rd}`;
+                        return `${t}`;
+                    };
+
                     // Branchek
                     const branches = repo.branches && repo.branches.length ?
                         `<div class='branches'><span class='section-title'>Branchek:</span><ul>${repo.branches.map(b => `<li>${b}</li>`).join('')}</ul></div>` :
@@ -39,7 +69,7 @@
 
                     // Tag-ek
                     const tags = repo.tags && repo.tags.length ?
-                        `<div class='tags'><span class='section-title'>Tag-ek:</span><ul>${repo.tags.map(t => `<li>${t}</li>`).join('')}</ul></div>` :
+                        `<div class='tags'><span class='section-title'>Tag-ek:</span><ul>${sortTagsNewestFirst(repo.tags).map(t => `<li>${formatTag(t)}</li>`).join('')}</ul></div>` :
                         `<div class='tags'><span class='section-title'>Nincs tag.</span></div>`;
 
                     repoDiv.innerHTML += branches + tags;

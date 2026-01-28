@@ -39,10 +39,15 @@ body {
     inset: 0;
     background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%);
     opacity: 0.01;
+    pointer-events: none;
 }
 .header-glass > * {
     position: relative;
     z-index: 1;
+}
+
+.exit-icon-wrap {
+    z-index: 2;
 }
 
 
@@ -75,10 +80,14 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     border-color: rgba(255, 255, 255, 0.35) !important;
 }
 .glass-input-group .form-control {
-    color: #1f2937;
+    color: #ffffff;
 }
 .glass-input-group .form-control::placeholder {
-    color: rgba(31, 41, 55, 0.75);
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.glass-input-group .input-group-text {
+    color: #ffffff;
 }
 
 /* Olyan panelekhez, ahol nem szeretnénk átlátszó hátteret (pl. Kilépés oldal) */
@@ -104,7 +113,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     flex: 0 0 auto;
 }
 .nav-tabs .nav-link {
-    color: #495057;
+    color: #ffffff;
     border: none;
     padding: 8px 16px;
     font-weight: 600;
@@ -172,6 +181,10 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .hidden { display: none !important; }
 .spinning { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.tab-hint {
+    color: #ffffff !important;
+}
 </style>
 </head>
 <body>
@@ -179,6 +192,11 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     <div class="row mb-4">
         <div class="col-12">
             <div class="p-4 rounded shadow header-glass">
+                <div class="position-absolute top-0 end-0 p-3 exit-icon-wrap">
+                    <button class="btn btn-outline-light btn-sm" id="exitIconBtn" type="button" title="Kilépés">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </button>
+                </div>
                 <h1 class="mb-0 bi bi-robot"> {{ page_title }}</h1>
                 <div class="timestamp">
                     <div>CLA-ssistant &copy; {{ datetime.now().year }} / Verzió: {{ version }} </div>
@@ -214,11 +232,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <i class="bi bi-file-earmark-text"></i> Log
             </button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="exit-tab" data-bs-toggle="tab" data-bs-target="#exit" type="button" role="tab" aria-controls="exit" aria-selected="false">
-                <i class="bi bi-box-arrow-right"></i> Kilépés
-            </button>
-        </li>
     </ul>
     <div class="ms-auto" style="min-width: 280px;">
         <div class="input-group glass-input-group">
@@ -230,10 +243,10 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     <div class="tab-content" id="mainTabContent">
         <!-- Telepített robotok TAB -->
         <div class="tab-pane fade show active" id="runnable" role="tabpanel" aria-labelledby="runnable-tab">
-           <div class="page-section py-4">
+           <div class="page-section pt-0 pb-4">
                <div class="row mb-4 align-items-center">
                    <div class="col-12 d-flex align-items-center">
-                       <div class="text-muted small">
+                       <div class="tab-hint small">
                            <i class="bi bi-info-circle me-1"></i>
                            Kattintson a futtatás gombra a robot indításához
                        </div>
@@ -288,7 +301,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <div class="tab-pane fade" id="available-pane" role="tabpanel">
             <div class="row mb-4 align-items-center">
                 <div class="col-12 d-flex align-items-center">
-                    <div class="text-muted small">
+                    <div class="tab-hint small">
                         <i class="bi bi-info-circle me-1"></i>
                         Kattintson a letöltés gombra azonnali telepítéshez
                     </div>
@@ -322,7 +335,19 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
                                             <i class="bi bi-download"></i>
                                         </button>
-                                        <span>{{ branch }}</span>
+                                        {% set rel = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
+                                        <span>
+                                            {{ branch }}
+                                            {% if rel and (rel.get('tag') or rel.get('title') or rel.get('date')) %}
+                                                <small class="text-muted ms-1">
+                                                    (
+                                                    {% if rel.get('tag') %}{{ rel.get('tag') }}{% endif %}
+                                                    {% if rel.get('title') %}{% if rel.get('tag') %} — {% endif %}{{ rel.get('title') }}{% endif %}
+                                                    {% if rel.get('date') %}{% if rel.get('tag') or rel.get('title') %} — {% endif %}{{ rel.get('date')[:10] }}{% endif %}
+                                                    )
+                                                </small>
+                                            {% endif %}
+                                        </span>
                                      </div>
                                 {% endfor %}
                             </div>
@@ -462,6 +487,20 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             <input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
                             <label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
                         </div>
+
+                        <div class="mb-3">
+                            <label for="githubToken" class="form-label">GitHub Token</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="githubToken" placeholder="ghp_...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="toggleGitHubTokenVisibility()">Mutat/Rejt</button>
+                            </div>
+                            <div class="form-text">A token a szerveren a github_token.txt fájlba kerül, és a release információk (cím + dátum) lekéréséhez kell.</div>
+                            <div class="d-flex align-items-center gap-2 mt-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveGitHubToken()">Token mentése</button>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearGitHubToken()">Token törlése</button>
+                                <span class="ms-auto small text-muted" id="githubTokenStatus"></span>
+                            </div>
+                        </div>
                         <div class="d-flex gap-2 mt-4">
                             <button type="submit" class="btn btn-primary">Beállítások mentése</button>
                             <button type="button" class="btn btn-secondary" onclick="resetSettings()">Alapértelmezett visszaállítás</button>
@@ -583,6 +622,24 @@ document.addEventListener('DOMContentLoaded', function() {
                         const releaseNameByTag = repo.release_name_by_tag || {};
                         const releaseDateByTag = repo.release_date_by_tag || {};
 
+                        const tagDateMs = (t) => {
+                            const raw = releaseDateByTag && releaseDateByTag[t] ? String(releaseDateByTag[t]) : '';
+                            const d = raw ? new Date(raw) : null;
+                            const ms = (d && !isNaN(d.getTime())) ? d.getTime() : 0;
+                            return ms;
+                        };
+
+                        const sortTagsNewestFirst = (arr) => {
+                            const list = Array.isArray(arr) ? arr.slice() : [];
+                            list.sort((a, b) => {
+                                const dm = tagDateMs(b) - tagDateMs(a);
+                                if (dm !== 0) return dm;
+                                // fallback: tag név szerint csökkenő (gyakran verzióknál is jó)
+                                return String(b).localeCompare(String(a));
+                            });
+                            return list;
+                        };
+
                         const formatTag = (t) => {
                             const rn = releaseNameByTag && releaseNameByTag[t] ? releaseNameByTag[t] : '';
                             const rdRaw = releaseDateByTag && releaseDateByTag[t] ? releaseDateByTag[t] : '';
@@ -602,6 +659,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             arr.forEach(t => { mappedTags[t] = true; });
                         });
                         const unmapped = allTags.filter(t => !mappedTags[t]);
+                        const unmappedSorted = sortTagsNewestFirst(unmapped);
 
                         // Branchek + tag-ek branch-onként (csak azokat a brancheket mutatjuk, ahol van tag)
                         let branchesHtml = '';
@@ -619,14 +677,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         branchesHtml += `<div class='branches'>`;
                         visibleBranches.forEach(b => {
                             const bt = Array.isArray(tagsByBranch[b]) ? tagsByBranch[b] : [];
-                            const tagsHtml = `<ul class='mb-1'>${bt.map(t => `<li>${formatTag(t)}</li>`).join('')}</ul>`;
+                            const btSorted = sortTagsNewestFirst(bt);
+                            const tagsHtml = `<ul class='mb-1'>${btSorted.map(t => `<li>${formatTag(t)}</li>`).join('')}</ul>`;
                             branchesHtml += `<div class='mt-2'><div class='fw-semibold'>${b}</div>${tagsHtml}</div>`;
                         });
                         branchesHtml += `</div>`;
 
                         // Nem besorolható tag-ek (ha van)
-                        const unmappedHtml = unmapped.length
-                            ? `<div class='tags mt-3'><span class='fw-bold'>Nem besorolható tag-ek:</span><ul>${unmapped.map(t => `<li>${formatTag(t)}</li>`).join('')}</ul></div>`
+                        const unmappedHtml = unmappedSorted.length
+                            ? `<div class='tags mt-3'><span class='fw-bold'>Nem besorolható tag-ek:</span><ul>${unmappedSorted.map(t => `<li>${formatTag(t)}</li>`).join('')}</ul></div>`
                             : '';
 
                         repoDiv.innerHTML += branchesHtml + unmappedHtml;
@@ -733,9 +792,21 @@ function renderAvailableRepos(repos) {
     if (!repos || repos.length === 0) {
         return '<div class="col-12 text-center"><h2 class="text-muted mt-5">Nincs letölthető robot.</h2></div>';
     }
+
+    const escapeHtml = (value) => {
+        const s = (value === null || value === undefined) ? '' : String(value);
+        return s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+
     let html = '';
     repos.forEach(repo => {
         if (!repo.branches || repo.branches.length === 0) return;
+        const relMap = repo.available_branch_releases || {};
         html += `
         <div class="col-lg-6 col-xl-4 mb-4 repo-item-available" data-repo-name="${repo.name}">
             <div class="card repo-card h-100">
@@ -757,7 +828,16 @@ function renderAvailableRepos(repos) {
                                 <button class="btn btn-warning btn-sm me-2 text-dark" type="button" title="Azonnali letöltés" onclick='installRobot(${JSON.stringify(repo.name)}, ${JSON.stringify(branch)}, this)'>
                                     <i class="bi bi-download"></i>
                                 </button>
-                                <span>${branch}</span>
+                                ${(() => {
+                                    const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                    if (!rel) return `<span>${escapeHtml(branch)}</span>`;
+                                    const tag = rel.tag ? escapeHtml(rel.tag) : '';
+                                    const title = rel.title ? escapeHtml(rel.title) : '';
+                                    const date = rel.date ? escapeHtml(String(rel.date).slice(0, 10)) : '';
+                                    const parts = [tag, title, date].filter(Boolean);
+                                    const suffix = parts.length ? ` <small class="text-muted ms-1">(${parts.join(' — ')})</small>` : '';
+                                    return `<span>${escapeHtml(branch)}${suffix}</span>`;
+                                })()}
                             </div>
                         `).join('')}
                     </div>
@@ -1059,6 +1139,103 @@ function showToast(message, type = 'info') {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3500);
 }
+
+// --- GitHub token (Beállítások tab) ---
+function toggleGitHubTokenVisibility() {
+    const input = document.getElementById('githubToken');
+    if (!input) return;
+    input.type = (input.type === 'password') ? 'text' : 'password';
+}
+
+function setGitHubTokenStatusText(text) {
+    const el = document.getElementById('githubTokenStatus');
+    if (el) el.textContent = text || '';
+}
+
+function refreshGitHubTokenStatus() {
+    return fetch('/api/get_github_token_status')
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.present) {
+                const hint = data.hint ? ` (${data.hint})` : '';
+                const source = data.source ? `, forrás: ${data.source}` : '';
+                setGitHubTokenStatusText(`Beállítva${hint}${source}`);
+            } else {
+                setGitHubTokenStatusText('Nincs beállítva');
+            }
+        })
+        .catch(() => setGitHubTokenStatusText('Token státusz nem elérhető'));
+}
+
+function saveGitHubToken() {
+    const input = document.getElementById('githubToken');
+    const token = (input?.value || '').trim();
+    if (!token) {
+        showToast('Adj meg GitHub tokent a mentéshez.', 'warning');
+        return;
+    }
+    fetch('/api/set_github_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data && data.success) {
+            if (input) input.value = '';
+            showToast('GitHub token elmentve.', 'success');
+            refreshGitHubTokenStatus();
+            if (typeof refreshAvailableRobots === 'function') refreshAvailableRobots();
+        } else {
+            showToast('Token mentés hiba: ' + (data.error || 'Ismeretlen'), 'danger');
+        }
+    })
+    .catch(err => {
+        showToast('Token mentés hiba: ' + err, 'danger');
+    });
+}
+
+function clearGitHubToken() {
+    if (!confirm('Biztosan törlöd a GitHub tokent a szerverről?')) return;
+    fetch('/api/set_github_token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear: true })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data && data.success) {
+            showToast('GitHub token törölve.', 'success');
+            refreshGitHubTokenStatus();
+            if (typeof refreshAvailableRobots === 'function') refreshAvailableRobots();
+        } else {
+            showToast('Token törlés hiba: ' + (data.error || 'Ismeretlen'), 'danger');
+        }
+    })
+    .catch(err => {
+        showToast('Token törlés hiba: ' + err, 'danger');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Ha a token már be van állítva (env/file), mutassuk a státuszt
+    refreshGitHubTokenStatus();
+
+    const exitIconBtn = document.getElementById('exitIconBtn');
+    if (exitIconBtn) {
+        exitIconBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            try { exitApp(); } catch (err) { console.warn('exitApp hívás hiba:', err); }
+        });
+    }
+
+    const settingsTab = document.getElementById('settings-tab');
+    if (settingsTab) {
+        settingsTab.addEventListener('shown.bs.tab', function () {
+            refreshGitHubTokenStatus();
+        });
+    }
+});
 
 // --- Kilépés gomb működése ---
 function exitApp() {

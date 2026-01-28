@@ -302,6 +302,170 @@ def get_repository_data():
         return []
 
 
+def _get_github_token() -> str | None:
+    token = (os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN') or '').strip()
+    if token:
+        return token
+    try:
+        token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'github_token.txt')
+        if os.path.exists(token_path):
+            with open(token_path, 'r', encoding='utf-8', errors='replace') as f:
+                token_file = (f.read() or '').strip()
+            if token_file:
+                os.environ.setdefault('GITHUB_TOKEN', token_file)
+                return token_file
+    except Exception as e:
+        logger.info(f"[GITHUB-TOKEN] Token fájl olvasási hiba: {e}")
+    return None
+
+
+def _github_headers() -> dict:
+    headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'CLA-ssistant'}
+    token = _get_github_token()
+    if token:
+        headers['Authorization'] = f'token {token}'
+    return headers
+
+
+def _parse_owner_repo(repo_obj: dict) -> tuple[str, str]:
+    full_name = (repo_obj.get('full_name') or '').strip()
+    if '/' in full_name:
+        owner, name = full_name.split('/', 1)
+        return owner, name
+    tags_url_val = repo_obj.get('tags_url') or ''
+    m = re.search(r'/repos/([^/]+)/([^/]+)/tags', tags_url_val)
+    if m:
+        return m.group(1), m.group(2)
+    return 'lovaszotto', (repo_obj.get('name') or '').strip()
+
+
+def _parse_github_iso_datetime(dt_raw: str) -> datetime | None:
+    try:
+        s = (dt_raw or '').strip()
+        if not s:
+            return None
+        return datetime.fromisoformat(s.replace('Z', '+00:00'))
+    except Exception:
+        return None
+
+
+def get_latest_release_by_branch(repo_obj: dict, branches: list[str]) -> dict[str, dict[str, str]]:
+    """Best-effort: GitHub releases alapján branch-enként a legfrissebb release meta.
+
+    Visszaad: { "<branch>": {"tag": "v1.2.3", "title": "Release name", "date": "2026-01-28T...Z" } }
+    Token hiányában/rate limit esetén üres dict.
+    """
+    if not branches:
+        return {}
+
+
+@app.route('/api/get_github_token_status', methods=['GET'])
+def api_get_github_token_status():
+    """Token státusz visszaadása a UI-nak (a token értékét nem adjuk ki)."""
+    try:
+        token_from_env = (os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN') or '').strip()
+        token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'github_token.txt')
+        token_from_file = ''
+        if os.path.exists(token_path):
+            try:
+                with open(token_path, 'r', encoding='utf-8', errors='replace') as f:
+                    token_from_file = (f.read() or '').strip()
+            except Exception:
+                token_from_file = ''
+
+        token = token_from_env or token_from_file
+        hint = ''
+        if token:
+            hint = ('…' + token[-4:]) if len(token) >= 4 else '…'
+        source = 'env' if token_from_env else ('file' if token_from_file else 'none')
+        return jsonify({'present': bool(token), 'hint': hint, 'source': source})
+    except Exception as e:
+        logger.info(f"[GITHUB-TOKEN] Státusz lekérés hiba: {e}")
+        return jsonify({'present': False, 'hint': '', 'source': 'error'})
+
+
+@app.route('/api/set_github_token', methods=['POST'])
+def api_set_github_token():
+    """GitHub token mentése UI-ból.
+
+    - Mentés: github_token.txt (NE commitold; .gitignore-ban kell legyen)
+    - Futó processen belül: os.environ['GITHUB_TOKEN']
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        clear = bool(data.get('clear'))
+        token = (data.get('token') or '').strip()
+        token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'github_token.txt')
+
+        if clear:
+            try:
+                if os.path.exists(token_path):
+                    os.remove(token_path)
+            except Exception as e:
+                logger.info(f"[GITHUB-TOKEN] Token fájl törlés hiba: {e}")
+                return jsonify({'success': False, 'error': f'Nem sikerült törölni a token fájlt: {e}'}), 500
+            os.environ.pop('GITHUB_TOKEN', None)
+            os.environ.pop('GH_TOKEN', None)
+            return jsonify({'success': True, 'cleared': True})
+
+        if not token:
+            return jsonify({'success': False, 'error': 'Hiányzó token'}), 400
+
+        # Ne logoljuk a token értékét.
+        try:
+            with open(token_path, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(token + '\n')
+        except Exception as e:
+            logger.info(f"[GITHUB-TOKEN] Token fájl írás hiba: {e}")
+            return jsonify({'success': False, 'error': f'Nem sikerült menteni a token fájlt: {e}'}), 500
+
+        os.environ['GITHUB_TOKEN'] = token
+        return jsonify({'success': True, 'saved': True})
+    except Exception as e:
+        logger.info(f"[GITHUB-TOKEN] Token mentés hiba: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+    # Token nélkül gyorsan rate limitbe futhatunk, ezért csak tokennel kérdezünk.
+    if not _get_github_token():
+        return {}
+
+    owner, api_repo_name = _parse_owner_repo(repo_obj)
+    if not owner or not api_repo_name:
+        return {}
+
+    releases_url = f"https://api.github.com/repos/{owner}/{api_repo_name}/releases?per_page=100"
+    try:
+        rr = requests.get(releases_url, headers=_github_headers(), timeout=15)
+        if rr.status_code != 200:
+            logger.info(f"[RELEASE-BY-BRANCH] lekérés sikertelen: {releases_url} status={rr.status_code}")
+            return {}
+
+        # branch -> (datetime, meta)
+        best: dict[str, tuple[datetime, dict[str, str]]] = {}
+        branch_set = set(branches)
+        for rel in (rr.json() or []):
+            target = (rel.get('target_commitish') or '').strip()
+            if target not in branch_set:
+                continue
+            tag_name = (rel.get('tag_name') or '').strip()
+            title = (rel.get('name') or '').strip()
+            date_raw = (rel.get('published_at') or rel.get('created_at') or '').strip()
+            dt = _parse_github_iso_datetime(date_raw) or datetime.min
+            meta = {
+                'tag': tag_name,
+                'title': title,
+                'date': date_raw,
+            }
+            prev = best.get(target)
+            if prev is None or dt > prev[0]:
+                best[target] = (dt, meta)
+
+        return {b: meta for b, (_dt, meta) in best.items()}
+    except Exception as e:
+        logger.info(f"[RELEASE-BY-BRANCH] Hiba a release-ek lekérésekor: {owner}/{api_repo_name}: {e}")
+        return {}
+
+
 def run_robot_with_params(repo: str, branch: str):
 
     """Indítja el a Robot Framework futtatást a megadott repo/branch paraméterekkel.
@@ -510,6 +674,12 @@ def index():
             branch for branch in repo['branches']
             if f"{repo['name']}|{branch}" not in installed_keys
         ]
+
+        # Letölthető tab: branch-enként a legfrissebb release tag/cím/dátum (best-effort)
+        try:
+            repo['available_branch_releases'] = get_latest_release_by_branch(repo, list(repo.get('available_branches') or []))
+        except Exception:
+            repo['available_branch_releases'] = {}
     version = get_robot_variable('VERSION')
     build_date = get_robot_variable('BUILD_DATE')
     # page_title logika ugyanaz, mint a get_html_template-ben
@@ -1407,6 +1577,13 @@ def api_available_repos():
             branch for branch in repo.get('branches', get_branches_for_repo(repo['name']))
             if f"{repo['name']}|{branch}" not in installed_keys
         ]
+
+        # Kliens oldali megjelenítéshez: release meta a letölthető branchekhez
+        try:
+            repo_copy['available_branch_releases'] = get_latest_release_by_branch(repo, list(repo_copy.get('branches') or []))
+        except Exception:
+            repo_copy['available_branch_releases'] = {}
+
         # Csak akkor adjuk vissza, ha van legalább 1 letölthető branch
         if repo_copy['branches']:
             result.append(repo_copy)
