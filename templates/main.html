@@ -185,6 +185,39 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .tab-hint {
     color: #ffffff !important;
 }
+
+.server-log {
+    width: 100%;
+    height: 60vh;
+    margin: 0;
+    padding: 14px 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.35;
+    font-weight: 400;
+    color: #e9eef7;
+    background: linear-gradient(180deg, #111827 0%, #0b1220 100%);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    overflow: auto;
+    white-space: pre;
+}
+
+.server-log.log-wrap {
+    white-space: pre-wrap;
+}
+
+.server-log mark {
+    background: rgba(255, 193, 7, 0.35);
+    color: #ffffff;
+    padding: 0 2px;
+    border-radius: 4px;
+}
+.server-log mark.active {
+    background: rgba(13, 110, 253, 0.65);
+    box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.35);
+}
 </style>
 </head>
 <body>
@@ -580,8 +613,60 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             </div>
         <div class="tab-pane fade" id="log" role="tabpanel" aria-labelledby="log-tab">
             <div class="page-section py-4 opaque-panel">
-                <h2>Server Log</h2>
-                <pre id="serverLogPre" style="width:100%;height:60vh;font-family:Consolas, 'Courier New', monospace;font-size:14px;font-weight:normal;background:#222;color:#eee;overflow:auto;white-space:pre-wrap;"></pre>
+                <div class="d-flex flex-column gap-2 mb-2">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div class="d-flex align-items-baseline gap-3">
+                            <h2 class="mb-0">Server Log</h2>
+                            <span id="serverLogMeta" class="small text-muted"></span>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Log műveletek">
+                                <button type="button" class="btn btn-outline-primary" id="serverLogRefreshBtn" title="Frissítés">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="serverLogCopyBtn" title="Másolás">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="serverLogDownloadBtn" title="Letöltés">
+                                    <i class="bi bi-download"></i>
+                                </button>
+                            </div>
+
+                            <div class="form-check form-switch form-check-inline mb-0">
+                                <input class="form-check-input" type="checkbox" id="serverLogAutoScroll" checked>
+                                <label class="form-check-label" for="serverLogAutoScroll">Auto-scroll</label>
+                            </div>
+                            <div class="form-check form-switch form-check-inline mb-0">
+                                <input class="form-check-input" type="checkbox" id="serverLogWrap" checked>
+                                <label class="form-check-label" for="serverLogWrap">Tördelés</label>
+                            </div>
+                            <div class="form-check form-switch form-check-inline mb-0">
+                                <input class="form-check-input" type="checkbox" id="serverLogPause">
+                                <label class="form-check-label" for="serverLogPause">Szünet</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div class="input-group input-group-sm" style="max-width: 520px;">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" id="serverLogSearch" placeholder="Keresés a logban...">
+                            <button type="button" class="btn btn-outline-secondary" id="serverLogFindPrev" title="Előző találat (Shift+Enter)">
+                                <i class="bi bi-chevron-up"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="serverLogFindNext" title="Következő találat (Enter)">
+                                <i class="bi bi-chevron-down"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="serverLogFindClear" title="Keresés törlése">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <span id="serverLogMatchCount" class="small text-muted"></span>
+                    </div>
+                </div>
+
+                <pre id="serverLogPre" class="server-log log-wrap"></pre>
             </div>
         </div>
     </div>
