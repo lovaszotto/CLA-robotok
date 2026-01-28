@@ -271,7 +271,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                    <div class="card-body">
                                        <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
                                        <div class="branches-container">
-                                           <strong>Telepített robotok:</strong>
                                            <ul class="list-unstyled">
                                                {% for branch in runnable_branches %}
                                                <li class="branch-checkbox d-flex align-items-center">
@@ -325,7 +324,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                         </div>
                         <div class="card-body">
                             <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
-                            <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
                             <div class="branches-container">
                                 {% for branch in repo.available_branches %}
                                     <div class="branch-checkbox d-flex align-items-center" id="branch-available-{{ repo.name }}-{{ branch }}">
@@ -456,58 +454,97 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <div class="page-section py-4 opaque-panel">
                     <h2>Beállítások</h2>
                     <form id="settingsForm" onsubmit="event.preventDefault(); saveSettings();">
-                        <div class="form-check form-switch mb-3">
+                        <div class="row g-4 mt-1">
+                            <div class="col-12 col-lg-6">
+                                <div class="p-3 p-md-4 border rounded-3 h-100" style="background:#f8fbff;">
+                                    <h5 class="mb-3"><i class="bi bi-play-circle"></i> Futtatás</h5>
+
+                                    <div class="row g-3">
+                                        <div class="col-12 col-md-6">
+                                            <label for="pageSize" class="form-label">Oldalankénti elemszám</label>
+                                            <input type="number" class="form-control" id="pageSize" min="1" max="100" value="10">
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label for="executionMode" class="form-label">Futtatási mód</label>
+                                            <select class="form-select" id="executionMode">
+                                                <option value="sequential">Szekvenciális</option>
+                                                <option value="parallel">Párhuzamos</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="timeout" class="form-label">Futtatási timeout (mp)</label>
+                                            <input type="number" class="form-control" id="timeout" min="10" max="3600" value="300">
+                                        </div>
+                                    </div>
+
+                                    <hr class="my-3">
+
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="generateReport" checked>
+                                        <label class="form-check-label" for="generateReport">Futtatás után jelentés generálása</label>
+                                    </div>
+
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
+                                        <label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-lg-6">
+                                <div class="p-3 p-md-4 border rounded-3 h-100" style="background:#f8fbff;">
+                                    <h5 class="mb-3"><i class="bi bi-github"></i> GitHub</h5>
+
+                                    <label for="githubToken" class="form-label">GitHub Token</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="githubToken" placeholder="ghp_...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="toggleGitHubTokenVisibility()">Mutat/Rejt</button>
+                                    </div>
+                                    <div class="form-text">A token a szerveren a github_token.txt fájlba kerül, és a release információk (cím + dátum) lekéréséhez kell.</div>
+
+                                    <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveGitHubToken()"><i class="bi bi-check2"></i> Mentés</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearGitHubToken()"><i class="bi bi-x"></i> Törlés</button>
+                                        <span class="ms-auto small text-muted" id="githubTokenStatus"></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="p-3 p-md-4 border rounded-3" style="background:#f8fbff;">
+                                    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Beállítások mentése</button>
+                                            <button type="button" class="btn btn-secondary" onclick="resetSettings()"><i class="bi bi-arrow-counterclockwise"></i> Alapértelmezett</button>
+                                            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#repoBranchTagModal">
+                                                <i class="bi bi-diagram-3"></i> Repo/Branch/Tag lista
+                                            </button>
+                                        </div>
+
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <button type="button" class="btn btn-danger" onclick="clearAllLogs()">
+                                                <i class="bi bi-trash"></i> Naplók törlése
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" onclick="clearResultsFiles()">
+                                                <i class="bi bi-folder-x"></i> Eredmény mappák törlése (results)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Megtartva kompatibilitás miatt (nem jelenik meg) -->
+                        <div class="form-check form-switch d-none">
                             <input class="form-check-input" type="checkbox" id="darkMode">
                             <label class="form-check-label" for="darkMode">Sötét mód</label>
                         </div>
-                        <div class="form-check form-switch mb-3">
+                        <div class="form-check form-switch d-none">
                             <input class="form-check-input" type="checkbox" id="compactView">
                             <label class="form-check-label" for="compactView">Kompakt nézet</label>
                         </div>
-                        <div class="mb-3">
-                            <label for="pageSize" class="form-label">Oldalankénti elemszám</label>
-                            <input type="number" class="form-control" id="pageSize" min="1" max="100" value="10">
-                        </div>
-                        <div class="mb-3">
-                            <label for="executionMode" class="form-label">Futtatási mód</label>
-                            <select class="form-select" id="executionMode">
-                                <option value="sequential">Szekvenciális</option>
-                                <option value="parallel">Párhuzamos</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="timeout" class="form-label">Futtatási timeout (mp)</label>
-                            <input type="number" class="form-control" id="timeout" min="10" max="3600" value="300">
-                        </div>
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="generateReport" checked>
-                            <label class="form-check-label" for="generateReport">Futtatás után jelentés generálása</label>
-                        </div>
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
-                            <label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
-                        </div>
+                    </form>
 
-                        <div class="mb-3">
-                            <label for="githubToken" class="form-label">GitHub Token</label>
-                            <div class="input-group">
-                                <input type="password" class="form-control" id="githubToken" placeholder="ghp_...">
-                                <button class="btn btn-outline-secondary" type="button" onclick="toggleGitHubTokenVisibility()">Mutat/Rejt</button>
-                            </div>
-                            <div class="form-text">A token a szerveren a github_token.txt fájlba kerül, és a release információk (cím + dátum) lekéréséhez kell.</div>
-                            <div class="d-flex align-items-center gap-2 mt-2">
-                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveGitHubToken()">Token mentése</button>
-                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearGitHubToken()">Token törlése</button>
-                                <span class="ms-auto small text-muted" id="githubTokenStatus"></span>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2 mt-4">
-                            <button type="submit" class="btn btn-primary">Beállítások mentése</button>
-                            <button type="button" class="btn btn-secondary" onclick="resetSettings()">Alapértelmezett visszaállítás</button>
-                            <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#repoBranchTagModal">
-                                <i class="bi bi-diagram-3"></i> Repo/Branch/Tag lista
-                            </button>
-                        </div>
                     <!-- Repo/Branch/Tag lista MODAL -->
                     <div class="modal fade" id="repoBranchTagModal" tabindex="-1" aria-labelledby="repoBranchTagModalLabel" aria-hidden="true">
                         <div class="modal-dialog modal-lg">
@@ -530,7 +567,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             </div>
                         </div>
                     </div>
-                    </form>
                 </div>
             </div>
             <div class="tab-pane fade" id="exit" role="tabpanel" aria-labelledby="exit-tab">
@@ -545,7 +581,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <div class="tab-pane fade" id="log" role="tabpanel" aria-labelledby="log-tab">
             <div class="page-section py-4 opaque-panel">
                 <h2>Server Log</h2>
-                <pre id="serverLogPre" style="width:100%;height:60vh;font-family:monospace;font-size:18px;background:#222;color:#eee;overflow:auto;white-space:pre-wrap;"></pre>
+                <pre id="serverLogPre" style="width:100%;height:60vh;font-family:Consolas, 'Courier New', monospace;font-size:14px;font-weight:normal;background:#222;color:#eee;overflow:auto;white-space:pre-wrap;"></pre>
             </div>
         </div>
     </div>
@@ -750,7 +786,6 @@ function renderRunnableRepos(repos) {
                 </div>
                 <div class="card-body">
                     <p class="card-text">${repo.description || 'Nincs leírás'}</p>
-                    <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
                     <div class="branches-container">
                         ${repo.branches.map(branch => `
                             <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;" id="branch-${repo.name}-${branch}">
@@ -821,7 +856,6 @@ function renderAvailableRepos(repos) {
                 </div>
                 <div class="card-body">
                     <p class="card-text">${repo.description || 'Nincs leírás'}</p>
-                    <h6 class="mt-3"><i class="bi bi-git"></i> Robotok:</h6>
                     <div class="branches-container">
                         ${repo.branches.map(branch => `
                             <div class="branch-checkbox d-flex align-items-center" id="branch-available-${repo.name}-${branch}">
@@ -1138,6 +1172,63 @@ function showToast(message, type = 'info') {
     toast.innerHTML = message;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3500);
+}
+
+function clearAllLogs() {
+    if (!confirm('Biztosan törlöd az összes napló bejegyzést?\n\nEz törli a Server Log tartalmát és az Eredmények listát is.')) return;
+    fetch('/api/clear-logs', { method: 'POST' })
+        .then(r => r.json().then(j => ({ ok: r.ok, json: j })))
+        .then(({ ok, json }) => {
+            if (!ok || !(json && json.success)) {
+                const err = (json && json.errors && json.errors.length) ? json.errors.join('; ') : (json && json.error ? json.error : 'Ismeretlen hiba');
+                showToast('Naplók törlése sikertelen: ' + err, 'danger');
+                return;
+            }
+            showToast('Naplók törölve.', 'success');
+
+            // Log panel frissítése
+            if (typeof refreshServerLog === 'function') {
+                try { refreshServerLog(); } catch (e) {}
+            }
+
+            // Eredmények frissítése
+            if (typeof refreshResults === 'function') {
+                try { refreshResults(); } catch (e) {}
+            } else if (typeof loadResults === 'function') {
+                try { loadResults(1, '', '', ''); } catch (e) {}
+            }
+        })
+        .catch(err => {
+            showToast('Naplók törlése hiba: ' + err, 'danger');
+        });
+}
+
+function clearResultsFiles() {
+    if (!confirm('Biztosan törlöd a "results" mappa ÖSSZES almappáját?\n\nEz a futási logokat/jelentéseket is törli.')) return;
+    fetch('/api/clear-results-files', { method: 'POST' })
+        .then(r => r.json().then(j => ({ ok: r.ok, json: j })))
+        .then(({ ok, json }) => {
+            if (!ok || !(json && json.success)) {
+                const err = (json && json.errors && json.errors.length) ? json.errors.join('; ') : (json && json.error ? json.error : 'Ismeretlen hiba');
+                showToast('Eredmény mappák törlése sikertelen: ' + err, 'danger');
+                return;
+            }
+            const count = (json && json.deleted && json.deleted.length) ? json.deleted.length : 0;
+            showToast(`Eredmény mappák törölve (${count} db).`, 'success');
+
+            if (typeof refreshServerLog === 'function') {
+                try { refreshServerLog(); } catch (e) {}
+            }
+
+            if (typeof refreshResults === 'function') {
+                try { refreshResults(); } catch (e) {}
+            } else if (typeof loadResults === 'function') {
+                try { loadResults(1, '', '', ''); } catch (e) {}
+            }
+        })
+        .catch(err => {
+            showToast('Eredmény mappák törlése hiba: ' + err, 'danger');
+        });
 }
 
 // --- GitHub token (Beállítások tab) ---

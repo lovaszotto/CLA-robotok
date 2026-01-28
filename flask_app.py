@@ -60,6 +60,83 @@ def server_log():
         return f'Hiba a log olvasásakor: {e}', 500, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
+@app.route('/api/clear-logs', methods=['POST'])
+def api_clear_logs():
+    """Törli az összes napló bejegyzést (server.log + futási eredmények)."""
+    cleared = {
+        'server_log': False,
+        'results': False,
+    }
+    errors: list[str] = []
+
+    # 1) server.log ürítése
+    try:
+        log_path = _get_backend_log_path()
+        with open(log_path, 'w', encoding='utf-8') as f:
+            f.write('')
+        cleared['server_log'] = True
+    except Exception as e:
+        errors.append(f'server.log: {e}')
+
+    # 2) execution_results ürítése (ugyanaz, mint /api/clear-results)
+    try:
+        global execution_results
+        execution_results = []
+        save_execution_results()
+        cleared['results'] = True
+    except Exception as e:
+        errors.append(f'execution_results: {e}')
+
+    status_code = 200 if not errors else 500
+    return jsonify({'success': not errors, 'cleared': cleared, 'errors': errors}), status_code
+
+
+@app.route('/api/clear-results-files', methods=['POST'])
+def api_clear_results_files():
+    """Törli a ./results mappa alatti összes futási/letöltési log könyvtárat.
+
+    Csak a WORKSPACE-ben lévő "results" mappa azonnali alkönyvtárait törli (nem töröl fájlokat a gyökérben).
+    """
+    base_dir = os.path.abspath(os.path.join(os.getcwd(), 'results'))
+    deleted: list[str] = []
+    errors: list[str] = []
+
+    if not os.path.isdir(base_dir):
+        return jsonify({'success': True, 'deleted': [], 'errors': [], 'message': 'results mappa nem létezik'}), 200
+
+    try:
+        for name in os.listdir(base_dir):
+            target = os.path.join(base_dir, name)
+            if not os.path.isdir(target):
+                continue
+            # Biztonsági ellenőrzés: csak a base alatt törlünk
+            try:
+                if os.path.commonpath([base_dir, target]) != os.path.commonpath([base_dir]):
+                    continue
+            except Exception:
+                if not os.path.abspath(target).startswith(os.path.abspath(base_dir)):
+                    continue
+
+            try:
+                shutil.rmtree(target, onerror=_on_rm_error)
+                deleted.append(name)
+            except Exception as e:
+                errors.append(f"{name}: {e}")
+    except Exception as e:
+        errors.append(str(e))
+
+    # Opció: tartsuk szinkronban a tárolt eredménylistát is
+    try:
+        global execution_results
+        execution_results = []
+        save_execution_results()
+    except Exception as e:
+        errors.append(f"execution_results: {e}")
+
+    status_code = 200 if not errors else 500
+    return jsonify({'success': not errors, 'deleted': deleted, 'errors': errors}), status_code
+
+
 PYTHON_EXECUTABLE = sys.executable or 'python'
 
 
