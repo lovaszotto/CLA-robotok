@@ -226,6 +226,9 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <div class="col-12">
             <div class="p-4 rounded shadow header-glass">
                 <div class="position-absolute top-0 end-0 p-3 exit-icon-wrap">
+                    <button class="btn btn-outline-light btn-sm me-2" id="ideasIconBtn" type="button" title="Ötletek / Hibajegyek (GitHub)" aria-label="Ötletek">
+                        <i class="bi bi-lightbulb"></i>
+                    </button>
                     <button class="btn btn-outline-light btn-sm" id="exitIconBtn" type="button" title="Kilépés">
                         <i class="bi bi-box-arrow-right"></i>
                     </button>
@@ -705,6 +708,48 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" id="sureBoxCancelBtn" data-bs-dismiss="modal">Mégse</button>
                 <button type="button" class="btn btn-primary" id="sureBoxOkBtn">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Ötletek / Hibajegyek MODAL (GitHub Issue létrehozás tokennel) -->
+<div class="modal fade" id="ideasModal" tabindex="-1" aria-labelledby="ideasModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="background:#fff; color:#111; opacity:1;">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ideasModalLabel"><i class="bi bi-lightbulb me-2"></i>Ötletek / Hibajegyek</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body">
+                <div id="ideasTokenAlert" class="alert alert-warning py-2 mb-3 d-none"></div>
+
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label for="ideasIssueTitle" class="form-label">Cím</label>
+                        <input type="text" class="form-control" id="ideasIssueTitle" placeholder="Röviden: mi az ötlet/hiba?">
+                    </div>
+                    <div class="col-12">
+                        <label for="ideasIssueBody" class="form-label">Leírás</label>
+                        <textarea class="form-control" id="ideasIssueBody" rows="6" placeholder="Részletek, lépések, elvárt/valós viselkedés, screenshot link, stb."></textarea>
+                    </div>
+                    <div class="col-12">
+                        <label for="ideasIssueLabels" class="form-label">Labelek (opcionális)</label>
+                        <input type="text" class="form-control" id="ideasIssueLabels" placeholder="pl.: bug, enhancement (vesszővel elválasztva)">
+                        <div class="form-text">Vesszővel elválasztva. Üresen is hagyható.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-primary" onclick="openIdeasIssuesPage()">
+                    <i class="bi bi-github me-1"></i> Issues oldal megnyitása
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bezárás</button>
+                    <button type="button" class="btn btn-primary" id="ideasCreateBtn" onclick="createIdeasIssue()">
+                        <i class="bi bi-plus-circle me-1"></i> Issue létrehozása
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1517,6 +1562,14 @@ document.addEventListener('DOMContentLoaded', function () {
     // Ha a token már be van állítva (env/file), mutassuk a státuszt
     refreshGitHubTokenStatus();
 
+    const ideasIconBtn = document.getElementById('ideasIconBtn');
+    if (ideasIconBtn) {
+        ideasIconBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            openIdeas();
+        });
+    }
+
     const exitIconBtn = document.getElementById('exitIconBtn');
     if (exitIconBtn) {
         exitIconBtn.addEventListener('click', function (e) {
@@ -1532,6 +1585,113 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
+
+function openIdeasIssuesPage() {
+    const url = 'https://github.com/lovaszotto/CLA-robotok/issues';
+    try {
+        const win = window.open(url, '_blank');
+        if (win) {
+            try { win.opener = null; } catch (e) { /* ignore */ }
+            win.focus();
+        } else {
+            showToast('A böngésző blokkolta az új ablakot. Engedélyezd a felugró ablakokat ehhez az oldalhoz.', 'warning');
+        }
+    } catch (err) {
+        showToast('Nem sikerült megnyitni az Issues oldalt: ' + err, 'danger');
+    }
+}
+
+async function openIdeas() {
+    const modalEl = document.getElementById('ideasModal');
+    if (!modalEl || !window.bootstrap) {
+        // Ha valamiért nincs modal, legalább az issues oldalt nyissuk meg.
+        openIdeasIssuesPage();
+        return;
+    }
+
+    // Token státusz frissítése és gomb tiltása, ha nincs token.
+    const alertEl = document.getElementById('ideasTokenAlert');
+    const createBtn = document.getElementById('ideasCreateBtn');
+    try {
+        const r = await fetch('/api/get_github_token_status');
+        const st = await r.json();
+        const present = !!(st && st.present);
+        if (alertEl) {
+            alertEl.classList.toggle('d-none', present);
+            if (!present) {
+                alertEl.textContent = 'Nincs beállítva GitHub token. Állítsd be a Beállítások fülön, hogy innen issue-t tudjunk létrehozni.';
+            }
+        }
+        if (createBtn) createBtn.disabled = !present;
+    } catch (e) {
+        if (alertEl) {
+            alertEl.classList.remove('d-none');
+            alertEl.textContent = 'Nem sikerült lekérni a token státuszt. Próbáld újra később.';
+        }
+        if (createBtn) createBtn.disabled = true;
+    }
+
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function createIdeasIssue() {
+    const titleEl = document.getElementById('ideasIssueTitle');
+    const bodyEl = document.getElementById('ideasIssueBody');
+    const labelsEl = document.getElementById('ideasIssueLabels');
+    const createBtn = document.getElementById('ideasCreateBtn');
+
+    const title = (titleEl && titleEl.value ? titleEl.value : '').trim();
+    const body = (bodyEl && bodyEl.value ? bodyEl.value : '').trim();
+    const labelsRaw = (labelsEl && labelsEl.value ? labelsEl.value : '').trim();
+    const labels = labelsRaw
+        ? labelsRaw.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
+    if (!title) {
+        showToast('A cím mező kötelező.', 'warning');
+        if (titleEl) titleEl.focus();
+        return;
+    }
+
+    if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Létrehozás...';
+    }
+
+    try {
+        const r = await fetch('/api/create_github_issue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, body, labels })
+        });
+        const data = await r.json();
+
+        if (data && data.success) {
+            showToast('Issue létrehozva: #' + (data.number || '?'), 'success');
+            // opcionális: nyissuk meg az issue-t
+            if (data.html_url) {
+                try { window.open(data.html_url, '_blank'); } catch (e) { /* ignore */ }
+            }
+            const modalEl = document.getElementById('ideasModal');
+            if (modalEl && window.bootstrap) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }
+            if (titleEl) titleEl.value = '';
+            if (bodyEl) bodyEl.value = '';
+            if (labelsEl) labelsEl.value = '';
+        } else {
+            const msg = (data && (data.details || data.error)) ? (data.details || data.error) : 'Ismeretlen hiba';
+            showToast('Issue létrehozás hiba: ' + msg, 'danger');
+        }
+    } catch (e) {
+        showToast('Issue létrehozás hiba: ' + e, 'danger');
+    } finally {
+        if (createBtn) {
+            createBtn.disabled = false;
+            createBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i> Issue létrehozása';
+        }
+    }
+}
 
 // --- Kilépés gomb működése ---
 function exitApp() {

@@ -502,6 +502,64 @@ def api_set_github_token():
         logger.info(f"[GITHUB-TOKEN] Token mentés hiba: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/create_github_issue', methods=['POST'])
+def api_create_github_issue():
+    """GitHub Issue létrehozása tokennel (API-n keresztül).
+
+    Megjegyzés: a böngészős (web UI) bejelentkezést tokennel nem automatizáljuk;
+    helyette itt hozunk létre issue-t.
+    """
+    token = _get_github_token()
+    if not token:
+        return jsonify({'success': False, 'error': 'Hiányzó GitHub token (Beállítások -> GitHub token)'}), 403
+
+    data = request.get_json(silent=True) or {}
+    title = (data.get('title') or '').strip()
+    body = (data.get('body') or '').strip()
+    labels = data.get('labels')
+
+    if not title:
+        return jsonify({'success': False, 'error': 'Hiányzó cím (title)'}), 400
+
+    payload: dict = {'title': title}
+    if body:
+        payload['body'] = body
+
+    if isinstance(labels, list):
+        cleaned = [str(x).strip() for x in labels if str(x).strip()]
+        if cleaned:
+            payload['labels'] = cleaned
+
+    url = 'https://api.github.com/repos/lovaszotto/CLA-robotok/issues'
+    try:
+        resp = requests.post(url, headers=_github_headers(), json=payload, timeout=20)
+        if resp.status_code in (200, 201):
+            j = resp.json() or {}
+            return jsonify({
+                'success': True,
+                'number': j.get('number'),
+                'html_url': j.get('html_url'),
+                'title': j.get('title'),
+            })
+
+        detail = ''
+        try:
+            j = resp.json() or {}
+            # GitHub tipikusan {'message': '...', 'errors': [...]}
+            detail = j.get('message') or str(j)
+        except Exception:
+            detail = (resp.text or '').strip()
+
+        return jsonify({
+            'success': False,
+            'error': f'GitHub API hiba (status={resp.status_code})',
+            'details': detail
+        }), 502
+    except Exception as e:
+        logger.info(f"[GITHUB-ISSUE] Létrehozás hiba: {e}")
+        return jsonify({'success': False, 'error': 'Issue létrehozás hiba', 'details': str(e)}), 500
+
     # Token nélkül gyorsan rate limitbe futhatunk, ezért csak tokennel kérdezünk.
     if not _get_github_token():
         return {}
