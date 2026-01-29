@@ -1,8 +1,7 @@
 flask
 requests
 robotframework
+robotframework-jsonlibrary
 robotframework-seleniumlibrary
 selenium
-selenium-library
 webdriver-manager
-robotframework-jsonlibrary
