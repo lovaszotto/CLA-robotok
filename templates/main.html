@@ -534,7 +534,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                     <label for="githubToken" class="form-label">GitHub Token</label>
                                     <div class="input-group">
                                         <input type="password" class="form-control" id="githubToken" placeholder="ghp_...">
-                                        <button class="btn btn-outline-secondary" type="button" onclick="toggleGitHubTokenVisibility()">Mutat/Rejt</button>
                                     </div>
                                     <div class="form-text">A token a szerveren a github_token.txt fájlba kerül, és a release információk (cím + dátum) lekéréséhez kell.</div>
 
@@ -750,7 +749,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <div id="repoBranchesTagsAlert" class="alert alert-warning d-none" role="alert"></div>
 
                 <div class="row g-3">
-                    <div class="col-12 col-lg-4">
+                    <div class="col-12">
                         <div class="border rounded-3 p-3" style="background:#f8fbff;">
                             <div class="d-flex align-items-center justify-content-between mb-2">
                                 <div class="fw-semibold"><i class="bi bi-git me-1"></i> Branchek</div>
@@ -759,7 +758,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             <div id="repoBranchesList" class="d-flex flex-wrap gap-2"></div>
                         </div>
                     </div>
-                    <div class="col-12 col-lg-8">
+                    <div class="col-12">
                         <div class="border rounded-3 p-3" style="background:#f8fbff;">
                             <div class="d-flex align-items-center justify-content-between mb-2">
                                 <div class="fw-semibold"><i class="bi bi-tag me-1"></i> Tag-ek / Release infó</div>
@@ -767,6 +766,12 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             </div>
                             <div class="table-responsive">
                                 <table class="table table-sm table-striped align-middle">
+                                    <colgroup>
+                                        <col style="width: 14%;">
+                                        <col style="width: 32%;">
+                                        <col style="width: 12%;">
+                                        <col style="width: 42%;">
+                                    </colgroup>
                                     <thead class="table-dark">
                                         <tr>
                                             <th>Tag</th>
@@ -1593,6 +1598,14 @@ async function openRepoBranchesTagsModal(repoNameArg) {
         return;
     }
 
+    // Fontos: a modal event handler-eit csak egyszer kötjük fel,
+    // ezért a kiválasztott repo-t/state-et a modal elemre tesszük.
+    modalEl.__repoBranchesTagsState = {
+        owner,
+        repoName,
+        selectedBranch: null,
+    };
+
     const infoEl = document.getElementById('repoBranchesTagsInfo');
     const alertEl = document.getElementById('repoBranchesTagsAlert');
     const refreshBtn = document.getElementById('repoBranchesTagsRefreshBtn');
@@ -1631,11 +1644,38 @@ async function openRepoBranchesTagsModal(repoNameArg) {
             branchesList.innerHTML = '<span class="text-muted">Nincs branch (vagy nincs jogosultság).</span>';
             return;
         }
+
+        const state = modalEl.__repoBranchesTagsState || { selectedBranch: null };
+        const selected = state.selectedBranch;
+
+        // "Összes" opció (branch szűrés kikapcsolása)
+        const allBtn = document.createElement('button');
+        allBtn.type = 'button';
+        allBtn.className = 'btn btn-sm ' + (selected ? 'btn-outline-secondary' : 'btn-secondary');
+        allBtn.textContent = 'Összes';
+        allBtn.addEventListener('click', () => {
+            const st = modalEl.__repoBranchesTagsState || {};
+            st.selectedBranch = null;
+            modalEl.__repoBranchesTagsState = st;
+            renderBranches(list);
+            if (modalEl.__repoBranchesTagsLoad) modalEl.__repoBranchesTagsLoad();
+        });
+        branchesList.appendChild(allBtn);
+
         list.forEach(b => {
-            const span = document.createElement('span');
-            span.className = 'badge text-bg-light border';
-            span.textContent = String(b);
-            branchesList.appendChild(span);
+            const branchName = String(b);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm ' + (selected === branchName ? 'btn-primary' : 'btn-outline-primary');
+            btn.textContent = branchName;
+            btn.addEventListener('click', () => {
+                const st = modalEl.__repoBranchesTagsState || {};
+                st.selectedBranch = branchName;
+                modalEl.__repoBranchesTagsState = st;
+                renderBranches(list);
+                if (modalEl.__repoBranchesTagsLoad) modalEl.__repoBranchesTagsLoad();
+            });
+            branchesList.appendChild(btn);
         });
     };
 
@@ -1673,8 +1713,17 @@ async function openRepoBranchesTagsModal(repoNameArg) {
     };
 
     const load = async () => {
+        const state = modalEl.__repoBranchesTagsState || { owner, repoName };
+        const ownerNow = state.owner || owner;
+        const repoNow = state.repoName || repoName;
+        const selectedBranch = (state.selectedBranch || '').trim();
+
         clearAlert();
-        if (infoEl) infoEl.textContent = `Repo: ${owner}/${repoName}`;
+        if (infoEl) {
+            infoEl.textContent = selectedBranch
+                ? `Repo: ${ownerNow}/${repoNow} | Branch: ${selectedBranch}`
+                : `Repo: ${ownerNow}/${repoNow}`;
+        }
         if (tagsHint) tagsHint.textContent = '';
         if (tagsTbody) tagsTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Betöltés...</td></tr>';
         if (branchesList) branchesList.innerHTML = '<span class="text-muted">Betöltés...</span>';
@@ -1682,7 +1731,8 @@ async function openRepoBranchesTagsModal(repoNameArg) {
         if (tagsCount) tagsCount.textContent = '0';
         setLoading(true);
         try {
-            const r = await fetch(`/api/get_repo_branches_tags?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repoName)}`);
+            const branchQs = selectedBranch ? `&branch=${encodeURIComponent(selectedBranch)}` : '';
+            const r = await fetch(`/api/get_repo_branches_tags?owner=${encodeURIComponent(ownerNow)}&repo=${encodeURIComponent(repoNow)}${branchQs}`);
             const data = await r.json().catch(() => ({}));
             if (!r.ok || !data || !data.success) {
                 throw new Error((data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`);
@@ -1704,12 +1754,21 @@ async function openRepoBranchesTagsModal(repoNameArg) {
     };
 
     if (!modalEl.__repoBranchesTagsHooked) {
-        if (refreshBtn) refreshBtn.addEventListener('click', () => load());
-        modalEl.addEventListener('shown.bs.modal', () => load());
+        if (refreshBtn) refreshBtn.addEventListener('click', () => modalEl.__repoBranchesTagsLoad && modalEl.__repoBranchesTagsLoad());
+        modalEl.addEventListener('shown.bs.modal', () => modalEl.__repoBranchesTagsLoad && modalEl.__repoBranchesTagsLoad());
         modalEl.__repoBranchesTagsHooked = true;
     }
 
-    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    // Mindig a legfrissebb load függvényt tartsuk meg (ne az első hívás closure-ét).
+    modalEl.__repoBranchesTagsLoad = load;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const alreadyVisible = modalEl.classList.contains('show');
+    modal.show();
+    // Ha már nyitva van, a shown esemény nem fut le, ilyenkor kézzel frissítünk.
+    if (alreadyVisible) {
+        load();
+    }
 }
 
 async function openGitRepoListModal() {

@@ -749,10 +749,13 @@ def api_get_repo_branches_tags():
     try:
         owner = (request.args.get('owner') or '').strip()
         repo = (request.args.get('repo') or '').strip()
+        branch = (request.args.get('branch') or '').strip()
         if not owner or not repo:
             return jsonify({'success': False, 'error': 'Hiányzó owner vagy repo paraméter'}), 400
         if any(ch.isspace() for ch in owner) or any(ch.isspace() for ch in repo):
             return jsonify({'success': False, 'error': 'Érvénytelen paraméter (szóköz nem megengedett)'}), 400
+        if branch and any(ch.isspace() for ch in branch):
+            return jsonify({'success': False, 'error': 'Érvénytelen branch paraméter (szóköz nem megengedett)'}), 400
 
         headers = _github_headers()
 
@@ -770,51 +773,75 @@ def api_get_repo_branches_tags():
         branches_raw = br.json() or []
         branches = [b.get('name') for b in branches_raw if b.get('name')]
 
-        # Tag-ek
-        tags_url = f'https://api.github.com/repos/{owner}/{repo}/tags?per_page=100'
-        tr = requests.get(tags_url, headers=headers, timeout=15)
-        if tr.status_code != 200:
-            detail = ''
-            try:
-                j = tr.json() or {}
-                detail = j.get('message') or str(j)
-            except Exception:
-                detail = (tr.text or '').strip()
-            return jsonify({'success': False, 'error': f'Tag lekérés sikertelen (status={tr.status_code})', 'details': detail}), 502
-        tags_raw = tr.json() or []
-        tag_names = [t.get('name') for t in tags_raw if t.get('name')]
+        tags: list[dict] = []
+        tags_note = ''
 
-        # Releases (tag -> meta)
+        # Releases (branch szerinti szűréshez is ezt használjuk)
         releases_url = f'https://api.github.com/repos/{owner}/{repo}/releases?per_page=100'
         rr = requests.get(releases_url, headers=headers, timeout=15)
-        releases_map: dict[str, dict] = {}
-        if rr.status_code == 200:
-            rels = rr.json() or []
-            for r in rels:
-                tag = (r.get('tag_name') or '').strip()
-                if not tag:
-                    continue
-                releases_map[tag] = {
-                    'title': (r.get('name') or '').strip(),
-                    'date': (r.get('published_at') or '').strip() or (r.get('created_at') or '').strip(),
-                    'info': (r.get('body') or '').strip(),
-                    'html_url': (r.get('html_url') or '').strip(),
-                }
-        else:
-            # Token nélkül itt gyakran rate limit; ne bukjunk, csak jelezzünk
-            releases_map = {}
+        rels = rr.json() if rr.status_code == 200 else []
 
-        # Tag lista összeállítása
-        tags: list[dict] = []
-        for t in tag_names:
-            meta = releases_map.get(t) or {}
-            tags.append({
-                'tag': t,
-                'title': meta.get('title') or '',
-                'date': meta.get('date') or '',
-                'info': meta.get('info') or '',
-                'html_url': meta.get('html_url') or '',
-            })
+        if branch:
+            # Branch szerint: csak az adott branch-hez célzott release-eket mutatjuk.
+            # Itt a release "tag_name" a tag, a meta a release mezőkből jön.
+            if rr.status_code != 200:
+                # Token nélkül gyakran rate limit; ne bukjunk, csak jelezzünk
+                tags_note = 'Megjegyzés: release lista nem elérhető (nincs token / rate limit).'
+            else:
+                for r in (rels or []):
+                    if (r.get('target_commitish') or '').strip() != branch:
+                        continue
+                    tag = (r.get('tag_name') or '').strip()
+                    if not tag:
+                        continue
+                    tags.append({
+                        'tag': tag,
+                        'title': (r.get('name') or '').strip(),
+                        'date': (r.get('published_at') or '').strip() or (r.get('created_at') or '').strip(),
+                        'info': (r.get('body') or '').strip(),
+                        'html_url': (r.get('html_url') or '').strip(),
+                    })
+                if not tags:
+                    tags_note = 'Nincs release/tag információ ehhez a branch-hez.'
+        else:
+            # Összes tag: Git tag lista + release meta (ha van)
+            tags_url = f'https://api.github.com/repos/{owner}/{repo}/tags?per_page=100'
+            tr = requests.get(tags_url, headers=headers, timeout=15)
+            if tr.status_code != 200:
+                detail = ''
+                try:
+                    j = tr.json() or {}
+                    detail = j.get('message') or str(j)
+                except Exception:
+                    detail = (tr.text or '').strip()
+                return jsonify({'success': False, 'error': f'Tag lekérés sikertelen (status={tr.status_code})', 'details': detail}), 502
+            tags_raw = tr.json() or []
+            tag_names = [t.get('name') for t in tags_raw if t.get('name')]
+
+            releases_map: dict[str, dict] = {}
+            if rr.status_code == 200:
+                for r in (rels or []):
+                    tag = (r.get('tag_name') or '').strip()
+                    if not tag:
+                        continue
+                    releases_map[tag] = {
+                        'title': (r.get('name') or '').strip(),
+                        'date': (r.get('published_at') or '').strip() or (r.get('created_at') or '').strip(),
+                        'info': (r.get('body') or '').strip(),
+                        'html_url': (r.get('html_url') or '').strip(),
+                    }
+            else:
+                releases_map = {}
+
+            for t in tag_names:
+                meta = releases_map.get(t) or {}
+                tags.append({
+                    'tag': t,
+                    'title': meta.get('title') or '',
+                    'date': meta.get('date') or '',
+                    'info': meta.get('info') or '',
+                    'html_url': meta.get('html_url') or '',
+                })
 
         # Próbáljunk release dátum szerint rendezni (ha van), egyébként tag név szerint
         def _sort_key(x: dict):
@@ -822,14 +849,15 @@ def api_get_repo_branches_tags():
 
         tags.sort(key=_sort_key, reverse=True)
 
-        tags_note = ''
-        if tag_names and not releases_map:
-            tags_note = 'Megjegyzés: release meta nem elérhető (nincs token / rate limit / nincs release a tagekhez).'
+        if not branch:
+            if tag_names and not releases_map:
+                tags_note = 'Megjegyzés: release meta nem elérhető (nincs token / rate limit / nincs release a tagekhez).'
 
         return jsonify({
             'success': True,
             'owner': owner,
             'repo': repo,
+            'branch': branch,
             'branches': branches,
             'tags': tags,
             'tags_note': tags_note,
