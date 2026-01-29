@@ -711,7 +711,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                         <thead class="table-dark">
                             <tr>
                                 <th>Repo</th>
-                                <th>Default branch</th>
+                                <th>Branchek száma</th>
                                 <th>Visibilitás</th>
                                 <th class="text-end">Művelet</th>
                             </tr>
@@ -1764,7 +1764,10 @@ async function openGitRepoListModal() {
         list.forEach(r => {
             const name = r.name || '';
             const full = r.full_name || name;
-            const branch = r.default_branch || '';
+            const branchesCount = (typeof r.branches_count === 'number') ? r.branches_count : (r.branches_count ?? '');
+            const branchesCountHtml = (branchesCount !== '' && branchesCount !== null && branchesCount !== undefined)
+                ? `<span class="badge text-bg-secondary">${branchesCount}</span>`
+                : '<span class="text-muted">-</span>';
             const isPrivate = !!r.private;
             const badge = isPrivate
                 ? '<span class="badge text-bg-warning">private</span>'
@@ -1774,9 +1777,8 @@ async function openGitRepoListModal() {
             tr.innerHTML = `
                 <td>
                     <div class="fw-semibold">${full}</div>
-                    <div class="small text-muted"><a href="${r.html_url || '#'}" target="_blank" rel="noopener">Megnyitás</a></div>
                 </td>
-                <td>${branch}</td>
+                <td class="text-nowrap">${branchesCountHtml}</td>
                 <td>${badge}</td>
                 <td class="text-end">
                     <button type="button" class="btn btn-outline-secondary btn-sm">Branch/Tag</button>
@@ -1799,7 +1801,7 @@ async function openGitRepoListModal() {
         if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Betöltés...</td></tr>';
         setLoading(true);
         try {
-            const r = await fetch(`/api/list_github_repos?owner=${encodeURIComponent(owner)}`);
+            const r = await fetch(`/api/list_github_repos?owner=${encodeURIComponent(owner)}&include_branch_counts=1`);
             const data = await r.json().catch(() => ({}));
             if (!r.ok || !data) {
                 throw new Error((data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`);

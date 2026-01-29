@@ -1,10 +1,10 @@
 {
   "lovaszotto/CLA-robotok": {
-    "fetched_at": "2026-01-29T04:12:37",
+    "fetched_at": "2026-01-29T05:06:28",
     "releases": {}
   },
   "lovaszotto/CPS-Robotok": {
-    "fetched_at": "2026-01-29T04:12:39",
+    "fetched_at": "2026-01-29T05:06:29",
     "releases": {
       "CPS01-V1.0.0": {
         "name": "CPS01-Mező ellenőr - Alap kiadás",
@@ -13,7 +13,7 @@
     }
   },
   "lovaszotto/IKK-Robotok": {
-    "fetched_at": "2026-01-29T04:12:41",
+    "fetched_at": "2026-01-29T05:06:31",
     "releases": {
       "IKK04_V1.1.0": {
         "name": "Web ellenőrző - Első kiadás",
@@ -30,7 +30,7 @@
     }
   },
   "lovaszotto/KBSZ-robotok": {
-    "fetched_at": "2026-01-29T04:12:43",
+    "fetched_at": "2026-01-29T05:06:33",
     "releases": {
       "KB01_V1.0.0": {
         "name": "KB01-Közbeszerzési értesító - Alap kiadás",
@@ -39,7 +39,7 @@
     }
   },
   "lovaszotto/SzotarRobi": {
-    "fetched_at": "2026-01-29T04:12:45",
+    "fetched_at": "2026-01-29T05:06:34",
     "releases": {}
   }
 }
