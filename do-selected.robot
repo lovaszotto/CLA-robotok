@@ -71,7 +71,9 @@ Log fájlok összefűzése
     Create File    ${LOG_OUTPUT_DIR}/r_report.html    ${report_content_modified}
     Log    [REBOT][r_report.html] log.html hivatkozások cserélve r_log.html-re a ${LOG_OUTPUT_DIR}/r_report.html fájlban.
 
-    RETURN
+    # Készítsen egy issuet és csatolja az r_log.html és r_report.html fájlokat
+    Log    [REBOT] Log fájlok összefűzése befejeződött: ${LOG_OUTPUT_DIR}        
+    
     Log     \n=== MINDEN LÉPÉS BEFEJEZŐDÖTT ===
     Log     WORKFLOW_STATUS = ${WORKFLOW_STATUS}
 

@@ -15,6 +15,10 @@ import shutil
 import html
 import time
 import threading
+import pathlib
+import base64
+import zipfile
+import io
 from datetime import datetime
 import logging
 
@@ -1026,6 +1030,315 @@ def api_create_github_issue():
         logger.info(f"[GITHUB-ISSUE] Létrehozás hiba: {e}")
         return jsonify({'success': False, 'error': 'Issue létrehozás hiba', 'details': str(e)}), 500
 
+
+def _safe_path_basename(path: str) -> str:
+    try:
+        return pathlib.Path(path).name
+    except Exception:
+        return os.path.basename(os.path.normpath(path or ''))
+
+
+def _write_fallback_html(target_path: str, title: str, content_text: str):
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    safe_title = html.escape(title or '')
+    safe_body = html.escape(content_text or '')
+    html_text = (
+        "<!doctype html>\n"
+        "<html><head><meta charset='utf-8'>"
+        f"<title>{safe_title}</title>"
+        "</head><body>"
+        f"<h3>{safe_title}</h3>"
+        "<pre style='white-space:pre-wrap'>"
+        f"{safe_body}"
+        "</pre></body></html>\n"
+    )
+    with open(target_path, 'w', encoding='utf-8', errors='replace') as f:
+        f.write(html_text)
+
+
+def _ensure_run_issue_artifacts(results_dir_abs: str, stdout_text: str, stderr_text: str) -> dict:
+    """Előállítja az issue-hoz kért futási fájlokat.
+
+    - r_log.html: a Robot log.html másolata (fallback: stdout/stderr HTML)
+    - r_report.html: a Robot report.html másolata (fallback: stdout/stderr HTML)
+    - r_riport.html: magyar név alias a r_report.html-hez
+
+    If Robot did not produce them, create small fallback HTML files.
+    """
+    results_dir_abs = results_dir_abs or ''
+    log_src = os.path.join(results_dir_abs, 'log.html')
+    report_src = os.path.join(results_dir_abs, 'report.html')
+    r_log_path = os.path.join(results_dir_abs, 'r_log.html')
+    r_report_path = os.path.join(results_dir_abs, 'r_report.html')
+    r_riport_path = os.path.join(results_dir_abs, 'r_riport.html')
+
+    try:
+        if os.path.exists(log_src):
+            shutil.copyfile(log_src, r_log_path)
+        else:
+            _write_fallback_html(
+                r_log_path,
+                'Robot log (fallback)',
+                (stdout_text or '') + ("\n\n[stderr]\n" + (stderr_text or '') if stderr_text else ''),
+            )
+    except Exception as e:
+        logger.info(f"[RUN][ISSUE] Nem sikerült r_log.html előállítása: {e}")
+
+    try:
+        if os.path.exists(report_src):
+            shutil.copyfile(report_src, r_report_path)
+        else:
+            _write_fallback_html(
+                r_report_path,
+                'Robot report (fallback)',
+                (stdout_text or '') + ("\n\n[stderr]\n" + (stderr_text or '') if stderr_text else ''),
+            )
+    except Exception as e:
+        logger.info(f"[RUN][ISSUE] Nem sikerült r_report.html előállítása: {e}")
+
+    # Magyar alias: sok helyen r_riport.html néven várják
+    try:
+        if os.path.exists(r_report_path):
+            shutil.copyfile(r_report_path, r_riport_path)
+    except Exception as e:
+        logger.info(f"[RUN][ISSUE] Nem sikerült r_riport.html előállítása: {e}")
+
+    return {
+        'r_log_path': r_log_path,
+        'r_report_path': r_report_path,
+        'r_riport_path': r_riport_path,
+        'has_r_log': os.path.exists(r_log_path),
+        'has_r_report': os.path.exists(r_report_path),
+        'has_r_riport': os.path.exists(r_riport_path),
+    }
+
+
+def _github_create_issue(owner: str, repo_name: str, title: str, body: str, labels: list[str] | None = None) -> dict:
+    url = f'https://api.github.com/repos/{owner}/{repo_name}/issues'
+    payload: dict = {'title': title}
+    if body:
+        payload['body'] = body
+    if labels:
+        cleaned = [str(x).strip() for x in labels if str(x).strip()]
+        if cleaned:
+            payload['labels'] = cleaned
+    resp = requests.post(url, headers=_github_headers(), json=payload, timeout=20)
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"GitHub create issue failed (status={resp.status_code}): {(resp.text or '').strip()}")
+    return resp.json() or {}
+
+
+def _github_close_issue(owner: str, repo_name: str, issue_number: int) -> dict:
+    url = f'https://api.github.com/repos/{owner}/{repo_name}/issues/{issue_number}'
+    resp = requests.patch(url, headers=_github_headers(), json={'state': 'closed'}, timeout=20)
+    if resp.status_code != 200:
+        raise RuntimeError(f"GitHub close issue failed (status={resp.status_code}): {(resp.text or '').strip()}")
+    return resp.json() or {}
+
+
+def _github_create_issue_comment(owner: str, repo_name: str, issue_number: int, body: str) -> dict:
+    url = f'https://api.github.com/repos/{owner}/{repo_name}/issues/{issue_number}/comments'
+    resp = requests.post(url, headers=_github_headers(), json={'body': body}, timeout=20)
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"GitHub create comment failed (status={resp.status_code}): {(resp.text or '').strip()}")
+    return resp.json() or {}
+
+
+def _safe_repo_path_component(s: str) -> str:
+    s = (s or '').strip()
+    if not s:
+        return 'run'
+    # GitHub path safe-ish: keep alnum, dash, underscore, dot; replace others
+    out = []
+    for ch in s:
+        if ch.isalnum() or ch in ('-', '_', '.'):
+            out.append(ch)
+        else:
+            out.append('_')
+    return ''.join(out).strip('_') or 'run'
+
+
+def _github_get_default_branch(owner: str, repo_name: str) -> str:
+    try:
+        url = f'https://api.github.com/repos/{owner}/{repo_name}'
+        resp = requests.get(url, headers=_github_headers(), timeout=20)
+        if resp.status_code != 200:
+            return 'main'
+        j = resp.json() or {}
+        return (j.get('default_branch') or 'main').strip() or 'main'
+    except Exception:
+        return 'main'
+
+
+def _github_put_repo_file(owner: str, repo_name: str, branch: str, path_in_repo: str, content_bytes: bytes, message: str) -> dict:
+    """Feltölt egy fájlt a repóba a Contents API-n keresztül (commitot hoz létre).
+
+    Megjegyzés: ez nem issue-attachment, hanem verziózott fájl a repóban. Stabil fallback.
+    """
+    path_in_repo = (path_in_repo or '').lstrip('/')
+    url = f'https://api.github.com/repos/{owner}/{repo_name}/contents/{path_in_repo}'
+    payload = {
+        'message': message or f'Add artifact {path_in_repo}',
+        'content': base64.b64encode(content_bytes or b'').decode('ascii'),
+        'branch': branch,
+    }
+    resp = requests.put(url, headers=_github_headers(), json=payload, timeout=60)
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"GitHub contents upload failed (status={resp.status_code}): {(resp.text or '').strip()}")
+    return resp.json() or {}
+
+
+def _guess_mime_type(filename: str) -> str:
+    name = (filename or '').lower()
+    if name.endswith('.html'):
+        return 'text/html'
+    if name.endswith('.zip'):
+        return 'application/zip'
+    if name.endswith('.xml'):
+        return 'application/xml'
+    if name.endswith('.txt'):
+        return 'text/plain'
+    return 'application/octet-stream'
+
+
+def _zip_for_upload(src_path: str, zip_path: str) -> str:
+    os.makedirs(os.path.dirname(zip_path), exist_ok=True)
+    with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        zf.write(src_path, arcname=os.path.basename(src_path))
+    return zip_path
+
+
+def _zip_file_to_bytes(src_path: str) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        zf.write(src_path, arcname=os.path.basename(src_path))
+    return buf.getvalue()
+
+
+def _split_bytes(content: bytes, chunk_size: int) -> list[bytes]:
+    if not content:
+        return [b'']
+    if chunk_size <= 0:
+        return [content]
+    return [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
+
+
+def _prepare_attachment_payloads(file_path: str, preferred_name: str, max_bytes: int) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """Return ([(upload_name, upload_bytes)], notes).
+
+    Strategy:
+    - If file <= max_bytes: upload as-is
+    - Else: zip in-memory and upload the zip
+    - If zip still > max_bytes: split the zip into .partNN chunks <= max_bytes
+    """
+    notes: list[str] = []
+    file_path = file_path or ''
+    preferred_name = preferred_name or os.path.basename(file_path)
+
+    try:
+        size = os.path.getsize(file_path)
+    except Exception:
+        size = -1
+
+    # Small enough: upload raw
+    if size >= 0 and size <= max_bytes:
+        with open(file_path, 'rb') as f:
+            return [(preferred_name, f.read())], notes
+
+    # Too large (or unknown size): zip
+    try:
+        zip_name = preferred_name if preferred_name.lower().endswith('.zip') else (preferred_name + '.zip')
+        zipped = _zip_file_to_bytes(file_path)
+        if size >= 0:
+            notes.append(f"Zip csatolva: {zip_name} (raw={size} byte, zip={len(zipped)} byte)")
+        else:
+            notes.append(f"Zip csatolva: {zip_name} (zip={len(zipped)} byte)")
+    except Exception as e:
+        # Fallback: try raw anyway
+        notes.append(f"Zip készítés sikertelen ({e}); eredeti fájl feltöltése megkísérelve: {preferred_name}")
+        with open(file_path, 'rb') as f:
+            return [(preferred_name, f.read())], notes
+
+    # Zip fits
+    if len(zipped) <= max_bytes:
+        return [(zip_name, zipped)], notes
+
+    # Split zip into parts
+    parts = _split_bytes(zipped, max_bytes)
+    notes.append(f"Zip még mindig túl nagy, darabolva {len(parts)} részre (max {max_bytes} byte/rész)")
+    payloads: list[tuple[str, bytes]] = []
+    for idx, part in enumerate(parts, start=1):
+        part_name = f"{zip_name}.part{idx:02d}"
+        payloads.append((part_name, part))
+    notes.append(
+        "Összefűzés Windows alatt: `copy /b file.zip.part01+file.zip.part02+... file.zip` majd kibontás."
+    )
+    return payloads, notes
+
+
+def _prepare_attachment_path(file_path: str, preferred_name: str, max_bytes: int = 9 * 1024 * 1024) -> tuple[str, str, str | None]:
+    """Returns (path_to_upload, upload_filename, note).
+
+    If the original file is too large, creates a .zip next to it and uploads that.
+    """
+    file_path = file_path or ''
+    preferred_name = preferred_name or os.path.basename(file_path)
+    try:
+        size = os.path.getsize(file_path)
+    except Exception:
+        size = -1
+
+    if size >= 0 and size > max_bytes:
+        base_dir = os.path.dirname(file_path)
+        zip_name = preferred_name + '.zip' if not preferred_name.lower().endswith('.zip') else preferred_name
+        zip_path = os.path.join(base_dir, zip_name)
+        try:
+            _zip_for_upload(file_path, zip_path)
+            zsize = os.path.getsize(zip_path)
+            note = f"Túl nagy fájl ({size} byte), zip csatolva ({zsize} byte): {zip_name}"
+            return zip_path, zip_name, note
+        except Exception as e:
+            # Ha nem sikerül zip-elni, próbáljuk az eredetit
+            return file_path, preferred_name, f"Zip készítés sikertelen ({e}); eredeti fájl feltöltése megkísérelve."
+
+    return file_path, preferred_name, None
+
+
+def _github_upload_issue_attachment(owner: str, repo_name: str, issue_number: int, filename: str, content_bytes: bytes) -> dict:
+    """Uploads an attachment to an issue (GitHub Issues attachments API).
+
+    Returns JSON from GitHub on success.
+    """
+    url = f'https://uploads.github.com/repos/{owner}/{repo_name}/issues/{issue_number}/attachments'
+    headers = dict(_github_headers())
+    headers['Accept'] = 'application/vnd.github+json'
+    headers['X-GitHub-Api-Version'] = '2022-11-28'
+
+    # FONTOS: ez a végpont multipart/form-data feltöltést vár.
+    # Ne állítsunk be kézzel Content-Type-ot; a requests beállítja a boundary-t.
+
+    # Az uploads API néha érzékeny az auth sémára (fine-grained PAT esetén gyakran Bearer)
+    try:
+        token = _get_github_token()
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+    except Exception:
+        pass
+
+    if content_bytes is None:
+        content_bytes = b''
+
+    files = {
+        # GitHub endpoint sensitive; use octet-stream for maximum compatibility
+        'file': (filename, content_bytes, 'application/octet-stream'),
+    }
+    resp = requests.post(url, headers=headers, params={'name': filename}, files=files, timeout=60)
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(
+            f"GitHub upload attachment failed (status={resp.status_code}, name={filename}, bytes={len(content_bytes)}): {(resp.text or '').strip()}"
+        )
+    return resp.json() or {}
+
     # Token nélkül gyorsan rate limitbe futhatunk, ezért csak tokennel kérdezünk.
     if not _get_github_token():
         return {}
@@ -1367,6 +1680,176 @@ def api_execute():
         status = "success" if rc == 0 else "failed"
         logger.info(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
 
+        # --- GitHub Issue automatikus létrehozás + csatolmányok ---
+        issue_info: dict | None = None
+        try:
+            token = _get_github_token()
+            if token and out_dir:
+                artifacts = _ensure_run_issue_artifacts(out_dir, _stdout, _stderr)
+                title = _safe_path_basename(out_dir) or out_dir
+
+                settings = _get_github_settings()
+                owner = settings.get('owner') or 'lovaszotto'
+                repo_name = settings.get('repo_name') or DEFAULT_GITHUB_REPO_NAME
+
+                body_lines = [
+                    f"Automatikusan létrehozott futási ticket: **{title}**",
+                    "",
+                    f"- Repo: `{repo}`",
+                    f"- Branch: `{branch}`",
+                    f"- Return code: `{rc}`",
+                    f"- Status: `{status}`",
+                    f"- Results dir: `{out_dir}`",
+                ]
+                issue_obj = _github_create_issue(
+                    owner=owner,
+                    repo_name=repo_name,
+                    title=title,
+                    body='\n'.join(body_lines),
+                    labels=['documentation'],
+                )
+                issue_number = int(issue_obj.get('number'))
+                issue_url = issue_obj.get('html_url')
+
+                uploads: list[dict] = []
+                upload_errors: list[str] = []
+                upload_notes: list[str] = []
+                # A GitHub issue-attachment méretlimitje gyakorlatban nagyon alacsony lehet,
+                # ezért extra konzervatív limitet használunk, és szükség esetén darabolunk.
+                max_attachment_bytes = 100 * 1024
+                for key, file_path in (
+                    ('r_log.html', artifacts.get('r_log_path')),
+                    ('r_riport.html', artifacts.get('r_riport_path') or artifacts.get('r_report_path')),
+                ):
+                    if not file_path or not os.path.exists(file_path):
+                        upload_errors.append(f"Missing artifact: {key}")
+                        continue
+                    try:
+                        payloads, notes = _prepare_attachment_payloads(file_path, key, max_attachment_bytes)
+                        upload_notes.extend(notes)
+                        for upload_name, content in payloads:
+                            if not content:
+                                upload_notes.append(f"Üres csatolmány kihagyva: {upload_name}")
+                                continue
+                            try:
+                                up = _github_upload_issue_attachment(owner, repo_name, issue_number, upload_name, content)
+                                uploads.append(up)
+                            except Exception as e:
+                                upload_errors.append(f"{upload_name} upload failed: {e}")
+                    except Exception as e:
+                        upload_errors.append(f"{key} upload failed: {e}")
+
+                # Kommentben belinkeljük az attachmenteket (ha GitHub adott URL-t)
+                try:
+                    if uploads:
+                        link_lines = ["Futtási csatolmányok:"]
+                        for up in uploads:
+                            name = up.get('name') or up.get('filename') or 'attachment'
+                            link = up.get('browser_download_url') or up.get('html_url') or up.get('url')
+                            if link:
+                                link_lines.append(f"- [{name}]({link})")
+                            else:
+                                link_lines.append(f"- {name}")
+                        _github_create_issue_comment(owner, repo_name, issue_number, '\n'.join(link_lines))
+                except Exception as e:
+                    # Ne szemeteljük tele az issue-t hibával; elég a server.log.
+                    logger.info(f"[EXECUTE][ISSUE] Csatolmány-link komment hiba: {e}")
+
+                # Fallback: ha a GitHub issue-attachment API hibázik (pl. 422 Bad Size),
+                # akkor tegyük be a fájlokat a repóba a Contents API-val és linkeljük.
+                fallback_links: list[dict] = []
+                fallback_errors: list[str] = []
+                if upload_errors:
+                    try:
+                        default_branch = _github_get_default_branch(owner, repo_name)
+                        run_folder = _safe_repo_path_component(title)
+                        base_path = f"run_artifacts/{run_folder}"
+
+                        for key, file_path in (
+                            ('r_log.html', artifacts.get('r_log_path')),
+                            ('r_riport.html', artifacts.get('r_riport_path') or artifacts.get('r_report_path')),
+                        ):
+                            if not file_path or not os.path.exists(file_path):
+                                continue
+                            try:
+                                payloads, notes = _prepare_attachment_payloads(file_path, key, 700 * 1024)
+                                upload_notes.extend([f"[Repo fallback] {n}" for n in notes])
+                                for upload_name, content in payloads:
+                                    if not content:
+                                        continue
+                                    path_in_repo = f"{base_path}/{_safe_repo_path_component(upload_name)}"
+                                    respj = _github_put_repo_file(
+                                        owner,
+                                        repo_name,
+                                        default_branch,
+                                        path_in_repo,
+                                        content,
+                                        message=f"Add run artifact {run_folder}: {upload_name}",
+                                    )
+                                    html_url = None
+                                    try:
+                                        html_url = (respj.get('content') or {}).get('html_url')
+                                    except Exception:
+                                        html_url = None
+                                    fallback_links.append({'name': upload_name, 'path': path_in_repo, 'html_url': html_url, 'branch': default_branch})
+                            except Exception as e:
+                                fallback_errors.append(f"{key} repo fallback failed: {e}")
+
+                        if fallback_links:
+                            lines = ["Repo fallback csatolmányok (issue-attachment helyett):"]
+                            for item in fallback_links:
+                                nm = item.get('name')
+                                url = item.get('html_url')
+                                if url:
+                                    lines.append(f"- [{nm}]({url})")
+                                else:
+                                    lines.append(f"- {nm}: {item.get('path')}")
+                            _github_create_issue_comment(owner, repo_name, issue_number, '\n'.join(lines))
+                    except Exception as e:
+                        fallback_errors.append(str(e))
+
+                closed = False
+                close_error = None
+                if rc == 0:
+                    try:
+                        _github_close_issue(owner, repo_name, issue_number)
+                        closed = True
+                    except Exception as e:
+                        close_error = str(e)
+
+                issue_info = {
+                    'repo': f"{owner}/{repo_name}",
+                    'number': issue_number,
+                    'html_url': issue_url,
+                    'created': True,
+                    'closed': closed,
+                    'attachments_uploaded': [
+                        {
+                            'name': (u.get('name') or u.get('filename')),
+                            'url': (u.get('browser_download_url') or u.get('html_url') or u.get('url')),
+                        }
+                        for u in uploads
+                    ],
+                    'upload_ok': (len(upload_errors) == 0),
+                    'repo_fallback': {
+                        'used': bool(upload_errors),
+                        'links': fallback_links,
+                    },
+                    'close_error': close_error,
+                }
+            else:
+                issue_info = {
+                    'created': False,
+                    'skipped': True,
+                    'reason': 'Missing GitHub token or results dir',
+                }
+        except Exception as e:
+            logger.info(f"[EXECUTE][ISSUE] Issue automatizálás hiba: {e}")
+            issue_info = {
+                'created': False,
+                'error': str(e),
+            }
+
         # Eredmény tárolása
         global execution_results
         result_entry = {
@@ -1387,7 +1870,8 @@ def api_execute():
             'branch': branch,
             'returncode': rc,
             'results_dir': out_dir,
-            'status': "ok" if rc == 0 else "fail"
+            'status': "ok" if rc == 0 else "fail",
+            'issue': issue_info,
         }
         save_execution_results()
         return jsonify(result_obj)
