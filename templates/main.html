@@ -549,14 +549,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             </div>
                                             <div class="form-text">A klónozás alap URL-je (Robot Framework: ${GIT_URL_BASE}).</div>
                                         </div>
-                                        <div class="col-12 col-md-6">
-                                            <label for="githubRepoName" class="form-label">repo_name</label>
-                                            <div class="input-group">
-                                                <input type="text" class="form-control" id="githubRepoName" placeholder="CLA-robotok">
-                                                <button class="btn btn-outline-secondary" type="button" onclick="openRepoBranchesTagsModal()">Teszt</button>
-                                            </div>
-                                            <div class="form-text">Az Ötletek/Issue cél repository neve.</div>
-                                        </div>
                                     </div>
 
                                     <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
@@ -1473,7 +1465,6 @@ function _safeEl(id) {
 
 async function loadGitHubSettings() {
     const baseEl = _safeEl('gitUrlBase');
-    const repoEl = _safeEl('githubRepoName');
     try {
         const r = await fetch('/api/get_github_settings');
         const data = await r.json();
@@ -1484,7 +1475,6 @@ async function loadGitHubSettings() {
         const gitUrlBase = (settings.git_url_base || DEFAULT_GIT_URL_BASE);
         const repoName = (settings.repo_name || DEFAULT_GITHUB_REPO_NAME);
         if (baseEl) baseEl.value = gitUrlBase;
-        if (repoEl) repoEl.value = repoName;
         window.__githubSettingsCache = {
             git_url_base: gitUrlBase,
             repo_name: repoName,
@@ -1495,25 +1485,21 @@ async function loadGitHubSettings() {
     } catch (e) {
         // Ne zajongjunk: fallback értékek
         if (baseEl && !baseEl.value) baseEl.value = DEFAULT_GIT_URL_BASE;
-        if (repoEl && !repoEl.value) repoEl.value = DEFAULT_GITHUB_REPO_NAME;
         window.__githubSettingsCache = {
             git_url_base: (baseEl && baseEl.value) ? baseEl.value : DEFAULT_GIT_URL_BASE,
-            repo_name: (repoEl && repoEl.value) ? repoEl.value : DEFAULT_GITHUB_REPO_NAME,
+            repo_name: DEFAULT_GITHUB_REPO_NAME,
         };
     }
 }
 
 async function saveGitHubSettings() {
     const baseEl = _safeEl('gitUrlBase');
-    const repoEl = _safeEl('githubRepoName');
     const gitUrlBase = (baseEl ? baseEl.value : '').trim();
-    const repoName = (repoEl ? repoEl.value : '').trim();
     const r = await fetch('/api/set_github_settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             git_url_base: gitUrlBase,
-            repo_name: repoName,
         })
     });
     const data = await r.json().catch(() => ({}));
@@ -1529,26 +1515,15 @@ async function saveGitHubSettings() {
 
 async function testGitSettings(source = 'base') {
     const baseEl = _safeEl('gitUrlBase');
-    const repoEl = _safeEl('githubRepoName');
-
     const gitUrlBase = (baseEl ? baseEl.value : '').trim();
-    const repoName = (repoEl ? repoEl.value : '').trim();
-    const target = (source === 'repo' ? 'repo_name' : 'git_url_base');
 
-    if (target === 'git_url_base' && !gitUrlBase) {
+    // A repo_name beállítás nem jelenik meg a UI-ban; itt csak a base URL-t teszteljük.
+    const target = 'git_url_base';
+
+    if (!gitUrlBase) {
         showToast('Add meg a GIT_URL_BASE értéket.', 'warning');
         return;
     }
-    if (target === 'repo_name' && !repoName) {
-        showToast('Add meg a repo_name értéket.', 'warning');
-        return;
-    }
-
-    const btns = document.querySelectorAll(
-        target === 'repo_name'
-            ? '#githubRepoName + button, #githubRepoName ~ button'
-            : '#gitUrlBase + button, #gitUrlBase ~ button'
-    );
 
     try {
         // Mentés nélkül is tesztelhető: a mezők aktuális értékével dolgozunk.
@@ -1557,7 +1532,6 @@ async function testGitSettings(source = 'base') {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 git_url_base: gitUrlBase,
-                repo_name: repoName,
                 target
             })
         });
@@ -1598,7 +1572,7 @@ function _escapeHtml(s) {
         .replace(/'/g, '&#39;');
 }
 
-async function openRepoBranchesTagsModal() {
+async function openRepoBranchesTagsModal(repoNameArg) {
     const modalEl = document.getElementById('repoBranchesTagsModal');
     if (!modalEl || !window.bootstrap) {
         showToast('A branch/tag modal nem elérhető.', 'danger');
@@ -1606,9 +1580,8 @@ async function openRepoBranchesTagsModal() {
     }
 
     const baseEl = _safeEl('gitUrlBase');
-    const repoEl = _safeEl('githubRepoName');
     const base = (baseEl ? baseEl.value : '').trim();
-    const repoName = (repoEl ? repoEl.value : '').trim();
+    const repoName = String(repoNameArg || (window.__githubSettingsCache && window.__githubSettingsCache.repo_name) || DEFAULT_GITHUB_REPO_NAME).trim();
     const owner = _parseGitHubOwnerFromBase(base);
 
     if (!owner) {
@@ -1616,7 +1589,7 @@ async function openRepoBranchesTagsModal() {
         return;
     }
     if (!repoName) {
-        showToast('Add meg a repo_name értéket (vagy válaszd ki a listából).', 'warning');
+        showToast('Nincs kiválasztott repository.', 'warning');
         return;
     }
 
@@ -1806,16 +1779,14 @@ async function openGitRepoListModal() {
                 <td>${branch}</td>
                 <td>${badge}</td>
                 <td class="text-end">
-                    <button type="button" class="btn btn-outline-primary btn-sm">Beállít</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm">Branch/Tag</button>
                 </td>
             `;
             const btn = tr.querySelector('button');
             if (btn) {
                 btn.addEventListener('click', () => {
-                    const repoEl = _safeEl('githubRepoName');
-                    if (repoEl) repoEl.value = name;
-                    showToast('repo_name beállítva: ' + name, 'success');
                     try { bootstrap.Modal.getOrCreateInstance(modalEl).hide(); } catch (e) { /* ignore */ }
+                    openRepoBranchesTagsModal(name);
                 });
             }
             tbody.appendChild(tr);
@@ -1885,7 +1856,6 @@ async function resetSettings() {
         const gr = _safeEl('generateReport');
         const sm = _safeEl('sandboxMode');
         const gu = _safeEl('gitUrlBase');
-        const rn = _safeEl('githubRepoName');
 
         if (dm) dm.checked = false;
         if (cv) cv.checked = false;
@@ -1895,7 +1865,6 @@ async function resetSettings() {
         if (gr) gr.checked = true;
 
         if (gu) gu.value = DEFAULT_GIT_URL_BASE;
-        if (rn) rn.value = DEFAULT_GITHUB_REPO_NAME;
 
         if (sm) {
             sm.checked = false;

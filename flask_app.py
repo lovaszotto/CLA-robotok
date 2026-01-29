@@ -532,11 +532,25 @@ def api_get_github_settings():
 
 @app.route('/api/set_github_settings', methods=['POST'])
 def api_set_github_settings():
-    """Mentjük a GIT_URL_BASE-t és a repo_name-t, és szinkronizáljuk a resources/variables.robot fájlba."""
+    """Mentjük a GitHub beállításokat és szinkronizáljuk a resources/variables.robot fájlba.
+
+    Támogatja a részleges frissítést is:
+    - ha egy mező nincs megadva (vagy üres), megtartjuk a korábbi értéket.
+    """
     try:
         data = request.get_json(silent=True) or {}
-        git_url_base = _normalize_git_url_base(data.get('git_url_base') or '')
-        repo_name = (data.get('repo_name') or '').strip() or DEFAULT_GITHUB_REPO_NAME
+
+        current = _get_github_settings()
+
+        if 'git_url_base' in data and (data.get('git_url_base') or '').strip():
+            git_url_base = _normalize_git_url_base(data.get('git_url_base') or '')
+        else:
+            git_url_base = _normalize_git_url_base(current.get('git_url_base') or DEFAULT_GIT_URL_BASE)
+
+        if 'repo_name' in data and (data.get('repo_name') or '').strip():
+            repo_name = (data.get('repo_name') or '').strip()
+        else:
+            repo_name = (current.get('repo_name') or DEFAULT_GITHUB_REPO_NAME).strip() or DEFAULT_GITHUB_REPO_NAME
 
         # Szinkron: variables.robot
         _set_robot_variable_value('GIT_URL_BASE', git_url_base)
@@ -635,6 +649,7 @@ def api_list_github_repos():
         headers = _github_headers()
         repos: list[dict] = []
         warning = ''
+        include_branch_counts = str(request.args.get('include_branch_counts') or '').strip().lower() in ('1', 'true', 'yes', 'y')
 
         def _simplify(repo: dict) -> dict:
             return {
@@ -647,6 +662,38 @@ def api_list_github_repos():
                 'ssh_url': repo.get('ssh_url'),
                 'updated_at': repo.get('updated_at'),
             }
+
+        def _get_branches_count(repo_name: str) -> int | None:
+            """Gyors branch-szám becslés GitHub Link header alapján.
+
+            Trükk: per_page=1 mellett a 'last' oldal száma megegyezik a branch-ok számával.
+            """
+            if not repo_name:
+                return None
+            url = f'https://api.github.com/repos/{owner}/{repo_name}/branches?per_page=1&page=1'
+            try:
+                resp = requests.get(url, headers=headers, timeout=15)
+            except Exception:
+                return None
+            if resp.status_code != 200:
+                return None
+            link = resp.headers.get('Link') or ''
+            if 'rel="last"' in link:
+                for part in link.split(','):
+                    if 'rel="last"' not in part:
+                        continue
+                    m = re.search(r'[?&]page=(\d+)', part)
+                    if m:
+                        try:
+                            return int(m.group(1))
+                        except Exception:
+                            return None
+            # Ha nincs paging, akkor 0 vagy 1 elem jön vissza
+            try:
+                data = resp.json() or []
+                return int(len(data))
+            except Exception:
+                return None
 
         if token:
             # Privát repo-khoz: /user/repos (ha a token user-je azonos, és van jogosultság)
@@ -679,6 +726,18 @@ def api_list_github_repos():
         repos_raw = pr.json() or []
         repos = [_simplify(r) for r in repos_raw]
         repos.sort(key=lambda x: (x.get('updated_at') or ''), reverse=True)
+
+        if include_branch_counts and repos:
+            # Ne csináljunk 100+ extra HTTP hívást véletlenül.
+            max_repos = 40
+            if len(repos) > max_repos:
+                warning = (warning + ' ' if warning else '') + f'Branch szám csak az első {max_repos} repóra lett lekérdezve.'
+            for i, repo in enumerate(repos[:max_repos]):
+                name = (repo.get('name') or '').strip()
+                repo['branches_count'] = _get_branches_count(name)
+            for repo in repos[max_repos:]:
+                repo['branches_count'] = None
+
         return jsonify({'success': True, 'owner': owner, 'repos': repos, 'warning': warning})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
