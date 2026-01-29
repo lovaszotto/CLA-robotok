@@ -538,6 +538,27 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                     </div>
                                     <div class="form-text">A token a szerveren a github_token.txt fájlba kerül, és a release információk (cím + dátum) lekéréséhez kell.</div>
 
+                                    <hr class="my-3">
+
+                                    <div class="row g-3">
+                                        <div class="col-12">
+                                            <label for="gitUrlBase" class="form-label">GIT_URL_BASE</label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="gitUrlBase" placeholder="https://github.com/lovaszotto/">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="openGitRepoListModal()">Teszt</button>
+                                            </div>
+                                            <div class="form-text">A klónozás alap URL-je (Robot Framework: ${GIT_URL_BASE}).</div>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label for="githubRepoName" class="form-label">repo_name</label>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="githubRepoName" placeholder="CLA-robotok">
+                                                <button class="btn btn-outline-secondary" type="button" onclick="openRepoBranchesTagsModal()">Teszt</button>
+                                            </div>
+                                            <div class="form-text">Az Ötletek/Issue cél repository neve.</div>
+                                        </div>
+                                    </div>
+
                                     <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
                                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveGitHubToken()"><i class="bi bi-check2"></i> Mentés</button>
                                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearGitHubToken()"><i class="bi bi-x"></i> Törlés</button>
@@ -670,6 +691,112 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
 
                 <pre id="serverLogPre" class="server-log log-wrap"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Git repo lista MODAL (GIT_URL_BASE teszt) -->
+<div class="modal fade" id="gitRepoListModal" tabindex="-1" aria-labelledby="gitRepoListModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="gitRepoListModalLabel"><i class="bi bi-github me-1"></i> Repository lista</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+                    <div class="small text-muted" id="gitRepoListOwnerInfo">Betöltés...</div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="gitRepoListRefreshBtn">
+                        <i class="bi bi-arrow-clockwise"></i> Frissítés
+                    </button>
+                </div>
+
+                <div id="gitRepoListAlert" class="alert alert-warning d-none" role="alert"></div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Repo</th>
+                                <th>Default branch</th>
+                                <th>Visibilitás</th>
+                                <th class="text-end">Művelet</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gitRepoListTbody">
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-3">Betöltés...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bezárás</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Repo branch/tag MODAL (repo_name teszt) -->
+<div class="modal fade" id="repoBranchesTagsModal" tabindex="-1" aria-labelledby="repoBranchesTagsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="repoBranchesTagsModalLabel"><i class="bi bi-diagram-3 me-1"></i> Branch-ek és tag-ek</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+                    <div class="small text-muted" id="repoBranchesTagsInfo">Betöltés...</div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="repoBranchesTagsRefreshBtn">
+                        <i class="bi bi-arrow-clockwise"></i> Frissítés
+                    </button>
+                </div>
+
+                <div id="repoBranchesTagsAlert" class="alert alert-warning d-none" role="alert"></div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-lg-4">
+                        <div class="border rounded-3 p-3" style="background:#f8fbff;">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="fw-semibold"><i class="bi bi-git me-1"></i> Branchek</div>
+                                <span class="badge text-bg-secondary" id="repoBranchesCount">0</span>
+                            </div>
+                            <div id="repoBranchesList" class="d-flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-8">
+                        <div class="border rounded-3 p-3" style="background:#f8fbff;">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <div class="fw-semibold"><i class="bi bi-tag me-1"></i> Tag-ek / Release infó</div>
+                                <span class="badge text-bg-secondary" id="repoTagsCount">0</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-striped align-middle">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Tag</th>
+                                            <th>Cím</th>
+                                            <th>Dátum</th>
+                                            <th>Release info</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="repoTagsTbody">
+                                        <tr>
+                                            <td colspan="4" class="text-center text-muted py-3">Betöltés...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="small text-muted" id="repoTagsHint"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Bezárás</button>
             </div>
         </div>
     </div>
@@ -1332,6 +1459,527 @@ function showToast(message, type = 'info') {
     setTimeout(() => toast.remove(), 3500);
 }
 
+// --- Beállítások (UI + backend szinkron) ---
+const ROBOT_MANAGER_SETTINGS_KEY = 'robotManagerSettings';
+const DEFAULT_PAGE_SIZE = '10';
+const DEFAULT_EXECUTION_MODE = 'sequential';
+const DEFAULT_TIMEOUT = '300';
+const DEFAULT_GIT_URL_BASE = 'https://github.com/lovaszotto/';
+const DEFAULT_GITHUB_REPO_NAME = 'CLA-robotok';
+
+function _safeEl(id) {
+    try { return document.getElementById(id); } catch (e) { return null; }
+}
+
+async function loadGitHubSettings() {
+    const baseEl = _safeEl('gitUrlBase');
+    const repoEl = _safeEl('githubRepoName');
+    try {
+        const r = await fetch('/api/get_github_settings');
+        const data = await r.json();
+        if (!r.ok) {
+            throw new Error((data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`);
+        }
+        const settings = (data && data.settings) ? data.settings : (data || {});
+        const gitUrlBase = (settings.git_url_base || DEFAULT_GIT_URL_BASE);
+        const repoName = (settings.repo_name || DEFAULT_GITHUB_REPO_NAME);
+        if (baseEl) baseEl.value = gitUrlBase;
+        if (repoEl) repoEl.value = repoName;
+        window.__githubSettingsCache = {
+            git_url_base: gitUrlBase,
+            repo_name: repoName,
+            owner: settings.owner || null,
+            issues_url: settings.issues_url || null,
+            api_repo: settings.api_repo || null,
+        };
+    } catch (e) {
+        // Ne zajongjunk: fallback értékek
+        if (baseEl && !baseEl.value) baseEl.value = DEFAULT_GIT_URL_BASE;
+        if (repoEl && !repoEl.value) repoEl.value = DEFAULT_GITHUB_REPO_NAME;
+        window.__githubSettingsCache = {
+            git_url_base: (baseEl && baseEl.value) ? baseEl.value : DEFAULT_GIT_URL_BASE,
+            repo_name: (repoEl && repoEl.value) ? repoEl.value : DEFAULT_GITHUB_REPO_NAME,
+        };
+    }
+}
+
+async function saveGitHubSettings() {
+    const baseEl = _safeEl('gitUrlBase');
+    const repoEl = _safeEl('githubRepoName');
+    const gitUrlBase = (baseEl ? baseEl.value : '').trim();
+    const repoName = (repoEl ? repoEl.value : '').trim();
+    const r = await fetch('/api/set_github_settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            git_url_base: gitUrlBase,
+            repo_name: repoName,
+        })
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !(data && data.success)) {
+        const msg = (data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`;
+        throw new Error(msg);
+    }
+    if (data && data.settings) {
+        window.__githubSettingsCache = data.settings;
+    }
+    return data;
+}
+
+async function testGitSettings(source = 'base') {
+    const baseEl = _safeEl('gitUrlBase');
+    const repoEl = _safeEl('githubRepoName');
+
+    const gitUrlBase = (baseEl ? baseEl.value : '').trim();
+    const repoName = (repoEl ? repoEl.value : '').trim();
+    const target = (source === 'repo' ? 'repo_name' : 'git_url_base');
+
+    if (target === 'git_url_base' && !gitUrlBase) {
+        showToast('Add meg a GIT_URL_BASE értéket.', 'warning');
+        return;
+    }
+    if (target === 'repo_name' && !repoName) {
+        showToast('Add meg a repo_name értéket.', 'warning');
+        return;
+    }
+
+    const btns = document.querySelectorAll(
+        target === 'repo_name'
+            ? '#githubRepoName + button, #githubRepoName ~ button'
+            : '#gitUrlBase + button, #gitUrlBase ~ button'
+    );
+
+    try {
+        // Mentés nélkül is tesztelhető: a mezők aktuális értékével dolgozunk.
+        const r = await fetch('/api/test_git_repo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                git_url_base: gitUrlBase,
+                repo_name: repoName,
+                target
+            })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data) {
+            throw new Error((data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`);
+        }
+        if (data.ok) {
+            showToast('Git OK: ' + (data.url || ''), 'success');
+        } else {
+            const msg = (data.error || data.details || 'Nem elérhető');
+            showToast('Git teszt sikertelen: ' + msg, 'danger');
+        }
+    } catch (e) {
+        showToast('Git teszt hiba: ' + e, 'danger');
+    }
+}
+
+function _parseGitHubOwnerFromBase(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    // https://github.com/<owner>/
+    let m = s.match(/github\.com\/(.+?)(\/)?$/i);
+    if (m && m[1]) return m[1].replace(/\/$/, '').trim() || null;
+    // git@github.com:<owner>/
+    m = s.match(/github\.com:(.+?)(\/)?$/i);
+    if (m && m[1]) return m[1].replace(/\/$/, '').trim() || null;
+    return null;
+}
+
+function _escapeHtml(s) {
+    const str = String(s ?? '');
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function openRepoBranchesTagsModal() {
+    const modalEl = document.getElementById('repoBranchesTagsModal');
+    if (!modalEl || !window.bootstrap) {
+        showToast('A branch/tag modal nem elérhető.', 'danger');
+        return;
+    }
+
+    const baseEl = _safeEl('gitUrlBase');
+    const repoEl = _safeEl('githubRepoName');
+    const base = (baseEl ? baseEl.value : '').trim();
+    const repoName = (repoEl ? repoEl.value : '').trim();
+    const owner = _parseGitHubOwnerFromBase(base);
+
+    if (!owner) {
+        showToast('A GIT_URL_BASE alapján nem tudtam kinyerni a GitHub felhasználót (pl. https://github.com/<user>/).', 'warning');
+        return;
+    }
+    if (!repoName) {
+        showToast('Add meg a repo_name értéket (vagy válaszd ki a listából).', 'warning');
+        return;
+    }
+
+    const infoEl = document.getElementById('repoBranchesTagsInfo');
+    const alertEl = document.getElementById('repoBranchesTagsAlert');
+    const refreshBtn = document.getElementById('repoBranchesTagsRefreshBtn');
+    const branchesList = document.getElementById('repoBranchesList');
+    const branchesCount = document.getElementById('repoBranchesCount');
+    const tagsTbody = document.getElementById('repoTagsTbody');
+    const tagsCount = document.getElementById('repoTagsCount');
+    const tagsHint = document.getElementById('repoTagsHint');
+
+    const setAlert = (msg, variant = 'warning') => {
+        if (!alertEl) return;
+        alertEl.classList.remove('d-none', 'alert-warning', 'alert-danger', 'alert-info', 'alert-success');
+        alertEl.classList.add('alert-' + variant);
+        alertEl.textContent = msg;
+    };
+    const clearAlert = () => {
+        if (!alertEl) return;
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+    };
+    const setLoading = (loading) => {
+        if (refreshBtn) {
+            refreshBtn.disabled = !!loading;
+            refreshBtn.innerHTML = loading
+                ? '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Frissítés'
+                : '<i class="bi bi-arrow-clockwise"></i> Frissítés';
+        }
+    };
+
+    const renderBranches = (branches) => {
+        const list = Array.isArray(branches) ? branches : [];
+        if (branchesCount) branchesCount.textContent = String(list.length);
+        if (!branchesList) return;
+        branchesList.innerHTML = '';
+        if (list.length === 0) {
+            branchesList.innerHTML = '<span class="text-muted">Nincs branch (vagy nincs jogosultság).</span>';
+            return;
+        }
+        list.forEach(b => {
+            const span = document.createElement('span');
+            span.className = 'badge text-bg-light border';
+            span.textContent = String(b);
+            branchesList.appendChild(span);
+        });
+    };
+
+    const renderTags = (tags) => {
+        const list = Array.isArray(tags) ? tags : [];
+        if (tagsCount) tagsCount.textContent = String(list.length);
+        if (!tagsTbody) return;
+        if (list.length === 0) {
+            tagsTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Nincs tag.</td></tr>';
+            return;
+        }
+        tagsTbody.innerHTML = '';
+        list.forEach(t => {
+            const tag = t.tag || '';
+            const title = t.title || '';
+            const date = t.date ? String(t.date).slice(0, 10) : '';
+            const info = t.info || '';
+            const infoShort = info.length > 220 ? (info.slice(0, 220) + '…') : info;
+            const url = t.html_url || '';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="fw-semibold">${_escapeHtml(tag)}</td>
+                <td>${url ? `<a href="${_escapeHtml(url)}" target="_blank" rel="noopener">${_escapeHtml(title || '(nincs cím)')}</a>` : _escapeHtml(title)}</td>
+                <td class="text-nowrap">${_escapeHtml(date)}</td>
+                <td>
+                    <details>
+                        <summary class="small text-muted">${_escapeHtml(infoShort || '(nincs release info)')}</summary>
+                        <pre class="mt-2 mb-0" style="white-space:pre-wrap;">${_escapeHtml(info || '')}</pre>
+                    </details>
+                </td>
+            `;
+            tagsTbody.appendChild(tr);
+        });
+    };
+
+    const load = async () => {
+        clearAlert();
+        if (infoEl) infoEl.textContent = `Repo: ${owner}/${repoName}`;
+        if (tagsHint) tagsHint.textContent = '';
+        if (tagsTbody) tagsTbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Betöltés...</td></tr>';
+        if (branchesList) branchesList.innerHTML = '<span class="text-muted">Betöltés...</span>';
+        if (branchesCount) branchesCount.textContent = '0';
+        if (tagsCount) tagsCount.textContent = '0';
+        setLoading(true);
+        try {
+            const r = await fetch(`/api/get_repo_branches_tags?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repoName)}`);
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data || !data.success) {
+                throw new Error((data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`);
+            }
+
+            if (data.warning) {
+                setAlert(data.warning, 'info');
+            }
+            renderBranches(data.branches || []);
+            renderTags(data.tags || []);
+            if (tagsHint && data.tags_note) tagsHint.textContent = data.tags_note;
+        } catch (e) {
+            setAlert('Betöltési hiba: ' + e, 'danger');
+            renderBranches([]);
+            renderTags([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!modalEl.__repoBranchesTagsHooked) {
+        if (refreshBtn) refreshBtn.addEventListener('click', () => load());
+        modalEl.addEventListener('shown.bs.modal', () => load());
+        modalEl.__repoBranchesTagsHooked = true;
+    }
+
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function openGitRepoListModal() {
+    const modalEl = document.getElementById('gitRepoListModal');
+    if (!modalEl || !window.bootstrap) {
+        showToast('A repo lista modal nem elérhető.', 'danger');
+        return;
+    }
+
+    const baseEl = _safeEl('gitUrlBase');
+    const base = (baseEl ? baseEl.value : '').trim();
+    const owner = _parseGitHubOwnerFromBase(base);
+    if (!owner) {
+        showToast('A GIT_URL_BASE alapján nem tudtam kinyerni a GitHub felhasználót (pl. https://github.com/<user>/).', 'warning');
+        return;
+    }
+
+    const ownerInfoEl = document.getElementById('gitRepoListOwnerInfo');
+    const alertEl = document.getElementById('gitRepoListAlert');
+    const tbody = document.getElementById('gitRepoListTbody');
+    const refreshBtn = document.getElementById('gitRepoListRefreshBtn');
+
+    const setAlert = (msg, variant = 'warning') => {
+        if (!alertEl) return;
+        alertEl.classList.remove('d-none', 'alert-warning', 'alert-danger', 'alert-info', 'alert-success');
+        alertEl.classList.add('alert-' + variant);
+        alertEl.textContent = msg;
+    };
+    const clearAlert = () => {
+        if (!alertEl) return;
+        alertEl.classList.add('d-none');
+        alertEl.textContent = '';
+    };
+    const setLoading = (loading) => {
+        if (refreshBtn) {
+            refreshBtn.disabled = !!loading;
+            refreshBtn.innerHTML = loading
+                ? '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Frissítés'
+                : '<i class="bi bi-arrow-clockwise"></i> Frissítés';
+        }
+    };
+
+    const renderRows = (repos) => {
+        if (!tbody) return;
+        const list = Array.isArray(repos) ? repos : [];
+        if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Nincs megjeleníthető repository.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        list.forEach(r => {
+            const name = r.name || '';
+            const full = r.full_name || name;
+            const branch = r.default_branch || '';
+            const isPrivate = !!r.private;
+            const badge = isPrivate
+                ? '<span class="badge text-bg-warning">private</span>'
+                : '<span class="badge text-bg-success">public</span>';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div class="fw-semibold">${full}</div>
+                    <div class="small text-muted"><a href="${r.html_url || '#'}" target="_blank" rel="noopener">Megnyitás</a></div>
+                </td>
+                <td>${branch}</td>
+                <td>${badge}</td>
+                <td class="text-end">
+                    <button type="button" class="btn btn-outline-primary btn-sm">Beállít</button>
+                </td>
+            `;
+            const btn = tr.querySelector('button');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    const repoEl = _safeEl('githubRepoName');
+                    if (repoEl) repoEl.value = name;
+                    showToast('repo_name beállítva: ' + name, 'success');
+                    try { bootstrap.Modal.getOrCreateInstance(modalEl).hide(); } catch (e) { /* ignore */ }
+                });
+            }
+            tbody.appendChild(tr);
+        });
+    };
+
+    const load = async () => {
+        clearAlert();
+        if (ownerInfoEl) ownerInfoEl.textContent = `Felhasználó: ${owner}`;
+        if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Betöltés...</td></tr>';
+        setLoading(true);
+        try {
+            const r = await fetch(`/api/list_github_repos?owner=${encodeURIComponent(owner)}`);
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data) {
+                throw new Error((data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`);
+            }
+            if (data && data.warning) {
+                setAlert(data.warning, 'info');
+            }
+            renderRows(data.repos || []);
+        } catch (e) {
+            setAlert('Repo lista betöltési hiba: ' + e, 'danger');
+            renderRows([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!modalEl.__gitRepoListHooked) {
+        if (refreshBtn) refreshBtn.addEventListener('click', () => load());
+        modalEl.addEventListener('shown.bs.modal', () => load());
+        modalEl.__gitRepoListHooked = true;
+    }
+
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function saveSettings() {
+    try {
+        const settings = {
+            darkMode: !!(_safeEl('darkMode') && _safeEl('darkMode').checked),
+            compactView: !!(_safeEl('compactView') && _safeEl('compactView').checked),
+            pageSize: (_safeEl('pageSize') && _safeEl('pageSize').value) ? String(_safeEl('pageSize').value) : DEFAULT_PAGE_SIZE,
+            executionMode: (_safeEl('executionMode') && _safeEl('executionMode').value) ? String(_safeEl('executionMode').value) : DEFAULT_EXECUTION_MODE,
+            timeout: (_safeEl('timeout') && _safeEl('timeout').value) ? String(_safeEl('timeout').value) : DEFAULT_TIMEOUT,
+            generateReport: !!(_safeEl('generateReport') && _safeEl('generateReport').checked),
+            // sandboxMode-ot NEM mentjük localStorage-ba, mindig a backend a forrás
+        };
+        localStorage.setItem(ROBOT_MANAGER_SETTINGS_KEY, JSON.stringify(settings));
+
+        // GitHub beállítások mentése a backend-re (variables.robot szinkron)
+        await saveGitHubSettings();
+        showToast('Beállítások mentve.', 'success');
+    } catch (e) {
+        showToast('Beállítás mentés hiba: ' + e, 'danger');
+    }
+}
+
+async function resetSettings() {
+    try {
+        const dm = _safeEl('darkMode');
+        const cv = _safeEl('compactView');
+        const ps = _safeEl('pageSize');
+        const em = _safeEl('executionMode');
+        const to = _safeEl('timeout');
+        const gr = _safeEl('generateReport');
+        const sm = _safeEl('sandboxMode');
+        const gu = _safeEl('gitUrlBase');
+        const rn = _safeEl('githubRepoName');
+
+        if (dm) dm.checked = false;
+        if (cv) cv.checked = false;
+        if (ps) ps.value = DEFAULT_PAGE_SIZE;
+        if (em) em.value = DEFAULT_EXECUTION_MODE;
+        if (to) to.value = DEFAULT_TIMEOUT;
+        if (gr) gr.checked = true;
+
+        if (gu) gu.value = DEFAULT_GIT_URL_BASE;
+        if (rn) rn.value = DEFAULT_GITHUB_REPO_NAME;
+
+        if (sm) {
+            sm.checked = false;
+            try { await updateSandboxMode(); } catch (e) { /* ignore */ }
+        }
+
+        localStorage.removeItem(ROBOT_MANAGER_SETTINGS_KEY);
+        try { await saveGitHubSettings(); } catch (e) { /* ignore */ }
+
+        showToast('Beállítások visszaállítva.', 'success');
+    } catch (e) {
+        showToast('Alapértelmezett visszaállítás hiba: ' + e, 'danger');
+    }
+}
+
+function loadSettings() {
+    try {
+        const saved = localStorage.getItem(ROBOT_MANAGER_SETTINGS_KEY);
+        if (saved) {
+            const settings = JSON.parse(saved);
+            const dm = _safeEl('darkMode');
+            const cv = _safeEl('compactView');
+            const ps = _safeEl('pageSize');
+            const em = _safeEl('executionMode');
+            const to = _safeEl('timeout');
+            const gr = _safeEl('generateReport');
+            if (dm) dm.checked = !!settings.darkMode;
+            if (cv) cv.checked = !!settings.compactView;
+            if (ps) ps.value = settings.pageSize || DEFAULT_PAGE_SIZE;
+            if (em) em.value = settings.executionMode || DEFAULT_EXECUTION_MODE;
+            if (to) to.value = settings.timeout || DEFAULT_TIMEOUT;
+            if (gr) gr.checked = (settings.generateReport !== undefined) ? !!settings.generateReport : true;
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    // Backend-forrású állapotok
+    try { loadCurrentSandboxMode(); } catch (e) { /* ignore */ }
+    try { loadGitHubSettings(); } catch (e) { /* ignore */ }
+}
+
+// Sandbox Mode kezelés (backend a forrás)
+async function updateSandboxMode() {
+    const sm = _safeEl('sandboxMode');
+    if (!sm) return;
+    const isEnabled = !!sm.checked;
+
+    try {
+        const r = await fetch('/api/set_sandbox_mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: isEnabled })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !(data && data.success)) {
+            sm.checked = !isEnabled;
+            showToast('Hiba történt a beállítás mentése során', 'danger');
+            return;
+        }
+
+        showToast(isEnabled ? 'Sandbox mód bekapcsolva' : 'Sandbox mód kikapcsolva', 'success');
+        if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots();
+        if (typeof refreshAvailableRobots === 'function') refreshAvailableRobots();
+
+        // Konzisztens nézet miatt teljes frissítés
+        setTimeout(() => { try { window.location.reload(); } catch (e) { /* ignore */ } }, 800);
+    } catch (e) {
+        sm.checked = !isEnabled;
+        showToast('Hiba történt a beállítás mentése során', 'danger');
+    }
+}
+
+function loadCurrentSandboxMode() {
+    const sm = _safeEl('sandboxMode');
+    if (!sm) return;
+    fetch('/api/get_sandbox_mode')
+        .then(r => r.json())
+        .then(data => {
+            if (typeof data.enabled === 'boolean') sm.checked = data.enabled;
+        })
+        .catch(() => { /* ignore */ });
+}
+
 // --- Bootstrap "sure box" (alert/confirm helyett) ---
 function showSureBox({
     title = 'Megerősítés',
@@ -1562,6 +2210,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Ha a token már be van állítva (env/file), mutassuk a státuszt
     refreshGitHubTokenStatus();
 
+    // Settings értékek betöltése (localStorage + backend)
+    try { loadSettings(); } catch (e) { /* ignore */ }
+
     const ideasIconBtn = document.getElementById('ideasIconBtn');
     if (ideasIconBtn) {
         ideasIconBtn.addEventListener('click', function (e) {
@@ -1587,8 +2238,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 function openIdeasIssuesPage() {
-    const url = 'https://github.com/lovaszotto/CLA-robotok/issues';
-    try {
+    const openUrl = (url) => {
         const win = window.open(url, '_blank');
         if (win) {
             try { win.opener = null; } catch (e) { /* ignore */ }
@@ -1596,6 +2246,24 @@ function openIdeasIssuesPage() {
         } else {
             showToast('A böngésző blokkolta az új ablakot. Engedélyezd a felugró ablakokat ehhez az oldalhoz.', 'warning');
         }
+    };
+
+    const fallback = 'https://github.com/lovaszotto/CLA-robotok/issues';
+    try {
+        const cached = window.__githubSettingsCache || null;
+        if (cached && cached.issues_url) {
+            openUrl(cached.issues_url);
+            return;
+        }
+        // Best-effort: kérjük le a backend-ről
+        fetch('/api/get_github_settings')
+            .then(r => r.json().then(j => ({ ok: r.ok, j, status: r.status })))
+            .then(({ ok, j }) => {
+                const s = (j && j.settings) ? j.settings : j;
+                const url = (ok && s && s.issues_url) ? s.issues_url : fallback;
+                openUrl(url);
+            })
+            .catch(() => openUrl(fallback));
     } catch (err) {
         showToast('Nem sikerült megnyitni az Issues oldalt: ' + err, 'danger');
     }

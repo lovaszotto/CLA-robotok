@@ -78,11 +78,11 @@ Log fájlok összefűzése
 Feloldott könyvtár változók
 
     ${USERPROFILE}=    Get Environment Variable    USERPROFILE
-    ${DOWNLOADED_ROBOTS}=    Set Variable    ${USERPROFILE}/MyRobotFramework/DownloadedRobots
+    ${DOWNLOADED_ROBOTS}=    Set Variable    ${USERPROFILE}${/}MyRobotFramework${/}DownloadedRobots
     Set Suite Variable    ${DOWNLOADED_ROBOTS}
-    ${SANDBOX_ROBOTS}=    Set Variable    ${USERPROFILE}/MyRobotFramework/SandboxRobots
+    ${SANDBOX_ROBOTS}=    Set Variable    ${USERPROFILE}${/}MyRobotFramework${/}SandboxRobots
     Set Suite Variable    ${SANDBOX_ROBOTS}
-    ${LOG_FILES}=    Set Variable    ${USERPROFILE}/MyRobotFramework/RobotResults
+    ${LOG_FILES}=    Set Variable    ${USERPROFILE}${/}MyRobotFramework${/}RobotResults
     Set Suite Variable    ${LOG_FILES}
 
     # Aktuális log könyvtár csak változóban, nincs fájl írás/olvasás
@@ -93,8 +93,8 @@ Feloldott könyvtár változók
 Kiírás konzolra paraméterekből
     # Dinamikus könyvtár változók beállítása a környezeti USERPROFILE alapján
     ${USERPROFILE}=    Get Environment Variable    USERPROFILE
-    ${DOWNLOADED_ROBOTS}=    Set Variable    ${USERPROFILE}/MyRobotFramework/DownloadedRobots
-    ${SANDBOX_ROBOTS}=       Set Variable    ${USERPROFILE}/MyRobotFramework/SandboxRobots
+    ${DOWNLOADED_ROBOTS}=    Set Variable    ${USERPROFILE}${/}MyRobotFramework${/}DownloadedRobots
+    ${SANDBOX_ROBOTS}=       Set Variable    ${USERPROFILE}${/}MyRobotFramework${/}SandboxRobots
     Set Suite Variable    ${DOWNLOADED_ROBOTS}
     Set Suite Variable    ${SANDBOX_ROBOTS}
     Set Suite Variable    ${DOWNLOADED_ROBOTS}
@@ -116,7 +116,7 @@ Telepítettség és letöltöttség ellenőrzése
     Log     \n=== TELEPÍTETTSÉG ÉS LETÖLTÖTTSÉG ELLENŐRZÉSE === (${WORKFLOW_STATUS})
     
     # Telepített robot ellenőrzése (start.bat létezik-e)
-    ${START_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}/start.bat
+    ${START_SCRIPT}=    Set Variable    ${DOWNLOADED_ROBOTS}${/}${REPO}${/}${BRANCH}${/}start.bat
     ${start_script_exists}=    Run Keyword And Return Status    OperatingSystem.File Should Exist    ${START_SCRIPT}
     
     IF    ${start_script_exists}
@@ -127,12 +127,12 @@ Telepítettség és letöltöttség ellenőrzése
         
         # Letöltött robot ellenőrzése
         IF        ${SANDBOX_MODE} == True
-             ${REPO_PATH}=     Set Variable    ${SANDBOX_ROBOTS}/${REPO}
+               ${REPO_PATH}=     Set Variable    ${SANDBOX_ROBOTS}${/}${REPO}
         ELSE
-             ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}/${REPO} 
+               ${REPO_PATH}=     Set Variable    ${DOWNLOADED_ROBOTS}${/}${REPO} 
         END
           
-        ${BRANCH_PATH}=   Set Variable    ${REPO_PATH}/${BRANCH}
+           ${BRANCH_PATH}=   Set Variable    ${REPO_PATH}${/}${BRANCH}
         Set Global Variable    ${REPO_PATH}    ${REPO_PATH}
         Set Global Variable    ${BRANCH_PATH}    ${BRANCH_PATH}
 
@@ -193,9 +193,9 @@ Branch klónozása
         IF    ${WORKFLOW_STATUS} == 'TO_BE_CLONE'
             Log     ======KLONOZÁS GIT-BŐL===== (${WORKFLOW_STATUS})
             IF    ${SANDBOX_MODE} == True
-               ${TARGET_DIR}=    Set Variable    ${SANDBOX_ROBOTS}/${REPO}/${BRANCH}
+                    ${TARGET_DIR}=    Set Variable    ${SANDBOX_ROBOTS}${/}${REPO}${/}${BRANCH}
            ELSE
-               ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}/${REPO}/${BRANCH}
+                    ${TARGET_DIR}=    Set Variable    ${DOWNLOADED_ROBOTS}${/}${REPO}${/}${BRANCH}
             END
          
            Log     [GIT KLÓNOZÁS] Forrás: ${GIT_URL}

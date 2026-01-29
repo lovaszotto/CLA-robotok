@@ -404,6 +404,381 @@ def _github_headers() -> dict:
     return headers
 
 
+DEFAULT_GIT_URL_BASE = 'https://github.com/lovaszotto/'
+DEFAULT_GITHUB_REPO_NAME = 'CLA-robotok'
+
+
+def _variables_robot_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resources', 'variables.robot')
+
+
+def _read_variables_robot_lines() -> list[str]:
+    p = _variables_robot_path()
+    with open(p, 'r', encoding='utf-8', errors='replace') as f:
+        return f.readlines()
+
+
+def _write_variables_robot_lines(lines: list[str]) -> None:
+    p = _variables_robot_path()
+    with open(p, 'w', encoding='utf-8', errors='replace') as f:
+        f.writelines(lines)
+
+
+def _get_robot_variable_value(var_name: str) -> str | None:
+    """Kiolvassa a resources/variables.robot ${VAR} értékét (nyersen, sor vége nélkül)."""
+    try:
+        p = _variables_robot_path()
+        if not os.path.exists(p):
+            return None
+        pattern = re.compile(r'^\$\{' + re.escape(var_name) + r'\}\s+(.+?)\s*$')
+        for line in _read_variables_robot_lines():
+            m = pattern.match(line.strip('\n'))
+            if m:
+                return (m.group(1) or '').strip()
+    except Exception as e:
+        logger.info(f"[VARIABLES] Olvasási hiba {var_name}: {e}")
+    return None
+
+
+def _set_robot_variable_value(var_name: str, value: str, *, insert_after_var: str | None = None) -> bool:
+    """Beállítja a resources/variables.robot ${VAR} sorát. Ha nem létezik, beszúrja."""
+    p = _variables_robot_path()
+    if not os.path.exists(p):
+        raise FileNotFoundError('Variables.robot fájl nem található')
+
+    lines = _read_variables_robot_lines()
+    modified = False
+    insert_at = None
+
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f'${{{var_name}}}'):
+            # Igazodjunk a meglévő SANDBOX_MODE formátumhoz (fix spacing)
+            lines[i] = re.sub(
+                r'^\$\{' + re.escape(var_name) + r'\}\s+.*$',
+                f'${{{var_name}}}         {value}',
+                line.rstrip('\n')
+            ) + '\n'
+            modified = True
+            break
+        if insert_after_var and line.strip().startswith(f'${{{insert_after_var}}}'):
+            insert_at = i + 1
+
+    if not modified:
+        if insert_at is None:
+            # Legyen az elején, a Variables szekcióban
+            insert_at = 0
+            for i, line in enumerate(lines):
+                if line.strip().lower().startswith('*** variables'):
+                    insert_at = i + 1
+                    break
+        lines.insert(insert_at, f'${{{var_name}}}         {value}\n')
+        modified = True
+
+    if modified:
+        _write_variables_robot_lines(lines)
+    return modified
+
+
+def _normalize_git_url_base(raw: str) -> str:
+    s = (raw or '').strip()
+    if not s:
+        return DEFAULT_GIT_URL_BASE
+    # Normalizáljuk: ha nincs a végén '/', tegyük hozzá (RF-ben ${GIT_URL_BASE}${REPO}.git)
+    if not s.endswith('/'):
+        s = s + '/'
+    return s
+
+
+def _derive_github_owner_from_base(git_url_base: str) -> str | None:
+    s = (git_url_base or '').strip()
+    if not s:
+        return None
+
+    # HTTPS: https://github.com/<owner>/
+    m = re.search(r'github\.com/([^/]+)/?$', s)
+    if m:
+        return (m.group(1) or '').strip() or None
+
+    # SSH: git@github.com:<owner>/
+    m = re.search(r'github\.com:([^/]+)/?$', s)
+    if m:
+        return (m.group(1) or '').strip() or None
+
+    return None
+
+
+def _get_github_settings() -> dict:
+    git_url_base = _normalize_git_url_base(_get_robot_variable_value('GIT_URL_BASE') or DEFAULT_GIT_URL_BASE)
+    repo_name = (_get_robot_variable_value('GITHUB_REPO_NAME') or DEFAULT_GITHUB_REPO_NAME).strip()
+    owner = _derive_github_owner_from_base(git_url_base) or 'lovaszotto'
+    issues_url = f'https://github.com/{owner}/{repo_name}/issues'
+    api_repo = f'{owner}/{repo_name}'
+    return {
+        'git_url_base': git_url_base,
+        'repo_name': repo_name,
+        'owner': owner,
+        'issues_url': issues_url,
+        'api_repo': api_repo,
+    }
+
+
+@app.route('/api/get_github_settings', methods=['GET'])
+def api_get_github_settings():
+    try:
+        return jsonify({'success': True, 'settings': _get_github_settings()})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/set_github_settings', methods=['POST'])
+def api_set_github_settings():
+    """Mentjük a GIT_URL_BASE-t és a repo_name-t, és szinkronizáljuk a resources/variables.robot fájlba."""
+    try:
+        data = request.get_json(silent=True) or {}
+        git_url_base = _normalize_git_url_base(data.get('git_url_base') or '')
+        repo_name = (data.get('repo_name') or '').strip() or DEFAULT_GITHUB_REPO_NAME
+
+        # Szinkron: variables.robot
+        _set_robot_variable_value('GIT_URL_BASE', git_url_base)
+        _set_robot_variable_value('GITHUB_REPO_NAME', repo_name, insert_after_var='GIT_URL_BASE')
+
+        return jsonify({'success': True, 'settings': _get_github_settings()})
+    except FileNotFoundError as e:
+        return jsonify({'success': False, 'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/test_git_repo', methods=['POST'])
+def api_test_git_repo():
+    """Ellenőrzi, hogy a megadott GIT_URL_BASE + repo_name összeállításból valóban elérhető-e a git.
+
+    Megvalósítás: `git ls-remote --heads <url>`
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        target = (data.get('target') or '').strip()  # 'git_url_base' vagy 'repo_name'
+        raw_base = (data.get('git_url_base') or '').strip()
+        raw_repo = (data.get('repo_name') or '').strip()
+
+        # Ha csak az egyik mezőt tesztelik, a másikat vegyük a mentett beállításból (fallback).
+        saved = _get_github_settings()
+        base = _normalize_git_url_base(raw_base or saved.get('git_url_base') or DEFAULT_GIT_URL_BASE)
+        repo_name = (raw_repo or saved.get('repo_name') or DEFAULT_GITHUB_REPO_NAME).strip()
+
+        if target == 'git_url_base' and not raw_base:
+            return jsonify({'ok': False, 'error': 'Hiányzó GIT_URL_BASE'}), 400
+        if target == 'repo_name' and not raw_repo:
+            return jsonify({'ok': False, 'error': 'Hiányzó repo_name'}), 400
+
+        if not base:
+            return jsonify({'ok': False, 'error': 'Hiányzó GIT_URL_BASE'}), 400
+        if not repo_name:
+            return jsonify({'ok': False, 'error': 'Hiányzó repo_name'}), 400
+
+        # Minimális validáció (parancsinjekt ellen védelem: subprocess listás, de whitespace-t tiltunk)
+        if any(ch.isspace() for ch in base) or any(ch.isspace() for ch in repo_name):
+            return jsonify({'ok': False, 'error': 'A mezők nem tartalmazhatnak szóközt'}), 400
+
+        # URL összeállítása
+        url = f"{base}{repo_name}.git"
+
+        # Git parancs futtatása
+        try:
+            result = subprocess.run(
+                ['git', 'ls-remote', '--heads', url],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                timeout=20
+            )
+        except FileNotFoundError:
+            return jsonify({'ok': False, 'url': url, 'error': 'A git parancs nem található (nincs telepítve vagy nincs PATH-ban).'}), 200
+        except subprocess.TimeoutExpired:
+            return jsonify({'ok': False, 'url': url, 'error': 'Időtúllépés (timeout) a git elérés teszt során.'}), 200
+
+        ok = (result.returncode == 0)
+        stderr = (result.stderr or '').strip()
+        stdout = (result.stdout or '').strip()
+        if ok:
+            return jsonify({'ok': True, 'url': url, 'returncode': result.returncode})
+
+        # Tipikus okok: 128 (repo nincs, nincs jog, network)
+        details = stderr or stdout or f'returncode={result.returncode}'
+        return jsonify({
+            'ok': False,
+            'url': url,
+            'returncode': result.returncode,
+            'error': details
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/list_github_repos', methods=['GET'])
+def api_list_github_repos():
+    """Visszaadja a megadott GitHub felhasználó (owner) repository-jait.
+
+    Token esetén megpróbáljuk a /user/repos végpontot is (privát repo-k miatt),
+    de csak akkor lesznek elérhetők, ha a token jogosult és a user megegyezik.
+    """
+    try:
+        owner = (request.args.get('owner') or '').strip()
+        if not owner:
+            return jsonify({'success': False, 'error': 'Hiányzó owner paraméter'}), 400
+
+        # Minimális sanity
+        if any(ch.isspace() for ch in owner):
+            return jsonify({'success': False, 'error': 'Érvénytelen owner (szóköz nem megengedett)'}), 400
+
+        token = _get_github_token()
+        headers = _github_headers()
+        repos: list[dict] = []
+        warning = ''
+
+        def _simplify(repo: dict) -> dict:
+            return {
+                'name': repo.get('name'),
+                'full_name': repo.get('full_name'),
+                'private': bool(repo.get('private')),
+                'default_branch': repo.get('default_branch'),
+                'html_url': repo.get('html_url'),
+                'clone_url': repo.get('clone_url'),
+                'ssh_url': repo.get('ssh_url'),
+                'updated_at': repo.get('updated_at'),
+            }
+
+        if token:
+            # Privát repo-khoz: /user/repos (ha a token user-je azonos, és van jogosultság)
+            user_repos_url = 'https://api.github.com/user/repos?per_page=100&affiliation=owner&sort=updated'
+            rr = requests.get(user_repos_url, headers=headers, timeout=15)
+            if rr.status_code == 200:
+                all_repos = rr.json() or []
+                repos = [_simplify(r) for r in all_repos if (r.get('owner') or {}).get('login') == owner]
+                if not repos:
+                    # Token megvan, de lehet más user; fallback a public listára
+                    warning = 'A token nem ehhez a felhasználóhoz tartozik, csak public repo-k látszanak.'
+                else:
+                    repos.sort(key=lambda x: (x.get('updated_at') or ''), reverse=True)
+                    return jsonify({'success': True, 'owner': owner, 'repos': repos, 'warning': warning})
+            else:
+                warning = f'Nem sikerült a privát repo-k lekérése (status={rr.status_code}), csak public repo-k látszanak.'
+
+        # Public repo lista: /users/{owner}/repos
+        public_url = f'https://api.github.com/users/{owner}/repos?per_page=100&sort=updated'
+        pr = requests.get(public_url, headers=headers, timeout=15)
+        if pr.status_code != 200:
+            detail = ''
+            try:
+                j = pr.json() or {}
+                detail = j.get('message') or str(j)
+            except Exception:
+                detail = (pr.text or '').strip()
+            return jsonify({'success': False, 'error': f'GitHub API hiba (status={pr.status_code})', 'details': detail}), 502
+
+        repos_raw = pr.json() or []
+        repos = [_simplify(r) for r in repos_raw]
+        repos.sort(key=lambda x: (x.get('updated_at') or ''), reverse=True)
+        return jsonify({'success': True, 'owner': owner, 'repos': repos, 'warning': warning})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/get_repo_branches_tags', methods=['GET'])
+def api_get_repo_branches_tags():
+    """Repo branch-ek + tag-ek + release meta (cím, dátum, info/body)."""
+    try:
+        owner = (request.args.get('owner') or '').strip()
+        repo = (request.args.get('repo') or '').strip()
+        if not owner or not repo:
+            return jsonify({'success': False, 'error': 'Hiányzó owner vagy repo paraméter'}), 400
+        if any(ch.isspace() for ch in owner) or any(ch.isspace() for ch in repo):
+            return jsonify({'success': False, 'error': 'Érvénytelen paraméter (szóköz nem megengedett)'}), 400
+
+        headers = _github_headers()
+
+        # Branch-ek
+        branches_url = f'https://api.github.com/repos/{owner}/{repo}/branches?per_page=100'
+        br = requests.get(branches_url, headers=headers, timeout=15)
+        if br.status_code != 200:
+            detail = ''
+            try:
+                j = br.json() or {}
+                detail = j.get('message') or str(j)
+            except Exception:
+                detail = (br.text or '').strip()
+            return jsonify({'success': False, 'error': f'Branch lekérés sikertelen (status={br.status_code})', 'details': detail}), 502
+        branches_raw = br.json() or []
+        branches = [b.get('name') for b in branches_raw if b.get('name')]
+
+        # Tag-ek
+        tags_url = f'https://api.github.com/repos/{owner}/{repo}/tags?per_page=100'
+        tr = requests.get(tags_url, headers=headers, timeout=15)
+        if tr.status_code != 200:
+            detail = ''
+            try:
+                j = tr.json() or {}
+                detail = j.get('message') or str(j)
+            except Exception:
+                detail = (tr.text or '').strip()
+            return jsonify({'success': False, 'error': f'Tag lekérés sikertelen (status={tr.status_code})', 'details': detail}), 502
+        tags_raw = tr.json() or []
+        tag_names = [t.get('name') for t in tags_raw if t.get('name')]
+
+        # Releases (tag -> meta)
+        releases_url = f'https://api.github.com/repos/{owner}/{repo}/releases?per_page=100'
+        rr = requests.get(releases_url, headers=headers, timeout=15)
+        releases_map: dict[str, dict] = {}
+        if rr.status_code == 200:
+            rels = rr.json() or []
+            for r in rels:
+                tag = (r.get('tag_name') or '').strip()
+                if not tag:
+                    continue
+                releases_map[tag] = {
+                    'title': (r.get('name') or '').strip(),
+                    'date': (r.get('published_at') or '').strip() or (r.get('created_at') or '').strip(),
+                    'info': (r.get('body') or '').strip(),
+                    'html_url': (r.get('html_url') or '').strip(),
+                }
+        else:
+            # Token nélkül itt gyakran rate limit; ne bukjunk, csak jelezzünk
+            releases_map = {}
+
+        # Tag lista összeállítása
+        tags: list[dict] = []
+        for t in tag_names:
+            meta = releases_map.get(t) or {}
+            tags.append({
+                'tag': t,
+                'title': meta.get('title') or '',
+                'date': meta.get('date') or '',
+                'info': meta.get('info') or '',
+                'html_url': meta.get('html_url') or '',
+            })
+
+        # Próbáljunk release dátum szerint rendezni (ha van), egyébként tag név szerint
+        def _sort_key(x: dict):
+            return (x.get('date') or '', x.get('tag') or '')
+
+        tags.sort(key=_sort_key, reverse=True)
+
+        tags_note = ''
+        if tag_names and not releases_map:
+            tags_note = 'Megjegyzés: release meta nem elérhető (nincs token / rate limit / nincs release a tagekhez).'
+
+        return jsonify({
+            'success': True,
+            'owner': owner,
+            'repo': repo,
+            'branches': branches,
+            'tags': tags,
+            'tags_note': tags_note,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 def _parse_owner_repo(repo_obj: dict) -> tuple[str, str]:
     full_name = (repo_obj.get('full_name') or '').strip()
     if '/' in full_name:
@@ -531,7 +906,10 @@ def api_create_github_issue():
         if cleaned:
             payload['labels'] = cleaned
 
-    url = 'https://api.github.com/repos/lovaszotto/CLA-robotok/issues'
+    settings = _get_github_settings()
+    owner = settings.get('owner') or 'lovaszotto'
+    repo_name = settings.get('repo_name') or DEFAULT_GITHUB_REPO_NAME
+    url = f'https://api.github.com/repos/{owner}/{repo_name}/issues'
     try:
         resp = requests.post(url, headers=_github_headers(), json=payload, timeout=20)
         if resp.status_code in (200, 201):
@@ -541,6 +919,7 @@ def api_create_github_issue():
                 'number': j.get('number'),
                 'html_url': j.get('html_url'),
                 'title': j.get('title'),
+                'repo': f"{owner}/{repo_name}",
             })
 
         detail = ''

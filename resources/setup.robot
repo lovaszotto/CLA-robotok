@@ -51,18 +51,18 @@ Set Dynamic Repository Variables
     Set Global Variable    ${GIT_URL}        ${full_url}
     
     # Repository útvonal összeállítása
-    ${repo_path}=    Set Variable    ${DOWNLOADED_ROBOTS}${repo_name}
+    ${repo_path}=    Set Variable    ${DOWNLOADED_ROBOTS}${/}${repo_name}
     Set Global Variable    ${REPO_PATH}      ${repo_path}
     
     # Branch útvonal összeállítása
-    ${branch_path}=    Set Variable    ${repo_path}/${branch_name}
+    ${branch_path}=    Set Variable    ${repo_path}${/}${branch_name}
     Set Global Variable    ${BRANCH_PATH}    ${branch_path}
     
     # Target könyvtár beállítása
     IF    ${SANDBOX_MODE}
-        ${target}=    Set Variable    ${SANDBOX_ROBOTS}${repo_name}/${branch_name}
+        ${target}=    Set Variable    ${SANDBOX_ROBOTS}${/}${repo_name}${/}${branch_name}
     ELSE
-        ${target}=    Set Variable    ${INSTALLED_ROBOTS}${repo_name}/${branch_name}
+        ${target}=    Set Variable    ${INSTALLED_ROBOTS}${/}${repo_name}${/}${branch_name}
     END
     Set Global Variable    ${TARGET_DIR}     ${target}
     
