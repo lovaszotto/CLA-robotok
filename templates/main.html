@@ -315,8 +315,9 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                    </button>
                                                    {% set rel_run = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
                                                    <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                                       data-bs-toggle="tooltip" data-bs-title="Info"
+                                                       data-bs-toggle="tooltip" data-bs-title="Verziók"
                                                        data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="run"
+                                                       data-repo-url="{{ repo.html_url or '' }}"
                                                        data-release-tag="{{ (rel_run.get('tag') if rel_run else '') }}"
                                                        data-release-title="{{ (rel_run.get('title') if rel_run else '') }}"
                                                        data-release-date="{{ (rel_run.get('date') if rel_run else '') }}"
@@ -380,8 +381,9 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             <i class="bi bi-download"></i>
                                         </button>
                                         <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                            data-bs-toggle="tooltip" data-bs-title="Info"
+                                            data-bs-toggle="tooltip" data-bs-title="Verziók"
                                             data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="download"
+                                            data-repo-url="{{ repo.html_url or '' }}"
                                             data-release-tag="{{ (rel.get('tag') if rel else '') }}"
                                             data-release-title="{{ (rel.get('title') if rel else '') }}"
                                             data-release-date="{{ (rel.get('date') if rel else '') }}"
@@ -1099,10 +1101,11 @@ function renderRunnableRepos(repos) {
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                                 <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="Info"
+                                    data-bs-toggle="tooltip" data-bs-title="Verziók"
                                     data-repo="${repo.name}"
                                     data-branch="${branch}"
                                     data-mode="run"
+                                    data-repo-url="${escAttr(repo.html_url || '')}"
                                     data-release-tag="${escAttr((relMap && relMap[branch] && relMap[branch].tag) ? relMap[branch].tag : '')}"
                                     data-release-title="${escAttr((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
                                     data-release-date="${escAttr((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
@@ -1189,10 +1192,11 @@ function renderAvailableRepos(repos) {
                                     <i class="bi bi-download"></i>
                                 </button>
                                 <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="Info"
+                                    data-bs-toggle="tooltip" data-bs-title="Verziók"
                                     data-repo="${repo.name}"
                                     data-branch="${branch}"
                                     data-mode="download"
+                                    data-repo-url="${escapeHtml(repo.html_url || '')}"
                                     data-release-tag="${escapeHtml((relMap && relMap[branch] && relMap[branch].tag) ? relMap[branch].tag : '')}"
                                     data-release-title="${escapeHtml((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
                                     data-release-date="${escapeHtml((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
@@ -1322,10 +1326,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-function branchInfoClicked(button) {
+async function branchInfoClicked(button) {
     const repo = button?.getAttribute('data-repo') || '';
     const branch = button?.getAttribute('data-branch') || '';
     const mode = button?.getAttribute('data-mode') || '';
+    const repoUrl = (button?.getAttribute('data-repo-url') || '').trim();
     const relTag = (button?.getAttribute('data-release-tag') || '').trim();
     const relTitle = (button?.getAttribute('data-release-title') || '').trim();
     const relDateRaw = (button?.getAttribute('data-release-date') || '').trim();
@@ -1342,20 +1347,100 @@ function branchInfoClicked(button) {
         lines.push('Információ');
         lines.push('');
     }
+    // Alap adatok
     lines.push(`Repo: ${repo}`);
     lines.push(`Branch: ${branch}`);
 
-    // Release meta (tag/cím/dátum)
-    lines.push('');
-    if (relTag || relTitle || relDate) {
-        if (relTag) lines.push(`Tag: ${relTag}`);
-        if (relTitle) lines.push(`Cím: ${relTitle}`);
-        if (relDate) lines.push(`Release dátum: ${relDate}`);
-    } else {
-        lines.push('Nincs release információ ehhez a branch-hez.');
+    const fallbackReleaseLines = () => {
+        lines.push('');
+        if (relTag || relTitle || relDate) {
+            if (relTag) lines.push(`Tag: ${relTag}`);
+            if (relTitle) lines.push(`Cím: ${relTitle}`);
+            if (relDate) lines.push(`Release dátum: ${relDate}`);
+        } else {
+            lines.push('Nincs release információ ehhez a branch-hez.');
+        }
+    };
+
+    // Branch-hez tartozó összes release felsorolása (GitHub API-n keresztül)
+    try {
+        const m = repoUrl.match(/github\.com\/(.+?)\/(.+?)(?:\/|$)/i);
+        const owner = m ? m[1] : '';
+        const repoName = m ? m[2] : '';
+        if (!owner || !repoName || !branch) {
+            fallbackReleaseLines();
+        } else {
+            const qs = new URLSearchParams({ owner, repo: repoName, branch });
+
+            // Párhuzamosan: release lista + telepített verzió
+            const [tagsResp, installedResp] = await Promise.all([
+                fetch(`/api/get_repo_branches_tags?${qs.toString()}`),
+                fetch(`/api/get_installed_version?${new URLSearchParams({ branch }).toString()}`)
+            ]);
+
+            const data = await tagsResp.json();
+            const installedData = await installedResp.json();
+
+            const tags = (data && Array.isArray(data.tags)) ? data.tags : [];
+            const note = (data && (data.tags_note || data.error || '')) ? String(data.tags_note || data.error) : '';
+            let installedVersion = (installedData && installedData.success && installedData.version)
+                ? String(installedData.version)
+                : 'NONE';
+
+            // Ha az install épp most történt, a cache-ből azonnal tudjuk frissíteni.
+            try {
+                const cached = (window.__installedVersionCache && branch) ? String(window.__installedVersionCache[branch] || '') : '';
+                if ((installedVersion === 'NONE' || !installedVersion) && cached && cached !== 'NONE') {
+                    installedVersion = cached;
+                }
+            } catch (e) { /* ignore */ }
+
+            // Robot verziók blokk (a futási információk helyett)
+            lines.push('');
+            lines.push('Robot verziók:');
+            lines.push(`- Telepített: ${installedVersion}`);
+            if (tags.length > 0) {
+                const latest = tags[0] || {};
+                const lt = latest.tag ? String(latest.tag) : '';
+                const ldate = latest.date ? String(latest.date).slice(0, 10) : '';
+                const latestParts = [ldate, lt].filter(Boolean);
+                lines.push(`- Legfrissebb release: ${latestParts.join(' — ') || '-'}`);
+                if (installedVersion && installedVersion !== 'NONE' && lt && installedVersion !== lt) {
+                    lines.push(`- Állapot: új verzió elérhető (${installedVersion} → ${lt})`);
+                } else if (installedVersion && installedVersion !== 'NONE' && lt && installedVersion === lt) {
+                    lines.push('- Állapot: naprakész');
+                }
+            } else {
+                lines.push(`- Legfrissebb release: -`);
+            }
+
+            // Összes release felsorolása
+            lines.push('');
+            if (tags.length > 0) {
+                lines.push('Kiadások:');
+                tags.forEach(t => {
+                    const tag = (t && t.tag) ? String(t.tag) : '';
+                    const title = (t && t.title) ? String(t.title) : '';
+                    const date = (t && t.date) ? String(t.date).slice(0, 10) : '';
+                    const parts = [date, tag, title].filter(Boolean);
+                    lines.push(`- ${parts.join(' — ')}`);
+                });
+            } else {
+                lines.push(note || 'Nincs release információ ehhez a branch-hez.');
+            }
+        }
+    } catch (e) {
+        // Ha a listázás nem megy (token/rate limit/háló), legalább a best-effort meta jelenjen meg.
+        fallbackReleaseLines();
     }
 
-    if (action) header = `${action} információ`;
+    if (mode === 'run') {
+        header = 'Robot verziók';
+    } else if (mode === 'download') {
+        header = 'Robot verzió';
+    } else if (action) {
+        header = `${action} információ`;
+    }
     showInfoBox(lines.join('\n'), header);
 }
 
@@ -1476,8 +1561,29 @@ function installRobots(robots, options = {}) {
     .then(data => {
         if (data.success) {
             console.log('[DOWNLOAD] Sikeres letöltés:', data.installed);
-            showToast('A kijelölt robotok letöltése sikeres.', 'success');
             const installed = data.installed || [];
+
+            // Cache: Telepített verzió (release tag) az Info ablakhoz
+            try {
+                window.__installedVersionCache = window.__installedVersionCache || {};
+                installed.forEach(inst => {
+                    if (inst && inst.branch && inst.installed_version) {
+                        window.__installedVersionCache[String(inst.branch)] = String(inst.installed_version);
+                    }
+                });
+            } catch (e) { /* ignore */ }
+
+            // Toast üzenet: ha egy robotot töltünk le, írjuk ki a telepített release-t is
+            try {
+                if (installed.length === 1 && installed[0] && installed[0].installed_version && String(installed[0].installed_version).trim() && String(installed[0].installed_version) !== 'NONE') {
+                    showToast(`Letöltés sikeres. Telepített: ${String(installed[0].installed_version)}`, 'success');
+                } else {
+                    showToast('A kijelölt robotok letöltése sikeres.', 'success');
+                }
+            } catch (e) {
+                showToast('A kijelölt robotok letöltése sikeres.', 'success');
+            }
+
             installed.forEach(inst => {
                 // Checkbox visszaállítása, ha van
                 const cb = document.querySelector(`.robot-checkbox-available[data-repo="${inst.repo}"][data-branch="${inst.branch}"]`);

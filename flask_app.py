@@ -534,6 +534,78 @@ def api_get_github_settings():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/get_installed_version', methods=['GET'])
+def api_get_installed_version():
+    """Visszaadja a helyben telepített verziót a megadott branch-hez.
+
+    A verziót a Robot Framework verzióellenőrzés ugyanitt tárolja:
+    installed_versions/<branch>.txt
+    """
+    try:
+        branch_raw = (request.args.get('branch') or '').strip()
+        if not branch_raw:
+            return jsonify({'success': False, 'error': 'Hiányzó branch paraméter'}), 400
+
+        return jsonify({'success': True, 'branch': branch_raw, 'version': _read_installed_version(branch_raw)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _safe_installed_version_key(raw: str) -> str:
+    # Basic path traversal védelem: csak biztonságos fájlnév komponenseket engedünk.
+    return re.sub(r'[^A-Za-z0-9._-]+', '_', (raw or '').strip())
+
+
+def _installed_versions_base_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'installed_versions')
+
+
+def _installed_version_file_path(branch_raw: str) -> str:
+    safe_branch = _safe_installed_version_key(branch_raw)
+    return os.path.join(_installed_versions_base_dir(), f'{safe_branch}.txt')
+
+
+def _read_installed_version(branch_raw: str) -> str:
+    file_path = _installed_version_file_path(branch_raw)
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                return (f.read() or '').strip() or 'NONE'
+        except Exception:
+            return 'NONE'
+    return 'NONE'
+
+
+def _write_installed_version(branch_raw: str, version: str) -> None:
+    base_dir = _installed_versions_base_dir()
+    os.makedirs(base_dir, exist_ok=True)
+    file_path = _installed_version_file_path(branch_raw)
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write((version or '').strip() or 'NONE')
+
+
+def _try_get_latest_release_tag_for_branch(repo_name: str, branch: str) -> str:
+    """A telepítés pillanatában lekéri a branch legfrissebb GitHub release tag-jét.
+
+    Ha nem elérhető (nincs token / nincs release / hiba), 'NONE'-t ad.
+    """
+    try:
+        repos = get_repository_data() or []
+        repo_obj = next(
+            (r for r in repos if (r.get('name') or '').strip().lower() == (repo_name or '').strip().lower()),
+            None,
+        )
+        if not repo_obj:
+            return 'NONE'
+
+        meta_map = get_latest_release_by_branch(repo_obj, [branch]) or {}
+        meta = meta_map.get(branch) or {}
+        return (meta.get('tag') or '').strip() or 'NONE'
+    except Exception as e:
+        logger.warning(f"[INSTALL] Nem sikerült release tag-et lekérni: repo='{repo_name}', branch='{branch}', err={e}")
+        return 'NONE'
+
+
 @app.route('/api/set_github_settings', methods=['POST'])
 def api_set_github_settings():
     """Mentjük a GitHub beállításokat és szinkronizáljuk a resources/variables.robot fájlba.
@@ -2359,6 +2431,7 @@ def api_install_selected():
                 logger.info(f"[INSTALL_SELECTED] install_robot_with_params hívás: repo='{repo}', branch='{branch}'")
                 rc, results_dir_rel, _stdout, _stderr = install_robot_with_params(repo, branch)
                 logger.info(f"[INSTALL_SELECTED] install_robot_with_params eredmény: rc={rc}, results_dir_rel={results_dir_rel}")
+                installed_version = _read_installed_version(branch) if rc == 0 else 'NONE'
                 # --- r_log.html készítése ---
                 try:
                     # results_dir_rel pl.: IKK-Robotok__IKK01_Duplikáció-ellenőrzés__20251127_055002
@@ -2372,6 +2445,7 @@ def api_install_selected():
                             f.write(f'<h2>Letöltés eredménye: {html.escape(repo)} / {html.escape(branch)}</h2>')
                             if rc == 0:
                                 f.write('<p style="color:green;">Sikeres letöltés!</p>')
+                                f.write(f'<p><b>Telepített:</b> {html.escape(installed_version)}</p>')
                             else:
                                 f.write('<p style="color:red;">Sikertelen letöltés!</p>')
                             f.write('<h3>Részletek:</h3>')
@@ -2385,7 +2459,7 @@ def api_install_selected():
                     logger.warning(f"[INSTALL_SELECTED] r_log.html írási hiba: {e}")
                 # --- vége r_log.html ---
                 if rc == 0:
-                    installed.append({'repo': repo, 'branch': branch, 'results_dir': results_dir_rel})
+                    installed.append({'repo': repo, 'branch': branch, 'results_dir': results_dir_rel, 'installed_version': installed_version})
                     # ÚJ: execution_results-ba is bekerül
                     result_entry = {
                         'id': len(execution_results) + 1,
@@ -2396,6 +2470,7 @@ def api_install_selected():
                         'returncode': rc,
                         'results_dir': results_dir_rel,
                         'type': 'install',
+                        'installed_version': installed_version,
                         'stdout': _stdout,
                         'stderr': _stderr
                     }
@@ -2609,6 +2684,15 @@ def install_robot_with_params(repo: str, branch: str):
     else:
         logger.info(f"[INSTALL] .venv mappa már létezik: {venv_dir}")
     logger.info(f"[INSTALL] install_robot_with_params sikeresen lefutott: repo='{repo}', branch='{branch}', branch_dir='{branch_dir}'")
+
+    # --- Telepített verzió rögzítése (installed_versions/<branch>.txt) ---
+    try:
+        installed_version = _try_get_latest_release_tag_for_branch(repo, branch)
+        _write_installed_version(branch, installed_version)
+        logger.info(f"[INSTALL] Telepített verzió rögzítve: branch='{branch}', version='{installed_version}'")
+    except Exception as e:
+        logger.warning(f"[INSTALL] Telepített verzió rögzítése sikertelen: branch='{branch}', err={e}")
+
     # --- Eredmény log generálása a results mappába ---
     try:
         results_dir_name = f"{safe_repo}__{safe_branch}__{timestamp}"
@@ -2622,6 +2706,7 @@ def install_robot_with_params(repo: str, branch: str):
                 <ul>
                     <li>Repo: {repo}</li>
                     <li>Branch: {branch}</li>
+                    <li>Telepített: {installed_version}</li>
                     <li>Időpont: {timestamp}</li>
                     <li>Könyvtár: {branch_dir}</li>
                 </ul>
