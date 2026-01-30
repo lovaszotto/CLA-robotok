@@ -23,90 +23,94 @@ async function sureInfo({ title = 'Információ', message = '', okText = 'OK' } 
 }
 
 // --- Letöltés gombok kezelése: installRobot ---
-async function installRobot(repo, branch, btn) {
-    if (IS_BUSY) return;
-    const ok = await sureConfirm({
-        title: 'Robot letöltése',
-        message: 'Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
-        okText: 'Letöltés',
-        cancelText: 'Mégse',
-        okVariant: 'primary'
-    });
-    if (!ok) return;
-    IS_BUSY = true;
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-    }
-    fetch('/api/install_selected', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ robots: [{ repo: repo, branch: branch }] })
-    })
-    .then(response => {
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-            return response.json();
-        } else {
-            return response.text().then(text => {
-                throw new Error('A szerver nem JSON választ adott vissza.\nRészletek: ' + text);
-            });
-        }
-    })
-    .then(data => {
-        let msg = data && data.message ? data.message : 'Letöltés sikeresen befejeződött!';
-        return sureInfo({ title: 'Letöltés', message: msg, okText: 'OK' }).then(() => location.reload());
-    })
-    .catch(err => {
-        return sureInfo({ title: 'Hiba', message: 'Hiba a letöltés során: ' + err, okText: 'OK' });
-    })
-    .finally(() => {
-        IS_BUSY = false;
+if (typeof window.installRobot !== 'function') {
+    window.installRobot = async function(repo, branch, btn) {
+        if (IS_BUSY) return;
+        const ok = await sureConfirm({
+            title: 'Robot letöltése',
+            message: 'Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
+            okText: 'Letöltés',
+            cancelText: 'Mégse',
+            okVariant: 'primary'
+        });
+        if (!ok) return;
+        IS_BUSY = true;
         if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-download"></i>';
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         }
-    });
+        fetch('/api/install_selected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ robots: [{ repo: repo, branch: branch }] })
+        })
+        .then(response => {
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                return response.json();
+            } else {
+                return response.text().then(text => {
+                    throw new Error('A szerver nem JSON választ adott vissza.\nRészletek: ' + text);
+                });
+            }
+        })
+        .then(data => {
+            let msg = data && data.message ? data.message : 'Letöltés sikeresen befejeződött!';
+            return sureInfo({ title: 'Letöltés', message: msg, okText: 'OK' }).then(() => location.reload());
+        })
+        .catch(err => {
+            return sureInfo({ title: 'Hiba', message: 'Hiba a letöltés során: ' + err, okText: 'OK' });
+        })
+        .finally(() => {
+            IS_BUSY = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-download"></i>';
+            }
+        });
+    };
 }
 
 // --- Futtatás gomb kezelése: executeSingleRobot ---
-async function executeSingleRobot(btn) {
-    if (IS_BUSY) return;
-    const repo = btn.getAttribute('data-repo');
-    const branch = btn.getAttribute('data-branch');
-    const ok = await sureConfirm({
-        title: 'Robot futtatása',
-        message: 'Biztosan elindítod ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
-        okText: 'Futtatás',
-        cancelText: 'Mégse',
-        okVariant: 'primary'
-    });
-    if (!ok) return;
-    IS_BUSY = true;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-    fetch('/api/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo: repo, branch: branch })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data && data.success) {
-            return sureInfo({ title: 'Futtatás', message: '✅ Futtatás sikeres!', okText: 'OK' });
-        } else {
-            let msg = (data && data.error) ? data.error : 'Ismeretlen hiba a futtatás során!';
-            return sureInfo({ title: 'Futtatás', message: '❌ Futtatás sikertelen!\n\n' + msg, okText: 'OK' });
-        }
-    })
-    .catch(err => {
-        return sureInfo({ title: 'Hiba', message: 'Hiba a futtatás során: ' + err, okText: 'OK' });
-    })
-    .finally(() => {
-        IS_BUSY = false;
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-play-fill"></i>';
-    });
+if (typeof window.executeSingleRobot !== 'function') {
+    window.executeSingleRobot = async function(btn) {
+        if (IS_BUSY) return;
+        const repo = btn.getAttribute('data-repo');
+        const branch = btn.getAttribute('data-branch');
+        const ok = await sureConfirm({
+            title: 'Robot futtatása',
+            message: 'Biztosan elindítod ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
+            okText: 'Futtatás',
+            cancelText: 'Mégse',
+            okVariant: 'primary'
+        });
+        if (!ok) return;
+        IS_BUSY = true;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo: repo, branch: branch })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.success) {
+                return sureInfo({ title: 'Futtatás', message: '✅ Futtatás sikeres!', okText: 'OK' });
+            } else {
+                let msg = (data && data.error) ? data.error : 'Ismeretlen hiba a futtatás során!';
+                return sureInfo({ title: 'Futtatás', message: '❌ Futtatás sikertelen!\n\n' + msg, okText: 'OK' });
+            }
+        })
+        .catch(err => {
+            return sureInfo({ title: 'Hiba', message: 'Hiba a futtatás során: ' + err, okText: 'OK' });
+        })
+        .finally(() => {
+            IS_BUSY = false;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-fill"></i>';
+        });
+    };
 }
 console.log('[LOGTAB] main.js betöltve');
 // Menü és oldalváltás logika, logolással

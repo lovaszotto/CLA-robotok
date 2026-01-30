@@ -237,7 +237,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                     <div id="globalWaitTimerRow" class="text-end mt-2">
                         <span id="globalWaitTimerBadge" class="badge bg-secondary">
                             <i class="bi bi-hourglass-split me-1"></i>
-                            <span id="globalWaitTimerText">Készen</span>
+                            <span id="globalWaitTimerText">Kész</span>
                         </span>
                     </div>
                 </div>
@@ -334,7 +334,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                    </button>
                                                    <label for="runnable-{{ repo.name }}-{{ branch }}" class="mb-0">{{ branch }}</label>
                                                    <span class="ms-auto">
-                                                       <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"></i>
+                                                       <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}', this)"></i>
                                                    </span>
                                                </li>
                                                {% endfor %}
@@ -1172,7 +1172,7 @@ function renderRunnableRepos(repos) {
                                     onclick="branchInfoClicked(this)">
                                     <i class="bi bi-info-circle"></i>
                                 </button>
-                                <i class="bi bi-trash text-danger me-2" style="cursor: pointer;" onclick="deleteRunnableBranch('${repo.name}', '${branch}')" title="Eltávolítás a futtathatók közül"></i>
+                                <i class="bi bi-trash text-danger me-2" style="cursor: pointer;" onclick="deleteRunnableBranch('${repo.name}', '${branch}', this)" title="Eltávolítás a futtathatók közül"></i>
                                 <span>${branch}</span>
                             </div>
                         `).join('')}
@@ -1568,12 +1568,13 @@ async function executeSingleRobot(button) {
         showToast(`Robot futtatása indult: ${repo}/${branch}`, 'info');
         if (button) {
             button.disabled = true;
+            try { button.dataset.waitKind = 'run'; } catch (e) { /* noop */ }
             button._originalInnerHTML = button.innerHTML;
             button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         }
         const opKey = `run:${repo}:${branch}`;
         if (button) button._waitOpKey = opKey;
-        startGlobalWaitStopwatch(opKey);
+        startGlobalWaitStopwatch(opKey, 'Fut a robot...');
         executeRobot(repo, branch, button);
     } catch (e) {
         showToast('Robot indítás hiba: ' + String(e), 'danger');
@@ -1634,10 +1635,24 @@ function executeRobot(repo, branch, button) {
 // --- Letöltés ---
 async function installRobot(repo, branch, buttonElement) {
     console.log('[DOWNLOAD] Gomb megnyomva:', {repo, branch, buttonElement});
+    // Indítsuk el a stopppert már kattintáskor (hogy a felhasználó azonnal lássa),
+    // és csak akkor állítsuk le, ha a művelet véget ér vagy a felhasználó megszakítja.
+    const preOpKey = `install:${repo}:${branch}`;
+    try {
+        if (buttonElement) {
+            buttonElement._waitOpKey = preOpKey;
+            try { buttonElement.dataset.waitKind = 'download'; } catch (e) { /* noop */ }
+        }
+        startGlobalWaitStopwatch(preOpKey, 'Letöltés folyamatban...');
+    } catch (e) {
+        // noop
+    }
+
     const msg = `Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ${repo}\nBranch: ${branch}\n\nEz a művelet hosszabb ideig is eltarthat!`;
     const ok = await showSureBox({ title: 'Robot letöltése', message: msg, okText: 'Letöltés', cancelText: 'Mégse', okVariant: 'primary', showCancel: true });
     if (!ok) {
         console.log('[DOWNLOAD] Letöltés megszakítva a felhasználó által.');
+        stopGlobalWaitStopwatch(preOpKey);
         return;
     }
     console.log('[DOWNLOAD] Letöltési folyamat indítása...');
@@ -1652,23 +1667,40 @@ function installSelectedRobots() {
 }
 function installRobots(robots, options = {}) {
     const { triggerButton = null } = options;
-    const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
+    const installBtn = document.querySelector('button[onclick*="installSelectedRobots"]');
     if (installBtn) installBtn.disabled = true;
     let triggerOriginalHtml = null;
     let waitOpKey = null;
+    let bulkOriginalHtml = null;
     if (triggerButton) {
         triggerOriginalHtml = triggerButton.innerHTML;
         triggerButton.disabled = true;
+        try { triggerButton.dataset.waitKind = 'download'; } catch (e) { /* noop */ }
         triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-        try {
-            const repo = (robots && robots[0] && robots[0].repo) ? String(robots[0].repo) : 'unknown';
-            const branch = (robots && robots[0] && robots[0].branch) ? String(robots[0].branch) : 'unknown';
-            waitOpKey = `install:${repo}:${branch}`;
-        } catch (e) {
-            waitOpKey = 'install';
+        // Ha installRobot már elindította a stopppert, használjuk ugyanazt a kulcsot,
+        // hogy ne "ugorjon" az idő.
+        waitOpKey = (triggerButton && triggerButton._waitOpKey) ? String(triggerButton._waitOpKey) : null;
+        if (!waitOpKey) {
+            try {
+                const repo = (robots && robots[0] && robots[0].repo) ? String(robots[0].repo) : 'unknown';
+                const branch = (robots && robots[0] && robots[0].branch) ? String(robots[0].branch) : 'unknown';
+                waitOpKey = `install:${repo}:${branch}`;
+            } catch (e) {
+                waitOpKey = 'install';
+            }
+            triggerButton._waitOpKey = waitOpKey;
         }
-        triggerButton._waitOpKey = waitOpKey;
-        startGlobalWaitStopwatch(waitOpKey);
+        startGlobalWaitStopwatch(waitOpKey, 'Letöltés folyamatban...');
+    } else if (installBtn) {
+        // Tömeges letöltés (nem egy konkrét branch gombjáról indítva)
+        try {
+            bulkOriginalHtml = installBtn.innerHTML;
+            installBtn.disabled = true;
+            installBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Letöltés...';
+            installBtn.dataset.waitKind = 'download';
+        } catch (e) { /* noop */ }
+        waitOpKey = 'install:bulk';
+        startGlobalWaitStopwatch(waitOpKey, 'Letöltés folyamatban...');
     }
     if (!robots || robots.length === 0) {
         console.log('[DOWNLOAD] Nincs kijelölt robot a letöltéshez.');
@@ -1677,6 +1709,9 @@ function installRobots(robots, options = {}) {
         if (triggerButton) {
             triggerButton.disabled = false;
             triggerButton.innerHTML = triggerOriginalHtml || '<i class="bi bi-download"></i>';
+        }
+        if (installBtn && bulkOriginalHtml !== null) {
+            try { installBtn.innerHTML = bulkOriginalHtml; } catch (e) { /* noop */ }
         }
         if (waitOpKey) stopGlobalWaitStopwatch(waitOpKey);
         return;
@@ -1748,12 +1783,15 @@ function installRobots(robots, options = {}) {
             triggerButton.disabled = false;
             triggerButton.innerHTML = triggerOriginalHtml || '<i class="bi bi-download"></i>';
         }
+        if (installBtn && bulkOriginalHtml !== null) {
+            try { installBtn.innerHTML = bulkOriginalHtml; } catch (e) { /* noop */ }
+        }
         if (waitOpKey) stopGlobalWaitStopwatch(waitOpKey);
     });
 }
 
 // --- Branch törlés ---
-async function deleteRunnableBranch(repo, branch) {
+async function deleteRunnableBranch(repo, branch, iconEl) {
     const ok = await showSureBox({
         title: 'Törlés megerősítése',
         message: 'Valóban törölni szeretnéd a futtathatók közül?\n\nRepository: ' + repo + '\nBranch: ' + branch,
@@ -1763,7 +1801,28 @@ async function deleteRunnableBranch(repo, branch) {
         showCancel: true
     });
     if (!ok) return;
-        fetch('/delete_runnable_branch', {
+
+    const opKey = `delete:${repo}:${branch}`;
+    let originalIconHtml = null;
+    let originalCursor = null;
+    try {
+        if (iconEl) {
+            originalIconHtml = iconEl.outerHTML;
+            originalCursor = iconEl.style.cursor;
+            iconEl.style.cursor = 'default';
+            iconEl.style.pointerEvents = 'none';
+            try { iconEl.dataset.waitKind = 'delete'; } catch (e) { /* noop */ }
+            iconEl.className = 'spinner-border spinner-border-sm text-danger me-2';
+            iconEl.removeAttribute('onclick');
+            iconEl.removeAttribute('title');
+            iconEl.setAttribute('role', 'status');
+            iconEl.setAttribute('aria-hidden', 'true');
+        }
+    } catch (e) { /* ignore */ }
+
+    startGlobalWaitStopwatch(opKey, 'Törlés folyamatban...');
+
+    fetch('/delete_runnable_branch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ repo_name: repo, branch_name: branch })
@@ -1789,6 +1848,21 @@ async function deleteRunnableBranch(repo, branch) {
         })
         .catch(err => {
             showToast('Hiba a törlés során: ' + err, 'danger');
+        })
+        .finally(() => {
+            stopGlobalWaitStopwatch(opKey);
+            try {
+                if (iconEl && originalIconHtml) {
+                    // Az ikon általában újrarenderelődik refresh után, de ha mégsem, állítsuk vissza
+                    const tmp = document.createElement('span');
+                    tmp.innerHTML = originalIconHtml;
+                    const restored = tmp.firstElementChild;
+                    if (restored && iconEl.parentNode) {
+                        iconEl.parentNode.replaceChild(restored, iconEl);
+                        restored.style.cursor = originalCursor || 'pointer';
+                    }
+                }
+            } catch (e) { /* ignore */ }
         });
 }
 
@@ -1807,9 +1881,11 @@ function showToast(message, type = 'info') {
 window.__waitOps = window.__waitOps || new Set();
 window.__waitTimerInterval = window.__waitTimerInterval || null;
 window.__waitTimerStart = window.__waitTimerStart || null;
+window.__waitStartByOp = window.__waitStartByOp || {};
 window.__waitRowShownAt = window.__waitRowShownAt || null;
 window.__waitHideTimeout = window.__waitHideTimeout || null;
 window.__waitMinVisibleMs = window.__waitMinVisibleMs || 600;
+window.__waitLabelByOp = window.__waitLabelByOp || {};
 
 function _formatElapsedMs(ms) {
     const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -1837,7 +1913,7 @@ function ensureGlobalWaitTimerRow() {
             row.className = 'text-end mt-2';
             row.innerHTML = '<span id="globalWaitTimerBadge" class="badge bg-secondary">'
                 + '<i class="bi bi-hourglass-split me-1"></i>'
-                + '<span id="globalWaitTimerText">Készen</span>'
+                + '<span id="globalWaitTimerText">Kész</span>'
                 + '</span>';
             wrap.appendChild(row);
         }
@@ -1850,10 +1926,21 @@ function ensureGlobalWaitTimerRow() {
     }
 }
 
-function startGlobalWaitStopwatch(opKey) {
+function startGlobalWaitStopwatch(opKey, label) {
     try {
+        const wasIdle = !window.__waitOps || window.__waitOps.size === 0;
         const key = String(opKey || 'op');
         window.__waitOps.add(key);
+
+        // Per-op start idő: így nem tud "visszaesni" az óra 00:00-ra, ha ugyanarra az opKey-re többször hívódik a start.
+        try {
+            if (!window.__waitStartByOp) window.__waitStartByOp = {};
+            if (!window.__waitStartByOp[key]) window.__waitStartByOp[key] = Date.now();
+        } catch (e) { /* noop */ }
+
+        if (label) {
+            try { window.__waitLabelByOp[key] = String(label); } catch (e) { /* noop */ }
+        }
 
         // Ha korábban ütemezett elrejtés van, és közben új művelet indul, töröljük
         if (window.__waitHideTimeout) {
@@ -1864,26 +1951,51 @@ function startGlobalWaitStopwatch(opKey) {
         const { row, textEl, badgeEl } = ensureGlobalWaitTimerRow();
         if (!row || !textEl) return;
 
-        // Aktív állapot
+        // Aktív állapot + jelenjen meg
         try {
             if (badgeEl) {
                 badgeEl.classList.remove('bg-secondary');
                 badgeEl.classList.add('bg-warning', 'text-dark');
             }
+            row.style.display = '';
         } catch (e) { /* noop */ }
 
-        if (!window.__waitTimerStart) window.__waitTimerStart = Date.now();
-        if (!window.__waitRowShownAt) window.__waitRowShownAt = Date.now();
+        if (wasIdle) {
+            // A globális start legyen konzisztens a per-op starttal
+            window.__waitTimerStart = (window.__waitStartByOp && window.__waitStartByOp[key]) ? window.__waitStartByOp[key] : Date.now();
+            window.__waitRowShownAt = Date.now();
+        } else {
+            if (!window.__waitTimerStart) {
+                window.__waitTimerStart = (window.__waitStartByOp && window.__waitStartByOp[key]) ? window.__waitStartByOp[key] : Date.now();
+            }
+            if (!window.__waitRowShownAt) window.__waitRowShownAt = Date.now();
+        }
+
+        // Fontos: a start időt rögzítsük a closure-ben. Ha valami (akár bug) nullázza a globális startot,
+        // attól az óra még menjen tovább.
+        const fixedStartAt = (window.__waitStartByOp && window.__waitStartByOp[key])
+            ? window.__waitStartByOp[key]
+            : (window.__waitTimerStart || Date.now());
+
+        // Mindig legyen a legutóbbi művelethez igazítva a tick (különben "nem indul" érzés lehet)
+        try {
+            if (window.__waitTimerInterval) {
+                clearInterval(window.__waitTimerInterval);
+                window.__waitTimerInterval = null;
+            }
+        } catch (e) { /* noop */ }
 
         const tick = () => {
-            const elapsed = Date.now() - (window.__waitTimerStart || Date.now());
-            textEl.textContent = `Várakozás: ${_formatElapsedMs(elapsed)}`;
+            const elapsed = Date.now() - fixedStartAt;
+            const lbl = (window.__waitLabelByOp && window.__waitLabelByOp[key]) ? window.__waitLabelByOp[key] : 'Folyamatban...';
+            // DOM csere esetén frissítsük a referenciát.
+            const els = ensureGlobalWaitTimerRow();
+            const tEl = (els && els.textEl) ? els.textEl : textEl;
+            if (tEl) tEl.textContent = `${lbl} ${_formatElapsedMs(elapsed)}`;
         };
 
         tick();
-        if (!window.__waitTimerInterval) {
-            window.__waitTimerInterval = setInterval(tick, 1000);
-        }
+        window.__waitTimerInterval = setInterval(tick, 1000);
     } catch (e) {
         // noop
     }
@@ -1892,9 +2004,26 @@ function startGlobalWaitStopwatch(opKey) {
 function stopGlobalWaitStopwatch(opKey) {
     try {
         if (opKey) window.__waitOps.delete(String(opKey));
+        try { if (opKey && window.__waitLabelByOp) delete window.__waitLabelByOp[String(opKey)]; } catch (e) { /* noop */ }
+        try { if (opKey && window.__waitStartByOp) delete window.__waitStartByOp[String(opKey)]; } catch (e) { /* noop */ }
         if (window.__waitOps.size > 0) return;
 
-        const { textEl, badgeEl } = ensureGlobalWaitTimerRow();
+        const { row, textEl, badgeEl } = ensureGlobalWaitTimerRow();
+
+        const finalizeIdle = () => {
+            try {
+                if (textEl) textEl.textContent = 'Kész';
+                if (badgeEl) {
+                    badgeEl.classList.remove('bg-warning', 'text-dark');
+                    badgeEl.classList.add('bg-secondary');
+                }
+                if (row) row.style.display = '';
+            } catch (e) { /* noop */ }
+            window.__waitTimerStart = null;
+            try { window.__waitStartByOp = {}; } catch (e) { /* noop */ }
+            window.__waitRowShownAt = null;
+            window.__waitHideTimeout = null;
+        };
 
         // Állítsuk meg a számlálást azonnal (a kijelzés maradhat a minimum ideig)
         try {
@@ -1904,29 +2033,15 @@ function stopGlobalWaitStopwatch(opKey) {
             }
         } catch (e) { /* noop */ }
 
-        // Frissítsük a kijelzett időt még egyszer (ha van hova)
-        try {
-            if (textEl && window.__waitTimerStart) {
-                const elapsed = Date.now() - window.__waitTimerStart;
-                textEl.textContent = `Várakozás: ${_formatElapsedMs(elapsed)}`;
-            }
-        } catch (e) { /* noop */ }
-
-        // Mindig látható: állítsuk vissza "idle" állapotra
-        try {
-            if (badgeEl) {
-                badgeEl.classList.remove('bg-warning', 'text-dark');
-                badgeEl.classList.add('bg-secondary');
-            }
-        } catch (e) { /* noop */ }
-
-        try {
-            if (textEl) textEl.textContent = 'Készen';
-        } catch (e) { /* noop */ }
-
-        window.__waitTimerStart = null;
-        window.__waitRowShownAt = null;
-        window.__waitHideTimeout = null;
+        // Minimum ideig maradjon látható (különben gyors hibánál "nem látszik")
+        const shownAt = window.__waitRowShownAt || Date.now();
+        const alreadyVisibleFor = Date.now() - shownAt;
+        const remaining = Math.max(0, (window.__waitMinVisibleMs || 0) - alreadyVisibleFor);
+        if (remaining > 0) {
+            window.__waitHideTimeout = setTimeout(finalizeIdle, remaining);
+        } else {
+            finalizeIdle();
+        }
     } catch (e) {
         // noop
     }
@@ -1939,9 +2054,20 @@ function initAutoSpinnerWaitObserver() {
         const OP = 'auto-spinner';
         const check = () => {
             try {
-                const anySpinner = document.querySelector('.spinner-border') !== null;
-                if (anySpinner) startGlobalWaitStopwatch(OP);
-                else stopGlobalWaitStopwatch(OP);
+                const runSpinner = document.querySelector('[data-wait-kind="run"] .spinner-border') !== null;
+                const downloadSpinner = document.querySelector('[data-wait-kind="download"] .spinner-border') !== null;
+                const deleteSpinner = document.querySelector('[data-wait-kind="delete"].spinner-border') !== null;
+                const anyTracked = runSpinner || downloadSpinner || deleteSpinner;
+
+                // Csak akkor auto-zzunk, ha nincs explicit várakozás felvéve.
+                if (anyTracked && (!window.__waitOps || window.__waitOps.size === 0)) {
+                    const label = runSpinner
+                        ? 'Fut a robot...'
+                        : (downloadSpinner ? 'Letöltés folyamatban...' : 'Törlés folyamatban...');
+                    startGlobalWaitStopwatch(OP, label);
+                } else {
+                    stopGlobalWaitStopwatch(OP);
+                }
             } catch (e) { /* noop */ }
         };
 
