@@ -218,6 +218,10 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     background: rgba(13, 110, 253, 0.65);
     box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.35);
 }
+
+/* Globális stopper alatti stop ikon (csak jelzés) */
+.wait-stop-indicator { pointer-events: none; }
+.wait-stop-inactive { opacity: 0.35; }
 </style>
 </head>
 <body>
@@ -239,6 +243,11 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             <i class="bi bi-hourglass-split me-1"></i>
                             <span id="globalWaitTimerText">Kész</span>
                         </span>
+                    </div>
+                    <div id="globalWaitStopRow" class="text-end mt-1">
+                        <button id="globalWaitStopIconBtn" type="button" class="btn btn-outline-light btn-sm py-0 px-1 wait-stop-indicator wait-stop-inactive" title="Futás megszakítása" aria-label="Futás megszakítása">
+                            <i class="bi bi-stop-circle"></i>
+                        </button>
                     </div>
                 </div>
                 <h1 class="mb-0 bi bi-robot"> {{ page_title }}</h1>
@@ -1887,6 +1896,41 @@ window.__waitHideTimeout = window.__waitHideTimeout || null;
 window.__waitMinVisibleMs = window.__waitMinVisibleMs || 600;
 window.__waitLabelByOp = window.__waitLabelByOp || {};
 
+function _applyWaitBadgeStyleForOp(key, label, badgeEl) {
+    try {
+        if (!badgeEl) return;
+        const keyStr = String(key || '');
+        const lblStr = String(label || (window.__waitLabelByOp && window.__waitLabelByOp[keyStr]) || '');
+        const isRun = keyStr.startsWith('run:') || lblStr.includes('Fut a robot');
+        const isDownload = keyStr.startsWith('install:') || lblStr.includes('Letöltés');
+        const isDelete = keyStr.startsWith('delete:') || lblStr.includes('Törlés');
+
+        badgeEl.classList.remove('bg-secondary', 'bg-warning', 'bg-success', 'bg-danger', 'text-dark', 'text-white');
+        if (isRun) {
+            badgeEl.classList.add('bg-success', 'text-white');
+        } else if (isDelete) {
+            badgeEl.classList.add('bg-danger', 'text-white');
+        } else if (isDownload) {
+            badgeEl.classList.add('bg-warning', 'text-dark');
+        } else {
+            badgeEl.classList.add('bg-warning', 'text-dark');
+        }
+    } catch (e) { /* noop */ }
+}
+
+function _setGlobalWaitStopIndicatorActive(isActive) {
+    try {
+        const btn = document.getElementById('globalWaitStopIconBtn');
+        if (!btn) return;
+        btn.classList.remove('btn-danger', 'btn-outline-light', 'text-white', 'wait-stop-inactive');
+        if (isActive) {
+            btn.classList.add('btn-danger', 'text-white');
+        } else {
+            btn.classList.add('btn-outline-light', 'wait-stop-inactive');
+        }
+    } catch (e) { /* noop */ }
+}
+
 function _formatElapsedMs(ms) {
     const totalSec = Math.max(0, Math.floor(ms / 1000));
     const min = Math.floor(totalSec / 60);
@@ -1901,7 +1945,9 @@ function ensureGlobalWaitTimerRow() {
         let row = document.getElementById('globalWaitTimerRow');
         let textEl = document.getElementById('globalWaitTimerText');
         let badgeEl = document.getElementById('globalWaitTimerBadge');
-        if (row && textEl) return { row, textEl, badgeEl };
+        let stopRow = document.getElementById('globalWaitStopRow');
+        let stopBtn = document.getElementById('globalWaitStopIconBtn');
+        if (row && textEl && stopBtn) return { row, textEl, badgeEl };
 
         const wrap = document.querySelector('.exit-icon-wrap');
         if (!wrap) return { row: null, textEl: null };
@@ -1918,8 +1964,19 @@ function ensureGlobalWaitTimerRow() {
             wrap.appendChild(row);
         }
 
+        if (!stopRow) {
+            stopRow = document.createElement('div');
+            stopRow.id = 'globalWaitStopRow';
+            stopRow.className = 'text-end mt-1';
+            stopRow.innerHTML = '<button id="globalWaitStopIconBtn" type="button" class="btn btn-outline-light btn-sm py-0 px-1 wait-stop-indicator wait-stop-inactive" title="Futás megszakítása" aria-label="Futás megszakítása">'
+                + '<i class="bi bi-stop-circle"></i>'
+                + '</button>';
+            wrap.appendChild(stopRow);
+        }
+
         textEl = document.getElementById('globalWaitTimerText');
         badgeEl = document.getElementById('globalWaitTimerBadge');
+        stopBtn = document.getElementById('globalWaitStopIconBtn');
         return { row, textEl, badgeEl };
     } catch (e) {
         return { row: null, textEl: null, badgeEl: null };
@@ -1954,11 +2011,12 @@ function startGlobalWaitStopwatch(opKey, label) {
         // Aktív állapot + jelenjen meg
         try {
             if (badgeEl) {
-                badgeEl.classList.remove('bg-secondary');
-                badgeEl.classList.add('bg-warning', 'text-dark');
+                _applyWaitBadgeStyleForOp(key, label, badgeEl);
             }
             row.style.display = '';
         } catch (e) { /* noop */ }
+
+        _setGlobalWaitStopIndicatorActive(true);
 
         if (wasIdle) {
             // A globális start legyen konzisztens a per-op starttal
@@ -1992,6 +2050,13 @@ function startGlobalWaitStopwatch(opKey, label) {
             const els = ensureGlobalWaitTimerRow();
             const tEl = (els && els.textEl) ? els.textEl : textEl;
             if (tEl) tEl.textContent = `${lbl} ${_formatElapsedMs(elapsed)}`;
+
+            // Ha közben a badge újrarenderelődött (alapból szürke), tartsuk meg a művelet színét.
+            const bEl = (els && els.badgeEl) ? els.badgeEl : badgeEl;
+            _applyWaitBadgeStyleForOp(key, lbl, bEl);
+
+            // Ha a stop ikon újrarenderelődött, maradjon aktív.
+            _setGlobalWaitStopIndicatorActive(true);
         };
 
         tick();
@@ -2014,11 +2079,14 @@ function stopGlobalWaitStopwatch(opKey) {
             try {
                 if (textEl) textEl.textContent = 'Kész';
                 if (badgeEl) {
-                    badgeEl.classList.remove('bg-warning', 'text-dark');
+                    badgeEl.classList.remove('bg-warning', 'bg-success', 'bg-danger', 'text-dark', 'text-white');
                     badgeEl.classList.add('bg-secondary');
                 }
                 if (row) row.style.display = '';
             } catch (e) { /* noop */ }
+
+            _setGlobalWaitStopIndicatorActive(false);
+
             window.__waitTimerStart = null;
             try { window.__waitStartByOp = {}; } catch (e) { /* noop */ }
             window.__waitRowShownAt = null;

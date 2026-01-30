@@ -311,5 +311,25 @@
     "returncode": 9,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260130_084044",
     "type": "bulk"
+  },
+  {
+    "id": 32,
+    "timestamp": "2026-01-30 08:45:24",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260130_084524",
+    "type": "bulk"
+  },
+  {
+    "id": 33,
+    "timestamp": "2026-01-30 08:52:12",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "failed",
+    "returncode": 1,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260130_085212",
+    "type": "bulk"
   }
 ]
