@@ -188,5 +188,31 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260130_052610",
     "type": "bulk"
+  },
+  {
+    "id": 20,
+    "timestamp": "2026-01-30 06:25:40",
+    "repo": "CPS-Robotok",
+    "branch": "CPS02-ORIANA-Mezo-ellenor",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\SandboxRobots\\CPS-Robotok\\CPS02-ORIANA-Mezo-ellenor",
+    "type": "install",
+    "installed_version": "NONE",
+    "stdout": "Sandbox clone OK",
+    "stderr": ""
+  },
+  {
+    "id": 21,
+    "timestamp": "2026-01-30 07:38:23",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20260130_073700",
+    "type": "install",
+    "installed_version": "V1.0.0",
+    "stdout": "Install OK",
+    "stderr": ""
   }
 ]

@@ -226,12 +226,20 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <div class="col-12">
             <div class="p-4 rounded shadow header-glass">
                 <div class="position-absolute top-0 end-0 p-3 exit-icon-wrap">
-                    <button class="btn btn-outline-light btn-sm me-2" id="ideasIconBtn" type="button" title="Ötletek / Hibajegyek (GitHub)" aria-label="Ötletek">
-                        <i class="bi bi-lightbulb"></i>
-                    </button>
-                    <button class="btn btn-outline-light btn-sm" id="exitIconBtn" type="button" title="Kilépés">
-                        <i class="bi bi-box-arrow-right"></i>
-                    </button>
+                    <div class="d-flex justify-content-end" style="gap: 0.5rem;">
+                        <button class="btn btn-outline-light btn-sm" id="ideasIconBtn" type="button" title="Ötletek / Hibajegyek (GitHub)" aria-label="Ötletek">
+                            <i class="bi bi-lightbulb"></i>
+                        </button>
+                        <button class="btn btn-outline-light btn-sm" id="exitIconBtn" type="button" title="Kilépés">
+                            <i class="bi bi-box-arrow-right"></i>
+                        </button>
+                    </div>
+                    <div id="globalWaitTimerRow" class="text-end mt-2">
+                        <span id="globalWaitTimerBadge" class="badge bg-secondary">
+                            <i class="bi bi-hourglass-split me-1"></i>
+                            <span id="globalWaitTimerText">Készen</span>
+                        </span>
+                    </div>
                 </div>
                 <h1 class="mb-0 bi bi-robot"> {{ page_title }}</h1>
                 <div class="timestamp">
@@ -1563,6 +1571,9 @@ async function executeSingleRobot(button) {
             button._originalInnerHTML = button.innerHTML;
             button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         }
+        const opKey = `run:${repo}:${branch}`;
+        if (button) button._waitOpKey = opKey;
+        startGlobalWaitStopwatch(opKey);
         executeRobot(repo, branch, button);
     } catch (e) {
         showToast('Robot indítás hiba: ' + String(e), 'danger');
@@ -1570,6 +1581,7 @@ async function executeSingleRobot(button) {
             button.disabled = false;
             if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
         }
+        stopGlobalWaitStopwatch(`run:${repo}:${branch}`);
     }
 }
 function executeRobot(repo, branch, button) {
@@ -1595,6 +1607,7 @@ function executeRobot(repo, branch, button) {
             button.disabled = false;
             if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
         }
+        stopGlobalWaitStopwatch((button && button._waitOpKey) ? button._waitOpKey : `run:${repo}:${branch}`);
         const msg = document.createElement('div');
         const currentTime = new Date().toLocaleString('hu-HU');
         const isSuccess = Boolean(data && (data.success === true || data.status === 'ok' || data.returncode === 0));
@@ -1614,6 +1627,7 @@ function executeRobot(repo, branch, button) {
             button.disabled = false;
             if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
         }
+        stopGlobalWaitStopwatch((button && button._waitOpKey) ? button._waitOpKey : `run:${repo}:${branch}`);
     });
 }
 
@@ -1641,10 +1655,20 @@ function installRobots(robots, options = {}) {
     const installBtn = document.querySelector('button[onclick="installSelectedRobots()"]');
     if (installBtn) installBtn.disabled = true;
     let triggerOriginalHtml = null;
+    let waitOpKey = null;
     if (triggerButton) {
         triggerOriginalHtml = triggerButton.innerHTML;
         triggerButton.disabled = true;
         triggerButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        try {
+            const repo = (robots && robots[0] && robots[0].repo) ? String(robots[0].repo) : 'unknown';
+            const branch = (robots && robots[0] && robots[0].branch) ? String(robots[0].branch) : 'unknown';
+            waitOpKey = `install:${repo}:${branch}`;
+        } catch (e) {
+            waitOpKey = 'install';
+        }
+        triggerButton._waitOpKey = waitOpKey;
+        startGlobalWaitStopwatch(waitOpKey);
     }
     if (!robots || robots.length === 0) {
         console.log('[DOWNLOAD] Nincs kijelölt robot a letöltéshez.');
@@ -1654,6 +1678,7 @@ function installRobots(robots, options = {}) {
             triggerButton.disabled = false;
             triggerButton.innerHTML = triggerOriginalHtml || '<i class="bi bi-download"></i>';
         }
+        if (waitOpKey) stopGlobalWaitStopwatch(waitOpKey);
         return;
     }
     console.log('[DOWNLOAD] Letöltési kérés elküldése a backendnek:', robots);
@@ -1723,6 +1748,7 @@ function installRobots(robots, options = {}) {
             triggerButton.disabled = false;
             triggerButton.innerHTML = triggerOriginalHtml || '<i class="bi bi-download"></i>';
         }
+        if (waitOpKey) stopGlobalWaitStopwatch(waitOpKey);
     });
 }
 
@@ -1776,6 +1802,170 @@ function showToast(message, type = 'info') {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3500);
 }
+
+// --- Globális várakozás/stopper (a kilépés ikon alatt) ---
+window.__waitOps = window.__waitOps || new Set();
+window.__waitTimerInterval = window.__waitTimerInterval || null;
+window.__waitTimerStart = window.__waitTimerStart || null;
+window.__waitRowShownAt = window.__waitRowShownAt || null;
+window.__waitHideTimeout = window.__waitHideTimeout || null;
+window.__waitMinVisibleMs = window.__waitMinVisibleMs || 600;
+
+function _formatElapsedMs(ms) {
+    const totalSec = Math.max(0, Math.floor(ms / 1000));
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    const mm = String(min).padStart(2, '0');
+    const ss = String(sec).padStart(2, '0');
+    return `${mm}:${ss}`;
+}
+
+function ensureGlobalWaitTimerRow() {
+    try {
+        let row = document.getElementById('globalWaitTimerRow');
+        let textEl = document.getElementById('globalWaitTimerText');
+        let badgeEl = document.getElementById('globalWaitTimerBadge');
+        if (row && textEl) return { row, textEl, badgeEl };
+
+        const wrap = document.querySelector('.exit-icon-wrap');
+        if (!wrap) return { row: null, textEl: null };
+
+        // Ha hiányzik, hozzuk létre dinamikusan
+        if (!row) {
+            row = document.createElement('div');
+            row.id = 'globalWaitTimerRow';
+            row.className = 'text-end mt-2';
+            row.innerHTML = '<span id="globalWaitTimerBadge" class="badge bg-secondary">'
+                + '<i class="bi bi-hourglass-split me-1"></i>'
+                + '<span id="globalWaitTimerText">Készen</span>'
+                + '</span>';
+            wrap.appendChild(row);
+        }
+
+        textEl = document.getElementById('globalWaitTimerText');
+        badgeEl = document.getElementById('globalWaitTimerBadge');
+        return { row, textEl, badgeEl };
+    } catch (e) {
+        return { row: null, textEl: null, badgeEl: null };
+    }
+}
+
+function startGlobalWaitStopwatch(opKey) {
+    try {
+        const key = String(opKey || 'op');
+        window.__waitOps.add(key);
+
+        // Ha korábban ütemezett elrejtés van, és közben új művelet indul, töröljük
+        if (window.__waitHideTimeout) {
+            clearTimeout(window.__waitHideTimeout);
+            window.__waitHideTimeout = null;
+        }
+
+        const { row, textEl, badgeEl } = ensureGlobalWaitTimerRow();
+        if (!row || !textEl) return;
+
+        // Aktív állapot
+        try {
+            if (badgeEl) {
+                badgeEl.classList.remove('bg-secondary');
+                badgeEl.classList.add('bg-warning', 'text-dark');
+            }
+        } catch (e) { /* noop */ }
+
+        if (!window.__waitTimerStart) window.__waitTimerStart = Date.now();
+        if (!window.__waitRowShownAt) window.__waitRowShownAt = Date.now();
+
+        const tick = () => {
+            const elapsed = Date.now() - (window.__waitTimerStart || Date.now());
+            textEl.textContent = `Várakozás: ${_formatElapsedMs(elapsed)}`;
+        };
+
+        tick();
+        if (!window.__waitTimerInterval) {
+            window.__waitTimerInterval = setInterval(tick, 1000);
+        }
+    } catch (e) {
+        // noop
+    }
+}
+
+function stopGlobalWaitStopwatch(opKey) {
+    try {
+        if (opKey) window.__waitOps.delete(String(opKey));
+        if (window.__waitOps.size > 0) return;
+
+        const { textEl, badgeEl } = ensureGlobalWaitTimerRow();
+
+        // Állítsuk meg a számlálást azonnal (a kijelzés maradhat a minimum ideig)
+        try {
+            if (window.__waitTimerInterval) {
+                clearInterval(window.__waitTimerInterval);
+                window.__waitTimerInterval = null;
+            }
+        } catch (e) { /* noop */ }
+
+        // Frissítsük a kijelzett időt még egyszer (ha van hova)
+        try {
+            if (textEl && window.__waitTimerStart) {
+                const elapsed = Date.now() - window.__waitTimerStart;
+                textEl.textContent = `Várakozás: ${_formatElapsedMs(elapsed)}`;
+            }
+        } catch (e) { /* noop */ }
+
+        // Mindig látható: állítsuk vissza "idle" állapotra
+        try {
+            if (badgeEl) {
+                badgeEl.classList.remove('bg-warning', 'text-dark');
+                badgeEl.classList.add('bg-secondary');
+            }
+        } catch (e) { /* noop */ }
+
+        try {
+            if (textEl) textEl.textContent = 'Készen';
+        } catch (e) { /* noop */ }
+
+        window.__waitTimerStart = null;
+        window.__waitRowShownAt = null;
+        window.__waitHideTimeout = null;
+    } catch (e) {
+        // noop
+    }
+}
+
+// Biztonsági háló: ha valahol spinner jelenik meg, automatikusan indítsuk a stopppert.
+// Így akkor is működik, ha egy kódútvonal elfelejti meghívni a start/stop függvényeket.
+function initAutoSpinnerWaitObserver() {
+    try {
+        const OP = 'auto-spinner';
+        const check = () => {
+            try {
+                const anySpinner = document.querySelector('.spinner-border') !== null;
+                if (anySpinner) startGlobalWaitStopwatch(OP);
+                else stopGlobalWaitStopwatch(OP);
+            } catch (e) { /* noop */ }
+        };
+
+        // Első állapot
+        ensureGlobalWaitTimerRow();
+        check();
+
+        const obs = new MutationObserver(() => {
+            // Minimális debounce, hogy ne pörögjön túl
+            try {
+                clearTimeout(window.__autoSpinnerWaitT);
+            } catch (e) { /* noop */ }
+            window.__autoSpinnerWaitT = setTimeout(check, 50);
+        });
+        obs.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: false });
+    } catch (e) {
+        // noop
+    }
+}
+
+// Indítsuk el az auto-observer-t, amint a DOM készen van
+document.addEventListener('DOMContentLoaded', function () {
+    try { initAutoSpinnerWaitObserver(); } catch (e) { /* noop */ }
+});
 
 // --- Beállítások (UI + backend szinkron) ---
 const ROBOT_MANAGER_SETTINGS_KEY = 'robotManagerSettings';

@@ -28,7 +28,7 @@ ${ROOT_FOLDER}    ~/MyRobotFramework/
 
 
 #developer módban csak letöltjük a robotokat, de nem telepítjük
-${SANDBOX_MODE}         ${True}
+${SANDBOX_MODE}         ${False}
 ${SANDBOX_ROBOTS}       %USERPROFILE%/MyRobotFramework/SandboxRobots
 
 
