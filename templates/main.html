@@ -374,6 +374,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             <div class="branches-container">
                                 {% for branch in repo.available_branches %}
                                     <div class="branch-checkbox d-flex align-items-center" id="branch-available-{{ repo.name }}-{{ branch }}">
+                                        {% set rel = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
                                         <button class="btn btn-warning btn-sm me-2 text-dark"
                                             type="button"
                                             title="Azonnali letöltés"
@@ -390,19 +391,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             onclick="branchInfoClicked(this)">
                                             <i class="bi bi-info-circle"></i>
                                         </button>
-                                        {% set rel = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
-                                        <span>
-                                            {{ branch }}
-                                            {% if rel and (rel.get('tag') or rel.get('title') or rel.get('date')) %}
-                                                <small class="text-muted ms-1">
-                                                    (
-                                                    {% if rel.get('tag') %}{{ rel.get('tag') }}{% endif %}
-                                                    {% if rel.get('title') %}{% if rel.get('tag') %} — {% endif %}{{ rel.get('title') }}{% endif %}
-                                                    {% if rel.get('date') %}{% if rel.get('tag') or rel.get('title') %} — {% endif %}{{ rel.get('date')[:10] }}{% endif %}
-                                                    )
-                                                </small>
-                                            {% endif %}
-                                        </span>
+                                        <span>{{ branch }}</span>
                                      </div>
                                 {% endfor %}
                             </div>
@@ -1267,13 +1256,7 @@ function renderAvailableRepos(repos) {
                                 </button>
                                 ${(() => {
                                     const rel = relMap && relMap[branch] ? relMap[branch] : null;
-                                    if (!rel) return `<span>${escapeHtml(branch)}</span>`;
-                                    const tag = rel.tag ? escapeHtml(rel.tag) : '';
-                                    const title = rel.title ? escapeHtml(rel.title) : '';
-                                    const date = rel.date ? escapeHtml(String(rel.date).slice(0, 10)) : '';
-                                    const parts = [tag, title, date].filter(Boolean);
-                                    const suffix = parts.length ? ` <small class="text-muted ms-1">(${parts.join(' — ')})</small>` : '';
-                                    return `<span>${escapeHtml(branch)}${suffix}</span>`;
+                                    return `<span>${escapeHtml(branch)}</span>`;
                                 })()}
                             </div>
                         `).join('')}
@@ -1462,27 +1445,27 @@ async function branchInfoClicked(button) {
             // Robot verziók blokk (a futási információk helyett)
             lines.push('');
             lines.push('Robot verziók:');
-            lines.push(`- Telepített: ${installedVersion}`);
+            lines.push(`- Telepített verzió: ${installedVersion}`);
             if (tags.length > 0) {
                 const latest = tags[0] || {};
                 const lt = latest.tag ? String(latest.tag) : '';
                 const ldate = latest.date ? String(latest.date).slice(0, 10) : '';
                 const latestParts = [ldate, lt].filter(Boolean);
-                lines.push(`- Legfrissebb release: ${latestParts.join(' — ') || '-'}`);
+                lines.push(`- Legfrissebb verzió: ${latestParts.join(' — ') || '-'}`);
                 if (installedVersion && installedVersion !== 'NONE' && lt && installedVersion !== lt) {
                     lines.push(`- Állapot: új verzió elérhető (${installedVersion} → ${lt})`);
                 } else if (installedVersion && installedVersion !== 'NONE' && lt && installedVersion === lt) {
                     lines.push('- Állapot: naprakész');
                 }
             } else {
-                lines.push(`- Legfrissebb release: -`);
+                lines.push(`- Legfrissebb verzió: -`);
             }
 
             // Összes release felsorolása
             lines.push('');
             if (tags.length > 0) {
                 lines.push('Kiadások:');
-                tags.forEach(t => {
+                (tags.slice(0, 3)).forEach(t => {
                     const tag = (t && t.tag) ? String(t.tag) : '';
                     const title = (t && t.title) ? String(t.title) : '';
                     const date = (t && t.date) ? String(t.date).slice(0, 10) : '';
@@ -2370,18 +2353,18 @@ function showSureBox({
 function showInfoBox(message, title = 'Információ', okText = 'OK') {
     const msg = String(message ?? '');
 
+    const escapeHtml = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
     if (String(title || '') === 'Futtatás') {
         const m = msg.toLowerCase();
         const isOk = m.includes('futtatás sikeres');
         const isFail = m.includes('futtatás sikertelen');
         if (isOk || isFail) {
-            const escapeHtml = (s) => String(s ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-
             // Ha az üzenet már tartalmaz ikont az elején (pl. ✅/❌), ne duplázzuk.
             const trimmed = msg.replace(/^\s+/, '');
             const match = trimmed.match(/^(✅|❌|✓|✗)\s*/);
@@ -2406,6 +2389,17 @@ function showInfoBox(message, title = 'Információ', okText = 'OK') {
                 showCancel: false,
                 okVariant: isOk ? 'success' : 'danger'
             });
+        }
+    }
+
+    // Ha az állapot "új verzió elérhető", legyen a sor félkövér.
+    if (msg.includes('Állapot: új verzió elérhető')) {
+        try {
+            let html = escapeHtml(msg).replace(/\n/g, '<br>');
+            html = html.replace(/(-\s*Állapot:\s*új verzió elérhető[^<]*)(<br>|$)/gi, '<b>$1</b>$2');
+            return showSureBox({ title, message: msg, messageHtml: html, okText, showCancel: false, okVariant: 'primary' });
+        } catch (e) {
+            // fallback az alap viselkedésre
         }
     }
 
