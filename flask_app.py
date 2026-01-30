@@ -1572,9 +1572,12 @@ def _github_upload_issue_attachment(owner: str, repo_name: str, issue_number: in
     return resp.json() or {}
 
 
-def run_robot_with_params(repo: str, branch: str):
+def run_robot_with_params(repo: str, branch: str, timeout_seconds: int | None = None):
 
     """Indítja el a Robot Framework futtatást a megadott repo/branch paraméterekkel.
+
+    Ha timeout_seconds meg van adva (>0), akkor időtúllépés esetén a futó robot
+    folyamatot megszakítja (kill) és a futás "Megszakítva" státusszal kerül mentésre.
 
     Visszatér: (returncode, results_dir_rel, stdout, stderr)
     """
@@ -1704,6 +1707,51 @@ def run_robot_with_params(repo: str, branch: str):
             creationflags=creationflags,
         )
 
+        # Opcionális futási timeout kezelése (backend oldalon enforce-olva)
+        timeout_s: int | None = None
+        try:
+            if timeout_seconds is not None:
+                timeout_s = int(timeout_seconds)
+        except Exception:
+            timeout_s = None
+        if timeout_s is not None and timeout_s <= 0:
+            timeout_s = None
+
+        timed_out = False
+        watchdog_stop = None
+        watchdog_thread = None
+        if timeout_s is not None:
+            try:
+                import threading as _threading
+
+                watchdog_stop = _threading.Event()
+
+                def _watchdog():
+                    nonlocal timed_out
+                    try:
+                        # Várunk timeout_s másodpercet, vagy amíg a futás véget ér
+                        if watchdog_stop.wait(timeout_s):
+                            return
+                        # Ha még fut, megszakítjuk
+                        if result.poll() is None:
+                            timed_out = True
+                            try:
+                                _mark_run_cancelled(op_key)
+                            except Exception:
+                                pass
+                            logger.warning(f"[RUN][TIMEOUT] Időtúllépés: {timeout_s}s, folyamat kilövése. opKey={op_key} pid={getattr(result, 'pid', None)}")
+                            try:
+                                _kill_process_tree(result)
+                            except Exception as e:
+                                logger.warning(f"[RUN][TIMEOUT] Kill hiba: {e}")
+                    except Exception as e:
+                        logger.warning(f"[RUN][TIMEOUT] Watchdog hiba: {e}")
+
+                watchdog_thread = _threading.Thread(target=_watchdog, daemon=True)
+                watchdog_thread.start()
+            except Exception as e:
+                logger.warning(f"[RUN][TIMEOUT] Watchdog indítása sikertelen: {e}")
+
         # Regisztráljuk a futó folyamatot, hogy külön kérésből megszakítható legyen.
         try:
             with RUNNING_ROBOT_PROCS_LOCK:
@@ -1726,6 +1774,11 @@ def run_robot_with_params(repo: str, branch: str):
                     logger.warning(f"[RUN][LOGGING ERROR]: {e}")
         finally:
             try:
+                if watchdog_stop is not None:
+                    watchdog_stop.set()
+            except Exception:
+                pass
+            try:
                 result.wait()
             except Exception:
                 pass
@@ -1737,6 +1790,8 @@ def run_robot_with_params(repo: str, branch: str):
             except Exception:
                 pass
 
+        if timed_out:
+            output_lines.append(f"[TIMEOUT] A futás túllépte a beállított {timeout_s}s időt, a folyamat megszakítva.")
         logger.info(f"[RUN] Return code: {result.returncode}")
         logger.info(f"[RUN] Robot output (first 500 chars): {''.join(output_lines)[:500]}")
         return result.returncode, results_dir_abs, '\n'.join(output_lines), ''
@@ -1970,8 +2025,26 @@ def api_execute():
 
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         logger.info(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
-        logger.info(f"[EXECUTE] run_robot_with_params hívás előtt: repo={repo}, branch={branch}")
-        rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
+        # Futtatási timeout (mp) a kliens beállításából. Ha nincs/érvénytelen, akkor nincs enforce-olt timeout.
+        timeout_seconds: int | None = None
+        try:
+            raw_to = data.get('timeout')
+            if raw_to is None:
+                raw_to = request.values.get('timeout')
+            if raw_to is not None and str(raw_to).strip() != '':
+                timeout_seconds = int(float(str(raw_to).strip()))
+        except Exception:
+            timeout_seconds = None
+
+        if timeout_seconds is not None:
+            # UI: min=10, max=3600; legyen itt is védőkorlát
+            if timeout_seconds < 10:
+                timeout_seconds = 10
+            if timeout_seconds > 3600:
+                timeout_seconds = 3600
+
+        logger.info(f"[EXECUTE] run_robot_with_params hívás előtt: repo={repo}, branch={branch}, timeout_s={timeout_seconds}")
+        rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch, timeout_seconds=timeout_seconds)
         logger.info(f"[EXECUTE] run_robot_with_params visszatért: rc={rc}, out_dir={out_dir}")
 
         # If the user cancelled (killed) the process, persist a dedicated status

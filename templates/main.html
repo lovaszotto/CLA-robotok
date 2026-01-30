@@ -562,8 +562,13 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             </select>
                                         </div>
                                         <div class="col-12">
-                                            <label for="timeout" class="form-label">Futtatási timeout (mp)</label>
-                                            <input type="number" class="form-control" id="timeout" min="10" max="3600" value="300">
+                                            <label for="timeout" class="form-label">Futtatási timeout (óó:pp:mp)</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                                                <input type="time" class="form-control" id="timeout" value="00:05:00" step="1" min="00:00:10" max="01:00:00">
+                                            </div>
+                                            <div class="form-text">A futás ennyi idő után automatikusan megszakad (Megszakítva státusz).</div>
+                                            <div class="small text-muted mt-1" id="timeoutSecondsHint"></div>
                                         </div>
                                     </div>
 
@@ -1644,10 +1649,13 @@ function executeRobot(repo, branch, button) {
         window.__abortControllerByOp[opKey] = ctrl;
     } catch (e) { /* noop */ }
 
+    const timeoutEl = document.getElementById('timeout');
+    const timeoutVal = (timeoutEl && String(timeoutEl.value || '').trim()) ? String(timeoutEl.value).trim() : DEFAULT_TIMEOUT_TIME;
+    const timeoutSeconds = _parseTimeoutToSeconds(timeoutVal);
     fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo, branch }),
+        body: JSON.stringify({ repo, branch, timeout: String(timeoutSeconds) }),
         signal: ctrl ? ctrl.signal : undefined
     })
     .then(r => r.json())
@@ -2384,12 +2392,51 @@ document.addEventListener('DOMContentLoaded', function () {
 const ROBOT_MANAGER_SETTINGS_KEY = 'robotManagerSettings';
 const DEFAULT_PAGE_SIZE = '10';
 const DEFAULT_EXECUTION_MODE = 'sequential';
-const DEFAULT_TIMEOUT = '300';
+const DEFAULT_TIMEOUT_SECONDS = 300;
+const DEFAULT_TIMEOUT_TIME = '00:05:00';
 const DEFAULT_GIT_URL_BASE = 'https://github.com/lovaszotto/';
 const DEFAULT_GITHUB_REPO_NAME = 'CLA-robotok';
 
 function _safeEl(id) {
     try { return document.getElementById(id); } catch (e) { return null; }
+}
+
+function _parseTimeoutToSeconds(raw) {
+    const s = String(raw ?? '').trim();
+    if (!s) return DEFAULT_TIMEOUT_SECONDS;
+    // HH:MM[:SS]
+    if (s.includes(':')) {
+        const parts = s.split(':').map(p => String(p).trim());
+        if (parts.length >= 2) {
+            const hh = parseInt(parts[0] || '0', 10);
+            const mm = parseInt(parts[1] || '0', 10);
+            const ss = parseInt(parts[2] || '0', 10);
+            if (!Number.isNaN(hh) && !Number.isNaN(mm) && !Number.isNaN(ss)) {
+                return Math.max(0, (hh * 3600) + (mm * 60) + ss);
+            }
+        }
+    }
+    // numeric seconds (backward compatible)
+    const n = Number(s);
+    if (!Number.isFinite(n)) return DEFAULT_TIMEOUT_SECONDS;
+    return Math.max(0, Math.floor(n));
+}
+
+function _secondsToTimeoutTime(sec) {
+    const total = Math.max(0, Math.floor(Number(sec) || 0));
+    const hh = Math.floor(total / 3600);
+    const mm = Math.floor((total % 3600) / 60);
+    const ss = total % 60;
+    const pad2 = (x) => String(x).padStart(2, '0');
+    return `${pad2(hh)}:${pad2(mm)}:${pad2(ss)}`;
+}
+
+function _updateTimeoutSecondsHint() {
+    const el = _safeEl('timeoutSecondsHint');
+    const to = _safeEl('timeout');
+    if (!el || !to) return;
+    const sec = _parseTimeoutToSeconds(to.value);
+    el.textContent = `Másodpercben: ${sec} mp`;
 }
 
 async function loadGitHubSettings() {
@@ -2812,12 +2859,15 @@ async function openGitRepoListModal() {
 
 async function saveSettings() {
     try {
+        const toEl = _safeEl('timeout');
+        const timeoutSeconds = _parseTimeoutToSeconds(toEl ? toEl.value : DEFAULT_TIMEOUT_TIME);
         const settings = {
             darkMode: !!(_safeEl('darkMode') && _safeEl('darkMode').checked),
             compactView: !!(_safeEl('compactView') && _safeEl('compactView').checked),
             pageSize: (_safeEl('pageSize') && _safeEl('pageSize').value) ? String(_safeEl('pageSize').value) : DEFAULT_PAGE_SIZE,
             executionMode: (_safeEl('executionMode') && _safeEl('executionMode').value) ? String(_safeEl('executionMode').value) : DEFAULT_EXECUTION_MODE,
-            timeout: (_safeEl('timeout') && _safeEl('timeout').value) ? String(_safeEl('timeout').value) : DEFAULT_TIMEOUT,
+            // LocalStorage-ban másodpercet tárolunk (backwards kompatibilitás a régi numeric mezővel)
+            timeout: String(timeoutSeconds),
             // sandboxMode-ot NEM mentjük localStorage-ba, mindig a backend a forrás
         };
         localStorage.setItem(ROBOT_MANAGER_SETTINGS_KEY, JSON.stringify(settings));
@@ -2844,7 +2894,8 @@ async function resetSettings() {
         if (cv) cv.checked = false;
         if (ps) ps.value = DEFAULT_PAGE_SIZE;
         if (em) em.value = DEFAULT_EXECUTION_MODE;
-        if (to) to.value = DEFAULT_TIMEOUT;
+        if (to) to.value = DEFAULT_TIMEOUT_TIME;
+        try { _updateTimeoutSecondsHint(); } catch (e) { /* ignore */ }
 
         if (gu) gu.value = DEFAULT_GIT_URL_BASE;
 
@@ -2876,11 +2927,26 @@ function loadSettings() {
             if (cv) cv.checked = !!settings.compactView;
             if (ps) ps.value = settings.pageSize || DEFAULT_PAGE_SIZE;
             if (em) em.value = settings.executionMode || DEFAULT_EXECUTION_MODE;
-            if (to) to.value = settings.timeout || DEFAULT_TIMEOUT;
+            if (to) {
+                const raw = (settings && settings.timeout !== undefined && settings.timeout !== null)
+                    ? String(settings.timeout)
+                    : String(DEFAULT_TIMEOUT_SECONDS);
+                to.value = _secondsToTimeoutTime(_parseTimeoutToSeconds(raw));
+            }
         }
     } catch (e) {
         // ignore
     }
+
+    try { _updateTimeoutSecondsHint(); } catch (e) { /* ignore */ }
+    try {
+        const to = _safeEl('timeout');
+        if (to && !to.__timeoutHintHooked) {
+            to.addEventListener('input', () => { try { _updateTimeoutSecondsHint(); } catch (e) {} });
+            to.addEventListener('change', () => { try { _updateTimeoutSecondsHint(); } catch (e) {} });
+            to.__timeoutHintHooked = true;
+        }
+    } catch (e) { /* ignore */ }
 
     // Backend-forrású állapotok
     try { loadCurrentSandboxMode(); } catch (e) { /* ignore */ }
