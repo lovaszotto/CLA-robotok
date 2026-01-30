@@ -51,6 +51,84 @@ app = Flask(__name__)
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
 
+# --- Running Robot process registry (for cancel/kill) ---
+# Key format: run:<repo>:<branch>
+RUNNING_ROBOT_PROCS_LOCK = threading.RLock()
+RUNNING_ROBOT_PROCS: dict[str, subprocess.Popen] = {}
+
+
+def _make_run_op_key(repo: str, branch: str) -> str:
+    return f"run:{(repo or '').strip()}:{(branch or '').strip()}"
+
+
+def _get_running_robot_proc(op_key: str) -> subprocess.Popen | None:
+    try:
+        with RUNNING_ROBOT_PROCS_LOCK:
+            proc = RUNNING_ROBOT_PROCS.get(str(op_key))
+        if proc is None:
+            return None
+        if proc.poll() is not None:
+            # Clean up stale entries
+            try:
+                with RUNNING_ROBOT_PROCS_LOCK:
+                    if RUNNING_ROBOT_PROCS.get(str(op_key)) is proc:
+                        del RUNNING_ROBOT_PROCS[str(op_key)]
+            except Exception:
+                pass
+            return None
+        return proc
+    except Exception:
+        return None
+
+
+def _kill_process_tree(proc: subprocess.Popen) -> tuple[bool, str]:
+    """Best-effort kill of a subprocess (and its children on Windows)."""
+    try:
+        if proc is None:
+            return False, 'No process'
+        if proc.poll() is not None:
+            return True, 'Already finished'
+
+        pid = int(proc.pid)
+        if os.name == 'nt':
+            # Kill the whole tree (/T) forcefully (/F)
+            try:
+                r = subprocess.run(
+                    ['taskkill', '/PID', str(pid), '/T', '/F'],
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='ignore',
+                )
+                if r.returncode == 0:
+                    return True, 'taskkill ok'
+                # If the process already exited, taskkill may return non-zero.
+                if proc.poll() is not None:
+                    return True, 'Process already finished'
+                return False, (r.stdout or r.stderr or f'taskkill failed rc={r.returncode}').strip()
+            except Exception as e:
+                # Fallback: terminate single process
+                try:
+                    proc.terminate()
+                    return True, f'terminate fallback ok ({e})'
+                except Exception as e2:
+                    return False, f'kill failed: {e2}'
+        else:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            return True, 'terminated'
+    except Exception as e:
+        return False, str(e)
+
 # --- /server-log végpont: log tartalom szövegként ---
 @app.route('/server-log')
 def server_log():
@@ -1564,6 +1642,18 @@ def run_robot_with_params(repo: str, branch: str):
         #    check=False,
         #    creationflags=creationflags
         #)
+        op_key = _make_run_op_key(repo, branch)
+        # Ne indítsunk párhuzamosan ugyanarra az opKey-re új futást
+        try:
+            with RUNNING_ROBOT_PROCS_LOCK:
+                existing = RUNNING_ROBOT_PROCS.get(op_key)
+            if existing is not None and existing.poll() is None:
+                msg = f"Már fut egy folyamat ehhez: {op_key}"
+                logger.warning(f"[RUN][WARNING] {msg}")
+                return 1, results_dir_abs, '', msg
+        except Exception:
+            pass
+
         result = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -1571,23 +1661,42 @@ def run_robot_with_params(repo: str, branch: str):
             text=True,
             bufsize=1,
             encoding="utf-8",
-            errors="ignore"
+            errors="ignore",
+            creationflags=creationflags,
         )
 
-        output_lines = []
-        for line in result.stdout:
-            try:
-                safe_line = line.strip()
-                if isinstance(safe_line, bytes):
-                    safe_line = safe_line.decode('utf-8', errors='replace')
-                else:
-                    safe_line = str(safe_line)
-                logger.info(f": {safe_line}")
-                output_lines.append(safe_line)
-            except Exception as e:
-                logger.warning(f"[RUN][LOGGING ERROR]: {e}")
+        # Regisztráljuk a futó folyamatot, hogy külön kérésből megszakítható legyen.
+        try:
+            with RUNNING_ROBOT_PROCS_LOCK:
+                RUNNING_ROBOT_PROCS[op_key] = result
+        except Exception:
+            pass
 
-        result.wait()
+        output_lines = []
+        try:
+            for line in result.stdout:
+                try:
+                    safe_line = line.strip()
+                    if isinstance(safe_line, bytes):
+                        safe_line = safe_line.decode('utf-8', errors='replace')
+                    else:
+                        safe_line = str(safe_line)
+                    logger.info(f": {safe_line}")
+                    output_lines.append(safe_line)
+                except Exception as e:
+                    logger.warning(f"[RUN][LOGGING ERROR]: {e}")
+        finally:
+            try:
+                result.wait()
+            except Exception:
+                pass
+
+            try:
+                with RUNNING_ROBOT_PROCS_LOCK:
+                    if RUNNING_ROBOT_PROCS.get(op_key) is result:
+                        del RUNNING_ROBOT_PROCS[op_key]
+            except Exception:
+                pass
 
         logger.info(f"[RUN] Return code: {result.returncode}")
         logger.info(f"[RUN] Robot output (first 500 chars): {''.join(output_lines)[:500]}")
@@ -1605,6 +1714,38 @@ def run_robot_with_params(repo: str, branch: str):
         logger.info(f"[RUN] Robot stdout: '')")
         logger.info(f"[RUN] Robot stderr: {str(e)}")
         return 1, '', '', str(e)
+
+
+@app.route('/api/cancel_execute', methods=['POST'])
+def api_cancel_execute():
+    """Megszakítja (kill) a futó Robot Framework folyamatot repo/branch alapján."""
+    try:
+        data = request.get_json(silent=True) or {}
+        repo = (data.get('repo') or request.values.get('repo') or '').strip()
+        branch = (data.get('branch') or request.values.get('branch') or '').strip()
+        if not repo or not branch:
+            return jsonify({'success': False, 'error': 'Hiányzó repo vagy branch'}), 400
+
+        op_key = _make_run_op_key(repo, branch)
+        proc = _get_running_robot_proc(op_key)
+        if proc is None:
+            return jsonify({'success': False, 'error': 'Nincs futó folyamat', 'opKey': op_key}), 404
+
+        ok, message = _kill_process_tree(proc)
+
+        # Takarítsuk ki, ha már nem fut.
+        try:
+            if proc.poll() is not None:
+                with RUNNING_ROBOT_PROCS_LOCK:
+                    if RUNNING_ROBOT_PROCS.get(op_key) is proc:
+                        del RUNNING_ROBOT_PROCS[op_key]
+        except Exception:
+            pass
+
+        status = 200 if ok else 500
+        return jsonify({'success': ok, 'message': message, 'opKey': op_key, 'pid': int(proc.pid)}), status
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 def _persist_robot_outputs(results_dir_abs: str, stdout_text: str, stderr_text: str, note: str = ''):
@@ -3085,4 +3226,4 @@ def api_repos_branches_tags():
 
 if __name__ == "__main__":
     # Indítsd a Flask szervert, hogy kívülről is elérhető legyen, ne csak localhostról
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

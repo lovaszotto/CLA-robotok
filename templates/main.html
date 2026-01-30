@@ -219,8 +219,8 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.35);
 }
 
-/* Globális stopper alatti stop ikon (csak jelzés) */
-.wait-stop-indicator { pointer-events: none; }
+/* Globális stopper alatti stop ikon */
+.wait-stop-indicator { cursor: pointer; }
 .wait-stop-inactive { opacity: 0.35; }
 </style>
 </head>
@@ -1574,7 +1574,7 @@ async function executeSingleRobot(button) {
     const ok = await showSureBox({ title: 'Robot futtatása', message: msg, okText: 'Futtatás', cancelText: 'Mégse', okVariant: 'primary', showCancel: true });
     if (!ok) return;
     try {
-        showToast(`Robot futtatása indult: ${repo}/${branch}`, 'info');
+        // Indulás toast kikapcsolva: "Státusz: Fut" értesítés ne jelenjen meg.
         if (button) {
             button.disabled = true;
             try { button.dataset.waitKind = 'run'; } catch (e) { /* noop */ }
@@ -1597,27 +1597,29 @@ async function executeSingleRobot(button) {
 function executeRobot(repo, branch, button) {
     const container = document.getElementById('selectedRobotsContainer') || document.body;
     const currentTime = new Date().toLocaleString('hu-HU');
-    if (container) {
-        const tempMsg = document.createElement('div');
-        tempMsg.className = 'alert alert-info mt-3';
-        tempMsg.id = `status-${repo}-${branch}`;
-        tempMsg.innerHTML = `<i class="bi bi-arrow-clockwise spinning"></i> Elküldve a szervernek: <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small><div class="mt-2"><span class="badge bg-primary">Státusz: Fut</span></div>`;
-        container.appendChild(tempMsg);
-    }
+    // Futás közbeni "Elküldve a szervernek / Státusz: Fut" jelzés kikapcsolva.
+    const opKey = (button && button._waitOpKey) ? String(button._waitOpKey) : `run:${repo}:${branch}`;
+    let ctrl = null;
+    try {
+        ctrl = new AbortController();
+        window.__abortControllerByOp = window.__abortControllerByOp || {};
+        window.__abortControllerByOp[opKey] = ctrl;
+    } catch (e) { /* noop */ }
+
     fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo, branch })
+        body: JSON.stringify({ repo, branch }),
+        signal: ctrl ? ctrl.signal : undefined
     })
     .then(r => r.json())
     .then(data => {
-        const tempMsg = document.getElementById(`status-${repo}-${branch}`);
-        if (tempMsg) tempMsg.remove();
+        // Nincs futás-közbeni státusz elem, ezért nincs mit eltávolítani.
         if (button) {
             button.disabled = false;
             if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
         }
-        stopGlobalWaitStopwatch((button && button._waitOpKey) ? button._waitOpKey : `run:${repo}:${branch}`);
+        stopGlobalWaitStopwatch(opKey);
         const msg = document.createElement('div');
         const currentTime = new Date().toLocaleString('hu-HU');
         const isSuccess = Boolean(data && (data.success === true || data.status === 'ok' || data.returncode === 0));
@@ -1632,12 +1634,22 @@ function executeRobot(repo, branch, button) {
         setTimeout(() => msg.remove(), 10000);
     })
     .catch(err => {
-        showInfoBox('Hiba történt a szerver hívása közben.', 'Hiba');
+        const isAbort = !!(err && (err.name === 'AbortError' || String(err).includes('AbortError')));
+        if (isAbort) {
+            showToast('Futtatás megszakítva.', 'warning');
+        } else {
+            showInfoBox('Hiba történt a szerver hívása közben.', 'Hiba');
+        }
         if (button) {
             button.disabled = false;
             if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
         }
-        stopGlobalWaitStopwatch((button && button._waitOpKey) ? button._waitOpKey : `run:${repo}:${branch}`);
+        stopGlobalWaitStopwatch(opKey);
+    })
+    .finally(() => {
+        try {
+            if (window.__abortControllerByOp) delete window.__abortControllerByOp[opKey];
+        } catch (e) { /* noop */ }
     });
 }
 
@@ -1726,10 +1738,20 @@ function installRobots(robots, options = {}) {
         return;
     }
     console.log('[DOWNLOAD] Letöltési kérés elküldése a backendnek:', robots);
+    let ctrl = null;
+    try {
+        if (waitOpKey) {
+            ctrl = new AbortController();
+            window.__abortControllerByOp = window.__abortControllerByOp || {};
+            window.__abortControllerByOp[String(waitOpKey)] = ctrl;
+        }
+    } catch (e) { /* noop */ }
+
     fetch('/api/install_selected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ robots })
+        body: JSON.stringify({ robots }),
+        signal: ctrl ? ctrl.signal : undefined
     })
     .then(r => r.json())
     .then(data => {
@@ -1782,6 +1804,12 @@ function installRobots(robots, options = {}) {
         }
     })
     .catch(err => {
+        const isAbort = !!(err && (err.name === 'AbortError' || String(err).includes('AbortError')));
+        if (isAbort) {
+            console.log('[DOWNLOAD] Letöltés megszakítva.');
+            showToast('Letöltés megszakítva.', 'warning');
+            return;
+        }
         console.log('[DOWNLOAD] Hálózati vagy szerverhiba:', err);
         showToast('Hálózati vagy szerverhiba: ' + err, 'danger');
     })
@@ -1796,6 +1824,9 @@ function installRobots(robots, options = {}) {
             try { installBtn.innerHTML = bulkOriginalHtml; } catch (e) { /* noop */ }
         }
         if (waitOpKey) stopGlobalWaitStopwatch(waitOpKey);
+        try {
+            if (waitOpKey && window.__abortControllerByOp) delete window.__abortControllerByOp[String(waitOpKey)];
+        } catch (e) { /* noop */ }
     });
 }
 
@@ -1831,10 +1862,18 @@ async function deleteRunnableBranch(repo, branch, iconEl) {
 
     startGlobalWaitStopwatch(opKey, 'Törlés folyamatban...');
 
+    let ctrl = null;
+    try {
+        ctrl = new AbortController();
+        window.__abortControllerByOp = window.__abortControllerByOp || {};
+        window.__abortControllerByOp[String(opKey)] = ctrl;
+    } catch (e) { /* noop */ }
+
     fetch('/delete_runnable_branch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repo_name: repo, branch_name: branch })
+            body: JSON.stringify({ repo_name: repo, branch_name: branch }),
+            signal: ctrl ? ctrl.signal : undefined
         })
         .then(r => r.json())
         .then(data => {
@@ -1856,10 +1895,18 @@ async function deleteRunnableBranch(repo, branch, iconEl) {
             }
         })
         .catch(err => {
-            showToast('Hiba a törlés során: ' + err, 'danger');
+            const isAbort = !!(err && (err.name === 'AbortError' || String(err).includes('AbortError')));
+            if (isAbort) {
+                showToast('Törlés megszakítva.', 'warning');
+            } else {
+                showToast('Hiba a törlés során: ' + err, 'danger');
+            }
         })
         .finally(() => {
             stopGlobalWaitStopwatch(opKey);
+            try {
+                if (window.__abortControllerByOp) delete window.__abortControllerByOp[String(opKey)];
+            } catch (e) { /* noop */ }
             try {
                 if (iconEl && originalIconHtml) {
                     // Az ikon általában újrarenderelődik refresh után, de ha mégsem, állítsuk vissza
@@ -1895,6 +1942,10 @@ window.__waitRowShownAt = window.__waitRowShownAt || null;
 window.__waitHideTimeout = window.__waitHideTimeout || null;
 window.__waitMinVisibleMs = window.__waitMinVisibleMs || 600;
 window.__waitLabelByOp = window.__waitLabelByOp || {};
+window.__waitOpOrder = window.__waitOpOrder || [];
+window.__activeWaitOpKey = window.__activeWaitOpKey || null;
+window.__activeWaitLabel = window.__activeWaitLabel || null;
+window.__abortControllerByOp = window.__abortControllerByOp || {};
 
 function _applyWaitBadgeStyleForOp(key, label, badgeEl) {
     try {
@@ -1931,6 +1982,109 @@ function _setGlobalWaitStopIndicatorActive(isActive) {
     } catch (e) { /* noop */ }
 }
 
+function _setActiveWaitOp(key, label) {
+    try {
+        const k = key ? String(key) : null;
+        if (!k) return;
+        window.__activeWaitOpKey = k;
+        window.__activeWaitLabel = label ? String(label) : (window.__waitLabelByOp && window.__waitLabelByOp[k]) ? String(window.__waitLabelByOp[k]) : null;
+    } catch (e) { /* noop */ }
+}
+
+function _cleanupActiveWaitIfNeeded(removedKey) {
+    try {
+        const rk = removedKey ? String(removedKey) : '';
+        if (!rk) return;
+        // Rendben tartjuk a sorrend-listát
+        try {
+            window.__waitOpOrder = (window.__waitOpOrder || []).filter(k => String(k) !== rk);
+        } catch (e) { /* noop */ }
+
+        if (window.__activeWaitOpKey && String(window.__activeWaitOpKey) === rk) {
+            const arr = window.__waitOpOrder || [];
+            const last = arr.length ? String(arr[arr.length - 1]) : null;
+            window.__activeWaitOpKey = last;
+            window.__activeWaitLabel = last && window.__waitLabelByOp && window.__waitLabelByOp[last] ? String(window.__waitLabelByOp[last]) : null;
+        }
+    } catch (e) { /* noop */ }
+}
+
+function _wireGlobalWaitStopButton() {
+    try {
+        const btn = document.getElementById('globalWaitStopIconBtn');
+        if (!btn || btn.__wiredStopClick) return;
+        btn.__wiredStopClick = true;
+
+        btn.addEventListener('click', async (e) => {
+            try { e.preventDefault(); e.stopPropagation(); } catch (e2) { /* noop */ }
+
+            // Határozzuk meg a megszakítható opKey-t.
+            let activeKey = window.__activeWaitOpKey ? String(window.__activeWaitOpKey) : '';
+            const ops = window.__waitOps;
+            const opsSize = (ops && typeof ops.size === 'number') ? ops.size : 0;
+            const isAnyRunning = opsSize > 0;
+
+            if (isAnyRunning && !activeKey) {
+                try {
+                    const arr = window.__waitOpOrder || [];
+                    if (arr.length) activeKey = String(arr[arr.length - 1]);
+                } catch (e3) { /* noop */ }
+            }
+            if (isAnyRunning && !activeKey) {
+                try {
+                    activeKey = Array.from(ops).slice(-1)[0] ? String(Array.from(ops).slice(-1)[0]) : '';
+                } catch (e4) { /* noop */ }
+            }
+            if (!isAnyRunning || !activeKey) {
+                try { if (typeof showToast === 'function') showToast('Nincs megszakítható folyamat.', 'info'); } catch (e5) { /* noop */ }
+                return;
+            }
+
+            const label = window.__activeWaitLabel || (window.__waitLabelByOp && window.__waitLabelByOp[activeKey]) || 'Folyamat';
+            const ok = await showSureBox({
+                title: 'Folyamat megszakítása',
+                message: `Valóban szakítsam meg a folyamatot?\n\n${label}`,
+                okText: 'Megszakítás',
+                cancelText: 'Mégse',
+                okVariant: 'danger',
+                showCancel: true
+            });
+            if (!ok) return;
+
+            // RUN esetén kérjük a backend-től is a process kilövését.
+            try {
+                const k = String(activeKey || '');
+                if (k.startsWith('run:')) {
+                    const parts = k.split(':');
+                    const repo = parts.length >= 2 ? String(parts[1] || '') : '';
+                    const branch = parts.length >= 3 ? String(parts.slice(2).join(':') || '') : '';
+                    if (repo && branch) {
+                        try {
+                            await fetch('/api/cancel_execute', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ repo, branch })
+                            });
+                        } catch (eKill) { /* noop */ }
+                    }
+                }
+            } catch (eKillOuter) { /* noop */ }
+
+            // Próbáljuk megszakítani a futó fetch-et (ha van controller)
+            try {
+                const ctrl = window.__abortControllerByOp ? window.__abortControllerByOp[activeKey] : null;
+                if (ctrl && typeof ctrl.abort === 'function') {
+                    ctrl.abort();
+                }
+            } catch (e4) { /* noop */ }
+
+            // UI: az aktív opKey-t töröljük a stopperekből
+            try { stopGlobalWaitStopwatch(activeKey); } catch (e6) { /* noop */ }
+            try { if (typeof showToast === 'function') showToast('Folyamat megszakítva.', 'warning'); } catch (e7) { /* noop */ }
+        }, { capture: true });
+    } catch (e) { /* noop */ }
+}
+
 function _formatElapsedMs(ms) {
     const totalSec = Math.max(0, Math.floor(ms / 1000));
     const min = Math.floor(totalSec / 60);
@@ -1947,7 +2101,10 @@ function ensureGlobalWaitTimerRow() {
         let badgeEl = document.getElementById('globalWaitTimerBadge');
         let stopRow = document.getElementById('globalWaitStopRow');
         let stopBtn = document.getElementById('globalWaitStopIconBtn');
-        if (row && textEl && stopBtn) return { row, textEl, badgeEl };
+        if (row && textEl && stopBtn) {
+            try { _wireGlobalWaitStopButton(); } catch (e) { /* noop */ }
+            return { row, textEl, badgeEl };
+        }
 
         const wrap = document.querySelector('.exit-icon-wrap');
         if (!wrap) return { row: null, textEl: null };
@@ -1974,6 +2131,8 @@ function ensureGlobalWaitTimerRow() {
             wrap.appendChild(stopRow);
         }
 
+        try { _wireGlobalWaitStopButton(); } catch (e) { /* noop */ }
+
         textEl = document.getElementById('globalWaitTimerText');
         badgeEl = document.getElementById('globalWaitTimerBadge');
         stopBtn = document.getElementById('globalWaitStopIconBtn');
@@ -1988,6 +2147,14 @@ function startGlobalWaitStopwatch(opKey, label) {
         const wasIdle = !window.__waitOps || window.__waitOps.size === 0;
         const key = String(opKey || 'op');
         window.__waitOps.add(key);
+
+        try {
+            const arr = window.__waitOpOrder || [];
+            if (!arr.includes(key)) arr.push(key);
+            window.__waitOpOrder = arr;
+        } catch (e) { /* noop */ }
+
+        _setActiveWaitOp(key, label);
 
         // Per-op start idő: így nem tud "visszaesni" az óra 00:00-ra, ha ugyanarra az opKey-re többször hívódik a start.
         try {
@@ -2071,6 +2238,10 @@ function stopGlobalWaitStopwatch(opKey) {
         if (opKey) window.__waitOps.delete(String(opKey));
         try { if (opKey && window.__waitLabelByOp) delete window.__waitLabelByOp[String(opKey)]; } catch (e) { /* noop */ }
         try { if (opKey && window.__waitStartByOp) delete window.__waitStartByOp[String(opKey)]; } catch (e) { /* noop */ }
+
+        try {
+            if (opKey) _cleanupActiveWaitIfNeeded(String(opKey));
+        } catch (e) { /* noop */ }
         if (window.__waitOps.size > 0) return;
 
         const { row, textEl, badgeEl } = ensureGlobalWaitTimerRow();
@@ -2089,6 +2260,7 @@ function stopGlobalWaitStopwatch(opKey) {
 
             window.__waitTimerStart = null;
             try { window.__waitStartByOp = {}; } catch (e) { /* noop */ }
+            try { window.__waitOpOrder = []; window.__activeWaitOpKey = null; window.__activeWaitLabel = null; } catch (e) { /* noop */ }
             window.__waitRowShownAt = null;
             window.__waitHideTimeout = null;
         };
