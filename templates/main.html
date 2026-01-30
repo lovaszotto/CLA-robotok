@@ -1053,10 +1053,72 @@ function refreshRunnableRobots() {
             if (container) container.innerHTML = renderRunnableRepos(repos);
             if (typeof filterReposRunnable === 'function') filterReposRunnable();
             setTimeout(initTooltips, 10);
+            setTimeout(() => { try { updateRunnableUpdateIcons(); } catch (e) {} }, 30);
         })
         .catch(err => {
             showToast('Hiba a telepített robotok frissítésekor: ' + err, 'danger');
         });
+}
+
+async function updateRunnableUpdateIcons() {
+    const container = document.getElementById('runnable-list') || document;
+    const buttons = Array.from(container.querySelectorAll('button[data-mode="run"][data-repo][data-branch]'));
+    if (!buttons.length) return;
+
+    const branches = Array.from(new Set(buttons.map(b => (b.getAttribute('data-branch') || '').trim()).filter(Boolean)));
+    if (!branches.length) return;
+
+    window.__installedVersionCache = window.__installedVersionCache || {};
+
+    const missing = branches.filter(br => {
+        const v = String(window.__installedVersionCache[br] || '').trim();
+        return !v;
+    });
+
+    if (missing.length) {
+        await Promise.all(missing.map(async (br) => {
+            try {
+                const r = await fetch(`/api/get_installed_version?${new URLSearchParams({ branch: br }).toString()}`);
+                const j = await r.json();
+                if (j && j.success && j.version) {
+                    window.__installedVersionCache[br] = String(j.version);
+                } else {
+                    window.__installedVersionCache[br] = 'NONE';
+                }
+            } catch (e) {
+                window.__installedVersionCache[br] = 'NONE';
+            }
+        }));
+    }
+
+    buttons.forEach(btn => {
+        const br = (btn.getAttribute('data-branch') || '').trim();
+        const latestTag = (btn.getAttribute('data-release-tag') || '').trim();
+        const installed = String((window.__installedVersionCache && br) ? (window.__installedVersionCache[br] || '') : '').trim();
+
+        const hasUpdate = Boolean(installed && installed !== 'NONE' && latestTag && installed !== latestTag);
+        const iconEl = btn.querySelector('i');
+        if (!iconEl) return;
+
+        if (hasUpdate) {
+            iconEl.className = 'bi bi-bell-fill';
+            iconEl.style.color = '#fd7e14';
+            try { btn.setAttribute('data-bs-title', 'Új verzió elérhető'); } catch (e) { }
+        } else {
+            iconEl.className = 'bi bi-info-circle';
+            iconEl.style.color = '';
+            try { btn.setAttribute('data-bs-title', 'Verziók'); } catch (e) { }
+        }
+
+        // Tooltip frissítése (ha már létrejött)
+        try {
+            if (window.bootstrap && bootstrap.Tooltip) {
+                const inst = bootstrap.Tooltip.getInstance(btn);
+                if (inst) inst.dispose();
+                new bootstrap.Tooltip(btn);
+            }
+        } catch (e) { }
+    });
 }
 
 // Telepített robotok HTML generálása JSON-ból
@@ -1317,11 +1379,13 @@ function filterReposAvailable() {
 document.addEventListener('DOMContentLoaded', function () {
     setGlobalFilterEnabledState();
     initTooltips();
+    setTimeout(() => { try { updateRunnableUpdateIcons(); } catch (e) {} }, 50);
     const tabButtons = document.querySelectorAll('#mainTab button[data-bs-toggle="tab"]');
     tabButtons.forEach(btn => {
         btn.addEventListener('shown.bs.tab', function () {
             setGlobalFilterEnabledState();
             filterActiveTabRobots();
+            setTimeout(() => { try { updateRunnableUpdateIcons(); } catch (e) {} }, 50);
         });
     });
 });
@@ -1592,6 +1656,8 @@ function installRobots(robots, options = {}) {
             // Mindkét tab frissítése AJAX-szal, ha létezik a függvény
             if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots();
             if (typeof refreshAvailableRobots === 'function') refreshAvailableRobots();
+            // Biztonsági frissítés: ikonok érvényesítése (telepített verzió cache-ből)
+            setTimeout(() => { try { updateRunnableUpdateIcons(); } catch (e) {} }, 250);
             // Váltás a Telepített robotok tab-ra
             const tabEl = document.getElementById('runnable-tab');
             if (tabEl && window.bootstrap) {
