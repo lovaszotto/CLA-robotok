@@ -337,10 +337,11 @@ def get_installed_keys():
 def get_branches_for_repo(repo_name):
     """Lekéri egy repository branch-eit a git ls-remote segítségével."""
     try:
-        # Ha sandbox módban vagyunk, mock branch lista
+        # Sandbox módban is repo-specifikus branch listát szeretnénk.
+        # Ezért nem adunk vissza hardcoded mock listát (az minden repóra ugyanaz lenne),
+        # hanem best-effort megpróbáljuk a valós lekérdezést.
         if get_sandbox_mode():
-            logger.info(f"[BRANCH-QUERY][MOCK] Sandbox mód aktív, mock branch lista visszaadva.")
-            return ['main', 'teszt-branch', 'CLA-ssistant', 'IKK01_Duplikáció-ellenőrzés', 'IKK04-Dokumentum-WEB-Ellenőrzés', 'KB01-Közbeszerzési-Értesítő', 'Szó-kikérdező', 'CPS-Mezo-ellenor', 'ORIANA-Mezo-ellenor', 'IKK02_Formai-Ellenorzesek', 'IKK03_Web-ellenőrzés']
+            logger.info(f"[BRANCH-QUERY] Sandbox mód aktív, valós branch lekérdezés (best-effort): repo={repo_name}")
         url = f'https://github.com/lovaszotto/{repo_name}'
         logger.info(f"[BRANCH-QUERY] git ls-remote URL: {url}")
         result = subprocess.run(
@@ -363,6 +364,7 @@ def get_branches_for_repo(repo_name):
             return branches
         else:
             logger.error(f"[BRANCH-QUERY] git ls-remote returncode={result.returncode}, stderr={result.stderr}")
+            # Sandbox módban ne jelenítsünk meg nem repohoz tartozó brancheket.
             return []
     except Exception as e:
         logger.error(f"Hiba a branch-ek lekérésében: {e}")
@@ -1638,6 +1640,7 @@ def index():
     # Repository adatok lekérése
     repos = get_repository_data()
     root_folder = get_robot_variable('ROOT_FOLDER')
+    is_sandbox = get_sandbox_mode()
 
     # Dátum formázása (pushed_at -> YYYY-MM-DD HH:MM) és branch adatok hozzáadása minden repository-hoz
     for repo in repos:
@@ -1652,8 +1655,9 @@ def index():
             repo['pushed_at_formatted'] = (repo.get('pushed_at') or '')
 
         repo['branches'] = get_branches_for_repo(repo['name'])
-        # DEBUG/FALLBACK: ha nincs branch, adjunk hozzá egy teszt branch-et, hogy a UI ne legyen üres
-        if not repo['branches']:
+        # DEBUG/FALLBACK: normál módban ha nincs branch, adjunk hozzá teszt brancheket, hogy a UI ne legyen üres.
+        # Sandbox módban ez félrevezető lenne (nem repo-specifikus), ezért ott nem töltjük fel.
+        if not repo['branches'] and not get_sandbox_mode():
             repo['branches'] = ['main', 'teszt-branch']
 
     # Előre kiszámoljuk a futtatható (telepített) és letölthető branch-eket repo szinten
@@ -1678,19 +1682,21 @@ def index():
         except Exception:
             repo['available_branch_releases'] = {}
 
-        # Letölthető tab: csak azok a branchek látszódjanak, ahol ki van töltve a legfrissebb verzió (release tag)
-        try:
-            rel_map = repo.get('available_branch_releases') or {}
-            repo['available_branches'] = [
-                b for b in (repo.get('available_branches') or [])
-                if _has_filled_latest_version(rel_map.get(b) or {})
-            ]
-        except Exception:
-            pass
+        # Letölthető tab: normál módban csak azok a branchek látszódjanak,
+        # ahol ki van töltve a legfrissebb verzió (release tag).
+        # Fejlesztői (sandbox) módban ne szűrjünk release információ alapján.
+        if not is_sandbox:
+            try:
+                rel_map = repo.get('available_branch_releases') or {}
+                repo['available_branches'] = [
+                    b for b in (repo.get('available_branches') or [])
+                    if _has_filled_latest_version(rel_map.get(b) or {})
+                ]
+            except Exception:
+                pass
     version = get_robot_variable('VERSION')
     build_date = get_robot_variable('BUILD_DATE')
     # page_title logika ugyanaz, mint a get_html_template-ben
-    is_sandbox = get_sandbox_mode()
     page_title = "Fejlesztői mód" if is_sandbox else "Segíthetünk?"
     # Színséma lekérése
     color_scheme = get_html_template(is_sandbox, page_title)
@@ -1704,6 +1710,7 @@ def index():
             version=version,
             build_date=build_date,
             page_title=page_title,
+            is_sandbox=is_sandbox,
             **color_scheme
         ),
         mimetype='text/html'
@@ -2767,6 +2774,7 @@ def api_available_repos():
     """Csak a letölthető (még nem telepített) branch-ek repo-nként."""
     repos = get_repository_data()
     installed_keys = get_installed_keys()
+    is_sandbox = get_sandbox_mode()
     result = []
     for repo in repos:
         repo_copy = dict(repo)
@@ -2781,15 +2789,18 @@ def api_available_repos():
         except Exception:
             repo_copy['available_branch_releases'] = {}
 
-        # Csak azok a branchek maradjanak, ahol van kitöltött legfrissebb verzió (release tag)
-        try:
-            rel_map = repo_copy.get('available_branch_releases') or {}
-            repo_copy['branches'] = [
-                b for b in (repo_copy.get('branches') or [])
-                if _has_filled_latest_version(rel_map.get(b) or {})
-            ]
-        except Exception:
-            pass
+        # Normál módban csak azok a branchek maradjanak,
+        # ahol van kitöltött legfrissebb verzió (release tag).
+        # Fejlesztői (sandbox) módban ne szűrjünk release információ alapján.
+        if not is_sandbox:
+            try:
+                rel_map = repo_copy.get('available_branch_releases') or {}
+                repo_copy['branches'] = [
+                    b for b in (repo_copy.get('branches') or [])
+                    if _has_filled_latest_version(rel_map.get(b) or {})
+                ]
+            except Exception:
+                pass
 
         # Csak akkor adjuk vissza, ha van legalább 1 letölthető branch
         if repo_copy['branches']:

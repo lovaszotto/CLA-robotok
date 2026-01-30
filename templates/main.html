@@ -374,9 +374,20 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                         {% set rel = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
                                         <button class="btn btn-warning btn-sm me-2 text-dark"
                                             type="button"
-                                            title="Azonnali letöltés"
+                                            data-bs-toggle="tooltip"
+                                            {% if is_sandbox and (not rel or not (rel.get('tag') if rel else '')) %}
+                                                data-bs-title="Fejlesztés alatt"
+                                                title="Fejlesztés alatt"
+                                            {% else %}
+                                                data-bs-title="Azonnali letöltés"
+                                                title="Azonnali letöltés"
+                                            {% endif %}
                                             onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
-                                            <i class="bi bi-download"></i>
+                                            {% if is_sandbox and (not rel or not (rel.get('tag') if rel else '')) %}
+                                                <i class="bi bi-hammer"></i>
+                                            {% else %}
+                                                <i class="bi bi-download"></i>
+                                            {% endif %}
                                         </button>
                                         <button class="btn btn-outline-info btn-sm me-2" type="button"
                                             data-bs-toggle="tooltip" data-bs-title="Verziók"
@@ -1198,6 +1209,8 @@ function renderAvailableRepos(repos) {
         return '<div class="col-12 text-center"><h2 class="text-muted mt-5">Nincs letölthető robot.</h2></div>';
     }
 
+    const sandboxEnabled = !!document.getElementById('sandboxMode')?.checked;
+
     const escapeHtml = (value) => {
         const s = (value === null || value === undefined) ? '' : String(value);
         return s
@@ -1229,8 +1242,18 @@ function renderAvailableRepos(repos) {
                     <div class="branches-container">
                         ${repo.branches.map(branch => `
                             <div class="branch-checkbox d-flex align-items-center" id="branch-available-${repo.name}-${branch}">
-                                <button class="btn btn-warning btn-sm me-2 text-dark" type="button" title="Azonnali letöltés" onclick='installRobot(${JSON.stringify(repo.name)}, ${JSON.stringify(branch)}, this)'>
-                                    <i class="bi bi-download"></i>
+                                <button class="btn btn-warning btn-sm me-2 text-dark" type="button" data-bs-toggle="tooltip" ${(() => {
+                                    const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                    const hasRelease = !!(rel && rel.tag);
+                                    if (sandboxEnabled && !hasRelease) return 'data-bs-title="Fejlesztés alatt" title="Fejlesztés alatt"';
+                                    return 'data-bs-title="Azonnali letöltés" title="Azonnali letöltés"';
+                                })()} onclick='installRobot(${JSON.stringify(repo.name)}, ${JSON.stringify(branch)}, this)'>
+                                    ${(() => {
+                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                        const hasRelease = !!(rel && rel.tag);
+                                        if (sandboxEnabled && !hasRelease) return '<i class="bi bi-hammer"></i>';
+                                        return '<i class="bi bi-download"></i>';
+                                    })()}
                                 </button>
                                 <button class="btn btn-outline-info btn-sm me-2" type="button"
                                     data-bs-toggle="tooltip" data-bs-title="Verziók"
