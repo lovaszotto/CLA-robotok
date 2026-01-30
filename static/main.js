@@ -93,10 +93,10 @@ async function executeSingleRobot(btn) {
     .then(response => response.json())
     .then(data => {
         if (data && data.success) {
-            return sureInfo({ title: 'Futtatás', message: 'Futtatás sikeres!', okText: 'OK' });
+            return sureInfo({ title: 'Futtatás', message: '✅ Futtatás sikeres!', okText: 'OK' });
         } else {
             let msg = (data && data.error) ? data.error : 'Ismeretlen hiba a futtatás során!';
-            return sureInfo({ title: 'Hiba', message: 'Hiba: ' + msg, okText: 'OK' });
+            return sureInfo({ title: 'Futtatás', message: '❌ Futtatás sikertelen!\n\n' + msg, okText: 'OK' });
         }
     })
     .catch(err => {

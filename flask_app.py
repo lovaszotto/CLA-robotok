@@ -901,6 +901,46 @@ def get_latest_release_by_branch(repo_obj: dict, branches: list[str]) -> dict[st
     if not branches:
         return {}
 
+    # Token nélkül gyorsan rate limitbe futhatunk, ezért csak tokennel kérdezünk.
+    if not _get_github_token():
+        return {}
+
+    owner, api_repo_name = _parse_owner_repo(repo_obj)
+    if not owner or not api_repo_name:
+        return {}
+
+    releases_url = f"https://api.github.com/repos/{owner}/{api_repo_name}/releases?per_page=100"
+    try:
+        rr = requests.get(releases_url, headers=_github_headers(), timeout=15)
+        if rr.status_code != 200:
+            logger.info(f"[RELEASE-BY-BRANCH] lekérés sikertelen: {releases_url} status={rr.status_code}")
+            return {}
+
+        # branch -> (datetime, meta)
+        best: dict[str, tuple[datetime, dict[str, str]]] = {}
+        branch_set = set(branches)
+        for rel in (rr.json() or []):
+            target = (rel.get('target_commitish') or '').strip()
+            if target not in branch_set:
+                continue
+            tag_name = (rel.get('tag_name') or '').strip()
+            title = (rel.get('name') or '').strip()
+            date_raw = (rel.get('published_at') or rel.get('created_at') or '').strip()
+            dt = _parse_github_iso_datetime(date_raw) or datetime.min
+            meta = {
+                'tag': tag_name,
+                'title': title,
+                'date': date_raw,
+            }
+            prev = best.get(target)
+            if prev is None or dt > prev[0]:
+                best[target] = (dt, meta)
+
+        return {b: meta for b, (_dt, meta) in best.items()}
+    except Exception as e:
+        logger.info(f"[RELEASE-BY-BRANCH] Hiba a release-ek lekérésekor: {owner}/{api_repo_name}: {e}")
+        return {}
+
 
 @app.route('/api/get_github_token_status', methods=['GET'])
 def api_get_github_token_status():
@@ -1339,46 +1379,6 @@ def _github_upload_issue_attachment(owner: str, repo_name: str, issue_number: in
         )
     return resp.json() or {}
 
-    # Token nélkül gyorsan rate limitbe futhatunk, ezért csak tokennel kérdezünk.
-    if not _get_github_token():
-        return {}
-
-    owner, api_repo_name = _parse_owner_repo(repo_obj)
-    if not owner or not api_repo_name:
-        return {}
-
-    releases_url = f"https://api.github.com/repos/{owner}/{api_repo_name}/releases?per_page=100"
-    try:
-        rr = requests.get(releases_url, headers=_github_headers(), timeout=15)
-        if rr.status_code != 200:
-            logger.info(f"[RELEASE-BY-BRANCH] lekérés sikertelen: {releases_url} status={rr.status_code}")
-            return {}
-
-        # branch -> (datetime, meta)
-        best: dict[str, tuple[datetime, dict[str, str]]] = {}
-        branch_set = set(branches)
-        for rel in (rr.json() or []):
-            target = (rel.get('target_commitish') or '').strip()
-            if target not in branch_set:
-                continue
-            tag_name = (rel.get('tag_name') or '').strip()
-            title = (rel.get('name') or '').strip()
-            date_raw = (rel.get('published_at') or rel.get('created_at') or '').strip()
-            dt = _parse_github_iso_datetime(date_raw) or datetime.min
-            meta = {
-                'tag': tag_name,
-                'title': title,
-                'date': date_raw,
-            }
-            prev = best.get(target)
-            if prev is None or dt > prev[0]:
-                best[target] = (dt, meta)
-
-        return {b: meta for b, (_dt, meta) in best.items()}
-    except Exception as e:
-        logger.info(f"[RELEASE-BY-BRANCH] Hiba a release-ek lekérésekor: {owner}/{api_repo_name}: {e}")
-        return {}
-
 
 def run_robot_with_params(repo: str, branch: str):
 
@@ -1589,9 +1589,11 @@ def index():
             if f"{repo['name']}|{branch}" not in installed_keys
         ]
 
-        # Letölthető tab: branch-enként a legfrissebb release tag/cím/dátum (best-effort)
+        # Branch-enként a legfrissebb release tag/cím/dátum (best-effort)
+        # (kell a futtatható és a letölthető tab Info ablakához is)
         try:
-            repo['available_branch_releases'] = get_latest_release_by_branch(repo, list(repo.get('available_branches') or []))
+            branches_for_release = list(dict.fromkeys((repo.get('downloaded_branches') or []) + (repo.get('available_branches') or [])))
+            repo['available_branch_releases'] = get_latest_release_by_branch(repo, branches_for_release)
         except Exception:
             repo['available_branch_releases'] = {}
     version = get_robot_variable('VERSION')
@@ -2645,6 +2647,12 @@ def api_runnable_repos():
             branch for branch in repo.get('branches', get_branches_for_repo(repo['name']))
             if f"{repo['name']}|{branch}" in installed_keys
         ]
+
+        # Kliens oldali megjelenítéshez: release meta a futtatható branchekhez
+        try:
+            repo_copy['available_branch_releases'] = get_latest_release_by_branch(repo, list(repo_copy.get('branches') or []))
+        except Exception:
+            repo_copy['available_branch_releases'] = {}
         # Csak akkor adjuk vissza, ha van legalább 1 futtatható branch
         if repo_copy['branches']:
             result.append(repo_copy)

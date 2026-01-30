@@ -313,6 +313,16 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                    <button class="btn btn-success btn-sm me-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}" onclick="executeSingleRobot(this)">
                                                        <i class="bi bi-play-fill"></i>
                                                    </button>
+                                                   {% set rel_run = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
+                                                   <button class="btn btn-outline-info btn-sm me-2" type="button"
+                                                       data-bs-toggle="tooltip" data-bs-title="Info"
+                                                       data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="run"
+                                                       data-release-tag="{{ (rel_run.get('tag') if rel_run else '') }}"
+                                                       data-release-title="{{ (rel_run.get('title') if rel_run else '') }}"
+                                                       data-release-date="{{ (rel_run.get('date') if rel_run else '') }}"
+                                                       onclick="branchInfoClicked(this)">
+                                                       <i class="bi bi-info-circle"></i>
+                                                   </button>
                                                    <label for="runnable-{{ repo.name }}-{{ branch }}" class="mb-0">{{ branch }}</label>
                                                    <span class="ms-auto">
                                                        <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}')"></i>
@@ -368,6 +378,15 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             title="Azonnali letöltés"
                                             onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
                                             <i class="bi bi-download"></i>
+                                        </button>
+                                        <button class="btn btn-outline-info btn-sm me-2" type="button"
+                                            data-bs-toggle="tooltip" data-bs-title="Info"
+                                            data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="download"
+                                            data-release-tag="{{ (rel.get('tag') if rel else '') }}"
+                                            data-release-title="{{ (rel.get('title') if rel else '') }}"
+                                            data-release-date="{{ (rel.get('date') if rel else '') }}"
+                                            onclick="branchInfoClicked(this)">
+                                            <i class="bi bi-info-circle"></i>
                                         </button>
                                         {% set rel = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
                                         <span>
@@ -1031,6 +1050,7 @@ function refreshRunnableRobots() {
             const container = document.getElementById('runnable-list');
             if (container) container.innerHTML = renderRunnableRepos(repos);
             if (typeof filterReposRunnable === 'function') filterReposRunnable();
+            setTimeout(initTooltips, 10);
         })
         .catch(err => {
             showToast('Hiba a telepített robotok frissítésekor: ' + err, 'danger');
@@ -1042,9 +1062,19 @@ function renderRunnableRepos(repos) {
     if (!repos || repos.length === 0) {
         return '<div class="col-12 text-center"><h2 class="text-muted mt-5">Nincs telepített, futtatható robot.</h2></div>';
     }
+    const escAttr = (value) => {
+        const s = (value === null || value === undefined) ? '' : String(value);
+        return s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
     let html = '';
     repos.forEach(repo => {
         if (!repo.branches || repo.branches.length === 0) return;
+        const relMap = repo.available_branch_releases || {};
         html += `
         <div class="col-lg-6 col-xl-4 mb-4 repo-item" data-repo-name="${repo.name}">
             <div class="card repo-card h-100" style="background-color: #e3f2fd !important;">
@@ -1068,6 +1098,17 @@ function renderRunnableRepos(repos) {
                                     onclick="executeSingleRobot(this)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
+                                <button class="btn btn-outline-info btn-sm me-2" type="button"
+                                    data-bs-toggle="tooltip" data-bs-title="Info"
+                                    data-repo="${repo.name}"
+                                    data-branch="${branch}"
+                                    data-mode="run"
+                                    data-release-tag="${escAttr((relMap && relMap[branch] && relMap[branch].tag) ? relMap[branch].tag : '')}"
+                                    data-release-title="${escAttr((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
+                                    data-release-date="${escAttr((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
+                                    onclick="branchInfoClicked(this)">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>
                                 <i class="bi bi-trash text-danger me-2" style="cursor: pointer;" onclick="deleteRunnableBranch('${repo.name}', '${branch}')" title="Eltávolítás a futtathatók közül"></i>
                                 <span>${branch}</span>
                             </div>
@@ -1089,10 +1130,22 @@ function refreshAvailableRobots() {
             const container = document.getElementById('repoContainerAvailable');
             if (container) container.innerHTML = renderAvailableRepos(repos);
             if (typeof filterReposAvailable === 'function') filterReposAvailable();
+            setTimeout(initTooltips, 10);
         })
         .catch(err => {
             showToast('Hiba a letölthető robotok frissítésekor: ' + err, 'danger');
         });
+}
+
+function initTooltips() {
+    try {
+        const tList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tList.forEach(function (el) {
+            try { new bootstrap.Tooltip(el); } catch (e) { }
+        });
+    } catch (e) {
+        // noop
+    }
 }
 
 // Letölthető robotok HTML generálása JSON-ból
@@ -1134,6 +1187,17 @@ function renderAvailableRepos(repos) {
                             <div class="branch-checkbox d-flex align-items-center" id="branch-available-${repo.name}-${branch}">
                                 <button class="btn btn-warning btn-sm me-2 text-dark" type="button" title="Azonnali letöltés" onclick='installRobot(${JSON.stringify(repo.name)}, ${JSON.stringify(branch)}, this)'>
                                     <i class="bi bi-download"></i>
+                                </button>
+                                <button class="btn btn-outline-info btn-sm me-2" type="button"
+                                    data-bs-toggle="tooltip" data-bs-title="Info"
+                                    data-repo="${repo.name}"
+                                    data-branch="${branch}"
+                                    data-mode="download"
+                                    data-release-tag="${escapeHtml((relMap && relMap[branch] && relMap[branch].tag) ? relMap[branch].tag : '')}"
+                                    data-release-title="${escapeHtml((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
+                                    data-release-date="${escapeHtml((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
+                                    onclick="branchInfoClicked(this)">
+                                    <i class="bi bi-info-circle"></i>
                                 </button>
                                 ${(() => {
                                     const rel = relMap && relMap[branch] ? relMap[branch] : null;
@@ -1248,6 +1312,7 @@ function filterReposAvailable() {
 
 document.addEventListener('DOMContentLoaded', function () {
     setGlobalFilterEnabledState();
+    initTooltips();
     const tabButtons = document.querySelectorAll('#mainTab button[data-bs-toggle="tab"]');
     tabButtons.forEach(btn => {
         btn.addEventListener('shown.bs.tab', function () {
@@ -1256,6 +1321,43 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+
+function branchInfoClicked(button) {
+    const repo = button?.getAttribute('data-repo') || '';
+    const branch = button?.getAttribute('data-branch') || '';
+    const mode = button?.getAttribute('data-mode') || '';
+    const relTag = (button?.getAttribute('data-release-tag') || '').trim();
+    const relTitle = (button?.getAttribute('data-release-title') || '').trim();
+    const relDateRaw = (button?.getAttribute('data-release-date') || '').trim();
+    const relDate = relDateRaw ? String(relDateRaw).slice(0, 10) : '';
+
+    let header = 'Információ';
+    let action = '';
+    if (mode === 'run') action = 'Futtatás';
+    if (mode === 'download') action = 'Letöltés';
+
+    const lines = [];
+    // A címsorban már megjelenik pl. "Futtatás információ", ezért itt ne duplázzuk.
+    if (!action) {
+        lines.push('Információ');
+        lines.push('');
+    }
+    lines.push(`Repo: ${repo}`);
+    lines.push(`Branch: ${branch}`);
+
+    // Release meta (tag/cím/dátum)
+    lines.push('');
+    if (relTag || relTitle || relDate) {
+        if (relTag) lines.push(`Tag: ${relTag}`);
+        if (relTitle) lines.push(`Cím: ${relTitle}`);
+        if (relDate) lines.push(`Release dátum: ${relDate}`);
+    } else {
+        lines.push('Nincs release információ ehhez a branch-hez.');
+    }
+
+    if (action) header = `${action} információ`;
+    showInfoBox(lines.join('\n'), header);
+}
 
 // --- Robot futtatás ---
 async function executeSingleRobot(button) {
@@ -1305,8 +1407,14 @@ function executeRobot(repo, branch, button) {
         }
         const msg = document.createElement('div');
         const currentTime = new Date().toLocaleString('hu-HU');
-        msg.className = `alert alert-info mt-3`;
-        msg.innerHTML = `<i class="bi bi-check-circle"></i> Futtatás befejezve: <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small>`;
+        const isSuccess = Boolean(data && (data.success === true || data.status === 'ok' || data.returncode === 0));
+        // Biztosan megjelenő pipa/X (ne függjünk a Bootstrap Icons betöltésétől)
+        const iconHtml = isSuccess
+            ? '<span class="me-1 fw-bold" style="color:#198754">✓</span>'
+            : '<span class="me-1 fw-bold" style="color:#dc3545">✗</span>';
+        const labelText = isSuccess ? 'Futtatás sikeres!' : 'Futtatás sikertelen!';
+        msg.className = `alert ${isSuccess ? 'alert-success' : 'alert-danger'} mt-3`;
+        msg.innerHTML = `${iconHtml} ${labelText} <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small>`;
         container.appendChild(msg);
         setTimeout(() => msg.remove(), 10000);
     })
@@ -2014,6 +2122,7 @@ function loadCurrentSandboxMode() {
 function showSureBox({
     title = 'Megerősítés',
     message = '',
+    messageHtml = '',
     okText = 'OK',
     cancelText = 'Mégse',
     okVariant = 'primary',
@@ -2041,8 +2150,20 @@ function showSureBox({
                 return settle(!showCancel);
             }
 
+            const escapeHtml = (s) => String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+
             titleEl.textContent = title || 'Megerősítés';
-            bodyEl.textContent = message || '';
+
+            if (typeof messageHtml === 'string' && messageHtml.trim() !== '') {
+                bodyEl.innerHTML = messageHtml;
+            } else {
+                bodyEl.innerHTML = escapeHtml(message || '').replace(/\n/g, '<br>');
+            }
             okBtn.textContent = okText || 'OK';
             cancelBtn.textContent = cancelText || 'Mégse';
             cancelBtn.classList.toggle('d-none', !showCancel);
@@ -2075,7 +2196,48 @@ function showSureBox({
 }
 
 function showInfoBox(message, title = 'Információ', okText = 'OK') {
-    return showSureBox({ title, message, okText, showCancel: false, okVariant: 'primary' });
+    const msg = String(message ?? '');
+
+    if (String(title || '') === 'Futtatás') {
+        const m = msg.toLowerCase();
+        const isOk = m.includes('futtatás sikeres');
+        const isFail = m.includes('futtatás sikertelen');
+        if (isOk || isFail) {
+            const escapeHtml = (s) => String(s ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+
+            // Ha az üzenet már tartalmaz ikont az elején (pl. ✅/❌), ne duplázzuk.
+            const trimmed = msg.replace(/^\s+/, '');
+            const match = trimmed.match(/^(✅|❌|✓|✗)\s*/);
+            if (match) {
+                const symbol = match[1];
+                const rest = trimmed.slice(match[0].length);
+                const color = (symbol === '✅' || symbol === '✓') ? '#198754' : '#dc3545';
+                const okVariant = (symbol === '✅' || symbol === '✓') ? 'success' : 'danger';
+                const messageHtml = `<span class="me-2 fw-bold" style="color:${color}; font-size:1.35rem; line-height:1;">${escapeHtml(symbol)}</span><span>${escapeHtml(rest || '').trim() ? escapeHtml(rest) : ''}</span>`;
+                return showSureBox({ title, message: msg, messageHtml, okText, showCancel: false, okVariant });
+            }
+
+            const icon = isOk
+                ? '<span class="me-2 fw-bold" style="color:#198754; font-size:1.35rem; line-height:1;">✓</span>'
+                : '<span class="me-2 fw-bold" style="color:#dc3545; font-size:1.35rem; line-height:1;">✗</span>';
+
+            return showSureBox({
+                title,
+                message: msg,
+                messageHtml: `${icon}<span>${escapeHtml(msg)}</span>`,
+                okText,
+                showCancel: false,
+                okVariant: isOk ? 'success' : 'danger'
+            });
+        }
+    }
+
+    return showSureBox({ title, message: msg, okText, showCancel: false, okVariant: 'primary' });
 }
 
 async function clearAllLogs() {
