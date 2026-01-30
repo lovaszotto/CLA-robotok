@@ -1373,7 +1373,7 @@ async function branchInfoClicked(button) {
     const relDateRaw = (button?.getAttribute('data-release-date') || '').trim();
     const relDate = relDateRaw ? String(relDateRaw).slice(0, 10) : '';
 
-    let header = 'Információ';
+    let header = 'Robot verzió';
     let action = '';
     if (mode === 'run') action = 'Futtatás';
     if (mode === 'download') action = 'Letöltés';
@@ -1385,8 +1385,10 @@ async function branchInfoClicked(button) {
         lines.push('');
     }
     // Alap adatok
-    lines.push(`Repo: ${repo}`);
-    lines.push(`Branch: ${branch}`);
+    // A repo neve legyen külön sorban (címke nélkül).
+    lines.push(`${repo}`);
+    // Branch címke nélkül
+    lines.push(`${branch}`);
 
     const fallbackReleaseLines = () => {
         lines.push('');
@@ -1404,6 +1406,7 @@ async function branchInfoClicked(button) {
         const m = repoUrl.match(/github\.com\/(.+?)\/(.+?)(?:\/|$)/i);
         const owner = m ? m[1] : '';
         const repoName = m ? m[2] : '';
+        let latestTagForLink = '';
         if (!owner || !repoName || !branch) {
             fallbackReleaseLines();
         } else {
@@ -1439,6 +1442,7 @@ async function branchInfoClicked(button) {
             if (tags.length > 0) {
                 const latest = tags[0] || {};
                 const lt = latest.tag ? String(latest.tag) : '';
+                latestTagForLink = lt;
                 const ldate = latest.date ? String(latest.date).slice(0, 10) : '';
                 const latestParts = [ldate, lt].filter(Boolean);
                 lines.push(`- Legfrissebb verzió: ${latestParts.join(' — ') || '-'}`);
@@ -1465,6 +1469,47 @@ async function branchInfoClicked(button) {
             } else {
                 lines.push(note || 'Nincs release információ ehhez a branch-hez.');
             }
+
+            // "Robot verziók:" legyen kattintható link a GitHub releases oldalra.
+            // Ha van legfrissebb tag, akkor arra a konkrét release-re mutat.
+            try {
+                const escapeHtml = (s) => String(s ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+
+                const plain = lines.join('\n');
+                const base = `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`;
+                const releasesUrl = `${base}/releases`;
+
+                const textLines = plain.split('\n');
+                const titleLine = (textLines.shift() || '').trim();
+                const branchLine = (textLines.shift() || '').trim();
+                const restText = textLines.join('\n');
+                let htmlMsg = '';
+                if (titleLine) {
+                    htmlMsg += `<h2 class="h4 mb-3">${escapeHtml(titleLine)}</h2>`;
+                }
+                if (branchLine) {
+                    htmlMsg += `<h3 class="h6 mb-3">${escapeHtml(branchLine)}</h3>`;
+                }
+                if (restText) {
+                    htmlMsg += escapeHtml(restText).replace(/\n/g, '<br>');
+                }
+                htmlMsg = htmlMsg.replace(
+                    /Robot verziók:/,
+                    `<a href="${releasesUrl}" target="_blank" rel="noopener">Robot verziók:</a>`
+                );
+                if (plain.includes('Állapot: új verzió elérhető')) {
+                    htmlMsg = htmlMsg.replace(/(-\s*Állapot:\s*új verzió elérhető[^<]*)(<br>|$)/gi, '<b>$1</b>$2');
+                }
+                showInfoBox(plain, header, 'OK', htmlMsg);
+                return;
+            } catch (e) {
+                // fallback a sima message-re
+            }
         }
     } catch (e) {
         // Ha a listázás nem megy (token/rate limit/háló), legalább a best-effort meta jelenjen meg.
@@ -1472,7 +1517,7 @@ async function branchInfoClicked(button) {
     }
 
     if (mode === 'run') {
-        header = 'Robot verziók';
+        header = 'Robot verzió';
     } else if (mode === 'download') {
         header = 'Robot verzió';
     } else if (action) {
@@ -2335,7 +2380,7 @@ function showSureBox({
     });
 }
 
-function showInfoBox(message, title = 'Információ', okText = 'OK') {
+function showInfoBox(message, title = 'Információ', okText = 'OK', messageHtml = null) {
     const msg = String(message ?? '');
 
     const escapeHtml = (s) => String(s ?? '')
@@ -2344,6 +2389,10 @@ function showInfoBox(message, title = 'Információ', okText = 'OK') {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+
+    if (typeof messageHtml === 'string' && messageHtml.trim() !== '') {
+        return showSureBox({ title, message: msg, messageHtml, okText, showCancel: false, okVariant: 'primary' });
+    }
 
     if (String(title || '') === 'Futtatás') {
         const m = msg.toLowerCase();
