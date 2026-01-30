@@ -1,0 +1,112 @@
+<!doctype html>
+<html><head><meta charset='utf-8'><title>Robot log (fallback)</title></head><body><h3>Robot log (fallback)</h3><pre style='white-space:pre-wrap'>==============================================================================
+Do-Selected
+==============================================================================
+Kiírás konzolra paraméterekből :: A kapott REPO és BRANCH változók... | PASS |
+------------------------------------------------------------------------------
+Telepítettség és letöltöttség ellenőrzése :: Ellenőrzi, hogy a rob... | PASS |
+------------------------------------------------------------------------------
+Könyvtárak létrehozása :: Létrehozza a szükséges könyvtárakat, ha ... | PASS |
+------------------------------------------------------------------------------
+Branch klónozása :: A REPO és BRANCH változók alapján klónozza a m... | PASS |
+------------------------------------------------------------------------------
+Letöltött branch frissítése :: Ha a letöltött könyvtár már létezik... | PASS |
+------------------------------------------------------------------------------
+Klónozás sikeresség ellenőrzése :: A klónozás után ellenőrizzük, h... | PASS |
+------------------------------------------------------------------------------
+Telepítés futtatása :: A klónozás után futtatjuk a telepit.bat fájlt. | PASS |
+------------------------------------------------------------------------------
+Telepítés sikeresség ellenőrzése :: A telepítés után ellenőrizzük,... | PASS |
+------------------------------------------------------------------------------
+Robot futtatása :: Futtatjuk a start.bat fájlt, és elmentjük a log...
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;REM Mindig a script sajĂˇt kĂ¶nyvtĂˇrĂˇba lĂ©pĂĽnk
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;cd /d &quot;C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹\&quot;
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;REM Szotar-Robi alkalmazas indito script
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;REM Ez a script kozvetlenul elindija a Flask szervert es megnyitja a bongeszt
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo.
+
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo =====================================================
+=====================================================
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo           Szotar-Robi Alkalmazas Indito V1.2
+Szotar-Robi Alkalmazas Indito V1.2
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo =====================================================
+=====================================================
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo.
+
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo Flask szerver inditasa hatterben...
+Flask szerver inditasa hatterben...
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo.
+
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;REM Flask szerver inditasa hatterben
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;start &quot;Flask Szerver&quot; &quot;C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹\\.venv\Scripts\python.exe&quot; &quot;C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹\\flask_server.py&quot;
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;REM Varakozas a szerver indulasara
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;timeout /t 3 /nobreak   1&gt;nul
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo Szerver elindult: http://localhost:5001
+Szerver elindult: http://localhost:5001
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo Bongeszo megnyitasa...
+Bongeszo megnyitasa...
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo.
+
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;REM Bongeszo megnyitasa
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;start &quot;&quot; msedge &quot;http://localhost:5001&quot;
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo.
+
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo =====================================================
+=====================================================
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo    A Szotar-Robi alkalmazas fut a bongeszoben
+A Szotar-Robi alkalmazas fut a bongeszoben
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo =====================================================
+=====================================================
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo.
+
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo UTASITASOK:
+UTASITASOK:
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo 1. Hasznalja a megnyilt bongeszt a szotar gyakorlashoz
+1. Hasznalja a megnyilt bongeszt a szotar gyakorlashoz
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo 2. Toltse be a kivant lecke fajlt a &#x27;Lecke betoltese&#x27; gombbal
+2. Toltse be a kivant lecke fajlt a &#x27;Lecke betoltese&#x27; gombbal
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo 3. Gyakoroljon kedvere
+3. Gyakoroljon kedvere
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo 4. LEALILITAS: Kattintson a &#x27;Kilepes&#x27; gombra a weboldalon
+4. LEALILITAS: Kattintson a &#x27;Kilepes&#x27; gombra a weboldalon
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo    vagy futtassa a stop_server.bat fajlt
+vagy futtassa a stop_server.bat fajlt
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo.
+
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;echo A szerver a hatterben fut: http://localhost:5001
+A szerver a hatterben fut: http://localhost:5001
+
+C:\Users\oLovasz\MyRobotFramework\DownloadedRobots\SzotarRobi\Sz˘-kik‚rdez‹&gt;exit 0
+[TIMEOUT] A futás túllépte a beállított 15s időt, a folyamat megszakítva.</pre></body></html>
