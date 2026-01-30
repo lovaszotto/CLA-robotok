@@ -6,8 +6,8 @@ Ez a projekt egy Flask-alapú webes felületet biztosít robotok kezeléséhez.
 gh release create v1.0.0 --title "v1.0.0" --notes "Első stabil verzió"
 
 ## Fő funkciók
-- **Futtatható robotok**: Csak a már letöltött branch-ek jelennek meg, ezek közül lehet kiválasztani és futtatni.
-- **Letölthető robotok**: Csak a még le nem töltött branch-ek jelennek meg, ezek közül lehet kiválasztani és letölteni.
+- **Futtatható robotok**: Csak a már letöltött robotok jelennek meg, ezek közül lehet kiválasztani és futtatni.
+- **Letölthető robotok**: Csak a még le nem töltött robotok jelennek meg, ezek közül lehet kiválasztani és letölteni.
 - **Kiválasztott robotok futtatása**: A kiválasztott robotokat egy gombnyomással lehet futtatni.
 - **UI**: Két tab (Futtatható/Letölthető), kártyás nézet, gombok a letöltéshez és futtatáshoz.
 
@@ -30,7 +30,7 @@ gh release create v1.0.0 --title "v1.0.0" --notes "Első stabil verzió"
 - `results/` – Futtatási eredmények
 
 ## Megjegyzések
-- A "Branch név" felirat nem jelenik meg a felületen.
+- A "Robot" felirat jelenik meg a felületen (a technikai paraméternév továbbra is `branch`).
 - A tabok szűrése Python oldalon történik, a UI csak a releváns robotokat mutatja.
 
 ## Szerző

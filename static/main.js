@@ -28,7 +28,7 @@ if (typeof window.installRobot !== 'function') {
         if (IS_BUSY) return;
         const ok = await sureConfirm({
             title: 'Robot letöltése',
-            message: 'Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
+            message: 'Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nRobot: ' + branch) : ''),
             okText: 'Letöltés',
             cancelText: 'Mégse',
             okVariant: 'primary'
@@ -79,7 +79,7 @@ if (typeof window.executeSingleRobot !== 'function') {
         const branch = btn.getAttribute('data-branch');
         const ok = await sureConfirm({
             title: 'Robot futtatása',
-            message: 'Biztosan elindítod ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nBranch: ' + branch) : ''),
+            message: 'Biztosan elindítod ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nRobot: ' + branch) : ''),
             okText: 'Futtatás',
             cancelText: 'Mégse',
             okVariant: 'primary'

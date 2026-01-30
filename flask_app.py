@@ -625,7 +625,7 @@ def api_get_installed_version():
     try:
         branch_raw = (request.args.get('branch') or '').strip()
         if not branch_raw:
-            return jsonify({'success': False, 'error': 'Hiányzó branch paraméter'}), 400
+            return jsonify({'success': False, 'error': 'Hiányzó robot paraméter'}), 400
 
         return jsonify({'success': True, 'branch': branch_raw, 'version': _read_installed_version(branch_raw)})
     except Exception as e:
@@ -888,7 +888,7 @@ def api_list_github_repos():
             # Ne csináljunk 100+ extra HTTP hívást véletlenül.
             max_repos = 40
             if len(repos) > max_repos:
-                warning = (warning + ' ' if warning else '') + f'Branch szám csak az első {max_repos} repóra lett lekérdezve.'
+                warning = (warning + ' ' if warning else '') + f'Robot szám csak az első {max_repos} repóra lett lekérdezve.'
             for i, repo in enumerate(repos[:max_repos]):
                 name = (repo.get('name') or '').strip()
                 repo['branches_count'] = _get_branches_count(name)
@@ -912,7 +912,7 @@ def api_get_repo_branches_tags():
         if any(ch.isspace() for ch in owner) or any(ch.isspace() for ch in repo):
             return jsonify({'success': False, 'error': 'Érvénytelen paraméter (szóköz nem megengedett)'}), 400
         if branch and any(ch.isspace() for ch in branch):
-            return jsonify({'success': False, 'error': 'Érvénytelen branch paraméter (szóköz nem megengedett)'}), 400
+            return jsonify({'success': False, 'error': 'Érvénytelen robot paraméter (szóköz nem megengedett)'}), 400
 
         headers = _github_headers()
 
@@ -926,7 +926,7 @@ def api_get_repo_branches_tags():
                 detail = j.get('message') or str(j)
             except Exception:
                 detail = (br.text or '').strip()
-            return jsonify({'success': False, 'error': f'Branch lekérés sikertelen (status={br.status_code})', 'details': detail}), 502
+            return jsonify({'success': False, 'error': f'Robot lekérés sikertelen (status={br.status_code})', 'details': detail}), 502
         branches_raw = br.json() or []
         branches = [b.get('name') for b in branches_raw if b.get('name')]
 
@@ -959,7 +959,7 @@ def api_get_repo_branches_tags():
                         'html_url': (r.get('html_url') or '').strip(),
                     })
                 if not tags:
-                    tags_note = 'Nincs release/tag információ ehhez a branch-hez.'
+                    tags_note = 'Nincs release/tag információ ehhez a robothoz.'
         else:
             # Összes tag: Git tag lista + release meta (ha van)
             tags_url = f'https://api.github.com/repos/{owner}/{repo}/tags?per_page=100'
@@ -1724,7 +1724,7 @@ def api_cancel_execute():
         repo = (data.get('repo') or request.values.get('repo') or '').strip()
         branch = (data.get('branch') or request.values.get('branch') or '').strip()
         if not repo or not branch:
-            return jsonify({'success': False, 'error': 'Hiányzó repo vagy branch'}), 400
+            return jsonify({'success': False, 'error': 'Hiányzó repo vagy robot'}), 400
 
         op_key = _make_run_op_key(repo, branch)
         proc = _get_running_robot_proc(op_key)
@@ -1841,12 +1841,14 @@ def index():
     page_title = "Fejlesztői mód" if is_sandbox else "Segíthetünk?"
     # Színséma lekérése
     color_scheme = get_html_template(is_sandbox, page_title)
+    last_run_by_key = _build_last_run_by_key()
     response = app.response_class(
         render_template(
             "main.html",
             repos=repos,
             datetime=datetime,
             downloaded_keys=installed_keys,
+            last_run_by_key=last_run_by_key,
             root_folder=root_folder or '',
             version=version,
             build_date=build_date,
@@ -1912,7 +1914,7 @@ def api_execute():
         # Tényleges futtatás indítása Robot Framework-kel
         if not repo or not branch:
             logger.warning(f"[EXECUTE] HIBA: Hiányzó paraméterek - data={data}")
-            return jsonify({"success": False, "error": "Hiányzó repo vagy branch"}), 400
+            return jsonify({"success": False, "error": "Hiányzó repo vagy robot"}), 400
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         logger.info(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
         logger.info(f"[EXECUTE] run_robot_with_params hívás előtt: repo={repo}, branch={branch}")
@@ -1937,7 +1939,7 @@ def api_execute():
                     f"Automatikusan létrehozott futási ticket: **{title}**",
                     "",
                     f"- Repo: `{repo}`",
-                    f"- Branch: `{branch}`",
+                    f"- Robot: `{branch}`",
                     f"- Return code: `{rc}`",
                     f"- Status: `{status}`",
                     f"- Results dir: `{out_dir}`",
@@ -2141,10 +2143,10 @@ def api_start_robot():
         print(f"[START_ROBOT] Kérés érkezett (start.bat futtatás letiltva): repo={repo}, branch={branch}, debug_mode={debug_mode}")
 
         if not repo or not branch:
-            print("[START_ROBOT] HIBA: Hiányzó repo vagy branch paraméter")
+            print("[START_ROBOT] HIBA: Hiányzó repo vagy robot paraméter")
             return jsonify({
                 'success': False,
-                'error': 'Hiányzó repo vagy branch'
+                'error': 'Hiányzó repo vagy robot'
             }), 400
 
         base_dir = get_installed_robots_dir()
@@ -2274,6 +2276,47 @@ def _auto_cleanup_execution_results():
         print(f"[CLEANUP] {removed} execution_results törölve, mert a results_dir nem létezik.")
 _auto_cleanup_execution_results()
 
+
+def _build_last_run_by_key() -> dict[str, dict]:
+    """Legutóbbi futás meta repo|branch kulcsonként.
+
+    Visszatérési forma: {"repo|branch": {"status": "success|failed|...", "timestamp": "YYYY-MM-DD HH:MM:SS", "returncode": int|None}}
+    """
+    last: dict[str, dict] = {}
+    try:
+        for r in (execution_results or []):
+            repo = (r.get('repo') or '').strip()
+            branch = (r.get('branch') or '').strip()
+            ts = (r.get('timestamp') or '').strip()
+            if not repo or not branch or not ts:
+                continue
+            key = f"{repo}|{branch}"
+            prev = last.get(key)
+            # A timestamp formátum fix: YYYY-MM-DD HH:MM:SS -> lexikografikusan összehasonlítható
+            if prev is None or str(ts) > str(prev.get('timestamp') or ''):
+                last[key] = {
+                    'status': (r.get('status') or '').strip(),
+                    'timestamp': ts,
+                    'returncode': r.get('returncode'),
+                }
+    except Exception:
+        return last
+    return last
+
+
+def _build_last_run_by_branch(repo_name: str, branches: list[str]) -> dict[str, dict]:
+    """Repo-n belül branch->legutóbbi futás meta."""
+    m = _build_last_run_by_key()
+    out: dict[str, dict] = {}
+    try:
+        for br in (branches or []):
+            key = f"{(repo_name or '').strip()}|{(br or '').strip()}"
+            if key in m:
+                out[str(br)] = m[key]
+    except Exception:
+        return out
+    return out
+
 @app.route('/api/clear-results', methods=['POST'])
 def clear_results():
     """Törli az összes tárolt futási eredményt"""
@@ -2295,7 +2338,7 @@ def delete_runnable_branch():
         logger.info(f"[DELETE] repo_name: {repo_name}, branch_name: {branch_name}")
         if not repo_name or not branch_name:
             logger.warning("[DELETE] Hiányzó repo vagy branch név!")
-            return jsonify({'success': False, 'error': 'Repository és branch név szükséges'})
+            return jsonify({'success': False, 'error': 'Repository és robot név szükséges'})
         # Letöltött robot könyvtár törlése a DownloadedRobots alól
         logger.info(f"[DELETE] delete_downloaded_robot_directory hívás: repo={repo_name}, branch={branch_name}")
         deleted_downloaded, info_down = delete_downloaded_robot_directory(repo_name, branch_name)
@@ -2303,14 +2346,14 @@ def delete_runnable_branch():
         logger.info(f"[DELETE] DownloadedRobots: {repo_name}/{branch_name}: {status_down}. {info_down}")
         response = {
             'success': deleted_downloaded,
-            'message': f'Branch {repo_name}/{branch_name} eltávolítva' if deleted_downloaded else info_down,
+            'message': f'Robot {repo_name}/{branch_name} eltávolítva' if deleted_downloaded else info_down,
             'deleted': deleted_downloaded,
             'deleted_downloaded': deleted_downloaded
         }
         logger.info(f"[DELETE] Válasz: {response}")
         return jsonify(response)
     except Exception as e:
-        logger.error(f"Hiba a branch törlésében: {e}")
+        logger.error(f"Hiba a robot törlésében: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/debug/results')
@@ -2592,7 +2635,7 @@ def api_install_selected():
             branch = (r.get('branch') or '').strip()
             if not repo or not branch:
                 logger.error(f"[INSTALL_SELECTED] Hiányzó repo vagy branch: {r}")
-                errors.append({'repo': repo, 'branch': branch, 'error': 'Hiányzó repo vagy branch'})
+                errors.append({'repo': repo, 'branch': branch, 'error': 'Hiányzó repo vagy robot'})
                 continue
             try:
                 logger.info(f"[INSTALL_SELECTED] install_robot_with_params hívás: repo='{repo}', branch='{branch}'")
@@ -2872,7 +2915,7 @@ def install_robot_with_params(repo: str, branch: str):
                 <h2>Robot letöltés sikeres</h2>
                 <ul>
                     <li>Repo: {repo}</li>
-                    <li>Branch: {branch}</li>
+                    <li>Robot: {branch}</li>
                     <li>Telepített: {installed_version}</li>
                     <li>Időpont: {timestamp}</li>
                     <li>Könyvtár: {branch_dir}</li>
@@ -2899,6 +2942,12 @@ def api_runnable_repos():
             branch for branch in repo.get('branches', get_branches_for_repo(repo['name']))
             if f"{repo['name']}|{branch}" in installed_keys
         ]
+
+        # Legutóbbi futás meta (status + timestamp) branch-enként
+        try:
+            repo_copy['last_run_by_branch'] = _build_last_run_by_branch(repo.get('name') or repo_copy.get('name') or '', list(repo_copy.get('branches') or []))
+        except Exception:
+            repo_copy['last_run_by_branch'] = {}
 
         # Kliens oldali megjelenítéshez: release meta a futtatható branchekhez
         try:
