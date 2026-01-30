@@ -178,5 +178,28 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260129_121844",
     "type": "bulk"
+  },
+  {
+    "id": 19,
+    "timestamp": "2026-01-30 05:25:33",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20260130_052358",
+    "type": "install",
+    "installed_version": "V1.0.0",
+    "stdout": "Install OK",
+    "stderr": ""
+  },
+  {
+    "id": 20,
+    "timestamp": "2026-01-30 05:26:10",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260130_052610",
+    "type": "bulk"
   }
 ]

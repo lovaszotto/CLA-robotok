@@ -365,9 +365,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                     {{ repo.name }}
                                 </a>
                             </h5>
-                            {% if repo.updated_at %}
-                            <small class="opacity-75">{{ repo.updated_at[:10] }}</small>
-                            {% endif %}
                         </div>
                         <div class="card-body">
                             <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
@@ -525,11 +522,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 
                                     <hr class="my-3">
 
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="generateReport" checked>
-                                        <label class="form-check-label" for="generateReport">Futtatás után jelentés generálása</label>
-                                    </div>
-
                                     <div class="form-check form-switch mt-2">
                                         <input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
                                         <label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
@@ -545,7 +537,6 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                     <div class="input-group">
                                         <input type="password" class="form-control" id="githubToken" placeholder="ghp_...">
                                     </div>
-                                    <div class="form-text">A token a szerveren a github_token.txt fájlba kerül, és a release információk (cím + dátum) lekéréséhez kell.</div>
 
                                     <hr class="my-3">
 
@@ -1138,7 +1129,6 @@ function renderRunnableRepos(repos) {
                             ${repo.name}
                         </a>
                     </h5>
-                    ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
                 </div>
                 <div class="card-body">
                     <p class="card-text">${repo.description || 'Nincs leírás'}</p>
@@ -2157,7 +2147,6 @@ async function saveSettings() {
             pageSize: (_safeEl('pageSize') && _safeEl('pageSize').value) ? String(_safeEl('pageSize').value) : DEFAULT_PAGE_SIZE,
             executionMode: (_safeEl('executionMode') && _safeEl('executionMode').value) ? String(_safeEl('executionMode').value) : DEFAULT_EXECUTION_MODE,
             timeout: (_safeEl('timeout') && _safeEl('timeout').value) ? String(_safeEl('timeout').value) : DEFAULT_TIMEOUT,
-            generateReport: !!(_safeEl('generateReport') && _safeEl('generateReport').checked),
             // sandboxMode-ot NEM mentjük localStorage-ba, mindig a backend a forrás
         };
         localStorage.setItem(ROBOT_MANAGER_SETTINGS_KEY, JSON.stringify(settings));
@@ -2177,7 +2166,6 @@ async function resetSettings() {
         const ps = _safeEl('pageSize');
         const em = _safeEl('executionMode');
         const to = _safeEl('timeout');
-        const gr = _safeEl('generateReport');
         const sm = _safeEl('sandboxMode');
         const gu = _safeEl('gitUrlBase');
 
@@ -2186,7 +2174,6 @@ async function resetSettings() {
         if (ps) ps.value = DEFAULT_PAGE_SIZE;
         if (em) em.value = DEFAULT_EXECUTION_MODE;
         if (to) to.value = DEFAULT_TIMEOUT;
-        if (gr) gr.checked = true;
 
         if (gu) gu.value = DEFAULT_GIT_URL_BASE;
 
@@ -2214,13 +2201,11 @@ function loadSettings() {
             const ps = _safeEl('pageSize');
             const em = _safeEl('executionMode');
             const to = _safeEl('timeout');
-            const gr = _safeEl('generateReport');
             if (dm) dm.checked = !!settings.darkMode;
             if (cv) cv.checked = !!settings.compactView;
             if (ps) ps.value = settings.pageSize || DEFAULT_PAGE_SIZE;
             if (em) em.value = settings.executionMode || DEFAULT_EXECUTION_MODE;
             if (to) to.value = settings.timeout || DEFAULT_TIMEOUT;
-            if (gr) gr.checked = (settings.generateReport !== undefined) ? !!settings.generateReport : true;
         }
     } catch (e) {
         // ignore

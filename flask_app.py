@@ -276,8 +276,9 @@ def _delete_robot_directory(base_dir: str, repo_name: str, branch_name: str):
         if not os.path.abspath(target).startswith(os.path.abspath(base_dir)):
             return False, f'Biztonsági okból a törlés megakadályozva (prefix ellenőrzés): {target}'
 
+    # Idempotens törlés: ha nincs meg a könyvtár, tekintsük sikeresnek.
     if not os.path.exists(target):
-        return False, f'Könyvtár nem létezik: {target}'
+        return True, f'Könyvtár nem létezik: {target}'
 
     try:
         shutil.rmtree(target, onerror=_on_rm_error)
@@ -1623,6 +1624,14 @@ def _persist_robot_outputs(results_dir_abs: str, stdout_text: str, stderr_text: 
         note_text = note or 'Robot Framework log nem készült, automatikusan generált fallback tartalom.'
 
 
+def _has_filled_latest_version(release_meta: dict) -> bool:
+    """A 'legfrissebb verzió' akkor tekinthető kitöltöttnek, ha van release tag."""
+    try:
+        return bool((release_meta or {}).get('tag'))
+    except Exception:
+        return False
+
+
 @app.route('/')
 def index():
     """Főoldal"""
@@ -1668,6 +1677,16 @@ def index():
             repo['available_branch_releases'] = get_latest_release_by_branch(repo, branches_for_release)
         except Exception:
             repo['available_branch_releases'] = {}
+
+        # Letölthető tab: csak azok a branchek látszódjanak, ahol ki van töltve a legfrissebb verzió (release tag)
+        try:
+            rel_map = repo.get('available_branch_releases') or {}
+            repo['available_branches'] = [
+                b for b in (repo.get('available_branches') or [])
+                if _has_filled_latest_version(rel_map.get(b) or {})
+            ]
+        except Exception:
+            pass
     version = get_robot_variable('VERSION')
     build_date = get_robot_variable('BUILD_DATE')
     # page_title logika ugyanaz, mint a get_html_template-ben
@@ -2761,6 +2780,16 @@ def api_available_repos():
             repo_copy['available_branch_releases'] = get_latest_release_by_branch(repo, list(repo_copy.get('branches') or []))
         except Exception:
             repo_copy['available_branch_releases'] = {}
+
+        # Csak azok a branchek maradjanak, ahol van kitöltött legfrissebb verzió (release tag)
+        try:
+            rel_map = repo_copy.get('available_branch_releases') or {}
+            repo_copy['branches'] = [
+                b for b in (repo_copy.get('branches') or [])
+                if _has_filled_latest_version(rel_map.get(b) or {})
+            ]
+        except Exception:
+            pass
 
         # Csak akkor adjuk vissza, ha van legalább 1 letölthető branch
         if repo_copy['branches']:

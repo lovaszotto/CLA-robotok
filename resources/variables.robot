@@ -5,7 +5,8 @@ ${BUILD_DATE}    2026-01-29 04:07:22
 
 
 # A git repository alap URL-je
-${GIT_URL_BASE}           https://github.com/lovaszotto/
+${GIT_URL_BASE}         https://github.com/lovaszotto/
+${GITHUB_REPO_NAME}         CLA-robotok
 
 # A kiválasztott GIT_URL változó (dinamikusan állítjuk be)
 ${GIT_URL}        ${EMPTY}
