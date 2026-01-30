@@ -346,10 +346,10 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                    <span class="ms-2 small last-run-meta">
                                                        {% if lr %}
                                                            {% set lr_status = (lr.get('status') or '') %}
-                                                           <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %} me-1"
+                                                           <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% elif lr_status == 'cancelled' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1"
                                                                data-bs-toggle="tooltip"
                                                                data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
-                                                               {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% else %}Futás{% endif %}
+                                                               {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
                                                            </span>
                                                            <span class="text-muted"
                                                                data-bs-toggle="tooltip"
@@ -482,6 +482,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                    <option value="">Összes státusz</option>
                                    <option value="success">Sikeres</option>
                                    <option value="failed">Sikertelen</option>
+                                   <option value="cancelled">Megszakítva</option>
                                </select>
                            </div>
                            <div class="col-md-3">
@@ -1208,8 +1209,8 @@ function renderRunnableRepos(repos) {
                                         if (!lr) return '<span class="ms-2 small last-run-meta"><span class="badge bg-secondary me-1" data-bs-toggle="tooltip" data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span></span>';
                                         const st = String(lr.status || '').trim();
                                         const ts = String(lr.timestamp || '').trim();
-                                        const badgeClass = (st === 'success') ? 'bg-success' : (st === 'failed') ? 'bg-danger' : 'bg-secondary';
-                                        const badgeText = (st === 'success') ? 'Siker' : (st === 'failed') ? 'Hiba' : 'Futás';
+                                        const badgeClass = (st === 'success') ? 'bg-success' : (st === 'failed') ? 'bg-danger' : (st === 'cancelled') ? 'bg-warning text-dark' : 'bg-secondary';
+                                        const badgeText = (st === 'success') ? 'Siker' : (st === 'failed') ? 'Hiba' : (st === 'cancelled') ? 'Megszakítva' : 'Futás';
                                         const rc = (lr.returncode !== undefined && lr.returncode !== null) ? String(lr.returncode) : '';
                                         const statusTip = `Utolsó futás státusza: ${st}${rc ? ` (rc=${rc})` : ''}`;
                                         return `<span class="ms-2 small last-run-meta">` +
@@ -1659,13 +1660,17 @@ function executeRobot(repo, branch, button) {
         stopGlobalWaitStopwatch(opKey);
         const msg = document.createElement('div');
         const currentTime = new Date().toLocaleString('hu-HU');
-        const isSuccess = Boolean(data && (data.success === true || data.status === 'ok' || data.returncode === 0));
+        const runStatus = (data && (data.run_status || data.status)) ? String(data.run_status || data.status) : '';
+        const isCancelled = (runStatus === 'cancelled');
+        const isSuccess = Boolean(!isCancelled && data && (data.success === true || data.status === 'ok' || data.returncode === 0));
         // Biztosan megjelenő pipa/X (ne függjünk a Bootstrap Icons betöltésétől)
-        const iconHtml = isSuccess
-            ? '<span class="me-1 fw-bold" style="color:#198754">✓</span>'
-            : '<span class="me-1 fw-bold" style="color:#dc3545">✗</span>';
-        const labelText = isSuccess ? 'Futtatás sikeres!' : 'Futtatás sikertelen!';
-        msg.className = `alert ${isSuccess ? 'alert-success' : 'alert-danger'} mt-3`;
+        const iconHtml = isCancelled
+            ? '<span class="me-1 fw-bold" style="color:#ffc107">⏹</span>'
+            : (isSuccess
+                ? '<span class="me-1 fw-bold" style="color:#198754">✓</span>'
+                : '<span class="me-1 fw-bold" style="color:#dc3545">✗</span>');
+        const labelText = isCancelled ? 'Futtatás megszakítva!' : (isSuccess ? 'Futtatás sikeres!' : 'Futtatás sikertelen!');
+        msg.className = `alert ${isCancelled ? 'alert-warning' : (isSuccess ? 'alert-success' : 'alert-danger')} mt-3`;
         msg.innerHTML = `${iconHtml} ${labelText} <strong>${repo}/${branch}</strong> <small class="text-muted">(${currentTime})</small>`;
         container.appendChild(msg);
         setTimeout(() => msg.remove(), 10000);
@@ -2118,6 +2123,11 @@ function _wireGlobalWaitStopButton() {
             // UI: az aktív opKey-t töröljük a stopperekből
             try { stopGlobalWaitStopwatch(activeKey); } catch (e6) { /* noop */ }
             try { if (typeof showToast === 'function') showToast('Folyamat megszakítva.', 'warning'); } catch (e7) { /* noop */ }
+
+            // Frissítsük a releváns nézeteket, hogy a "Megszakítva" státusz azonnal látszódjon.
+            try { if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots(); } catch (e8) { /* noop */ }
+            try { if (typeof refreshResults === 'function') refreshResults(); } catch (e9) { /* noop */ }
+            try { if (typeof loadResults === 'function') loadResults(currentPage || 1, getCurrentSearch ? getCurrentSearch() : '', getCurrentStatusFilter ? getCurrentStatusFilter() : '', getCurrentDateFilter ? getCurrentDateFilter() : ''); } catch (e10) { /* noop */ }
         }, { capture: true });
     } catch (e) { /* noop */ }
 }
@@ -3491,7 +3501,9 @@ function displayResults(results) {
     results.forEach(result => {
         const statusBadge = result.status === 'success' 
             ? '<span class="badge bg-success"><i class="bi bi-check-circle"></i> Sikeres</span>'
-            : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sikertelen</span>';
+            : (result.status === 'cancelled'
+                ? '<span class="badge bg-warning text-dark"><i class="bi bi-stop-circle"></i> Megszakítva</span>'
+                : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sikertelen</span>');
         // Letöltés/Futtatás badge logika
         let typeBadge = '';
         if (result.type === 'bulk') {

@@ -56,6 +56,45 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
 RUNNING_ROBOT_PROCS_LOCK = threading.RLock()
 RUNNING_ROBOT_PROCS: dict[str, subprocess.Popen] = {}
 
+# Tracks user-requested cancellations by opKey so /api/execute can persist status='cancelled'
+CANCELLED_RUN_OPS_LOCK = threading.RLock()
+CANCELLED_RUN_OPS: dict[str, float] = {}
+
+
+def _mark_run_cancelled(op_key: str):
+    """Marks a running opKey as cancelled (best-effort) with a short TTL."""
+    try:
+        now = time.time()
+        with CANCELLED_RUN_OPS_LOCK:
+            CANCELLED_RUN_OPS[str(op_key)] = now
+            # prune old markers (avoid unbounded growth)
+            cutoff = now - 15 * 60
+            for k, ts in list(CANCELLED_RUN_OPS.items()):
+                if ts < cutoff:
+                    try:
+                        del CANCELLED_RUN_OPS[k]
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+
+def _clear_run_cancelled(op_key: str):
+    try:
+        with CANCELLED_RUN_OPS_LOCK:
+            CANCELLED_RUN_OPS.pop(str(op_key), None)
+    except Exception:
+        pass
+
+
+def _consume_run_cancelled(op_key: str) -> bool:
+    """Returns True if the opKey was marked cancelled and consumes the marker."""
+    try:
+        with CANCELLED_RUN_OPS_LOCK:
+            return CANCELLED_RUN_OPS.pop(str(op_key), None) is not None
+    except Exception:
+        return False
+
 
 def _make_run_op_key(repo: str, branch: str) -> str:
     return f"run:{(repo or '').strip()}:{(branch or '').strip()}"
@@ -1727,11 +1766,20 @@ def api_cancel_execute():
             return jsonify({'success': False, 'error': 'Hiányzó repo vagy robot'}), 400
 
         op_key = _make_run_op_key(repo, branch)
+
+        # User intent: if Stop was pressed for this run, persist as cancelled even if
+        # the process is already gone from the registry.
+        _mark_run_cancelled(op_key)
+
         proc = _get_running_robot_proc(op_key)
         if proc is None:
-            return jsonify({'success': False, 'error': 'Nincs futó folyamat', 'opKey': op_key}), 404
+            return jsonify({'success': True, 'message': 'Megszakítás jelölve (folyamat nem található)', 'opKey': op_key}), 200
 
         ok, message = _kill_process_tree(proc)
+
+        # Mark as cancelled so /api/execute can persist the proper run status
+        if ok:
+            _mark_run_cancelled(op_key)
 
         # Takarítsuk ki, ha már nem fut.
         try:
@@ -1915,12 +1963,20 @@ def api_execute():
         if not repo or not branch:
             logger.warning(f"[EXECUTE] HIBA: Hiányzó paraméterek - data={data}")
             return jsonify({"success": False, "error": "Hiányzó repo vagy robot"}), 400
+
+        op_key = _make_run_op_key(repo, branch)
+        # Avoid stale cancellation markers affecting a new run
+        _clear_run_cancelled(op_key)
+
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         logger.info(f"[EXECUTE] Robot futtatás indítása: {repo}/{branch}")
         logger.info(f"[EXECUTE] run_robot_with_params hívás előtt: repo={repo}, branch={branch}")
         rc, out_dir, _stdout, _stderr = run_robot_with_params(repo, branch)
         logger.info(f"[EXECUTE] run_robot_with_params visszatért: rc={rc}, out_dir={out_dir}")
-        status = "success" if rc == 0 else "failed"
+
+        # If the user cancelled (killed) the process, persist a dedicated status
+        was_cancelled = _consume_run_cancelled(op_key)
+        status = "cancelled" if was_cancelled else ("success" if rc == 0 else "failed")
         logger.info(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
 
         # --- GitHub Issue automatikus létrehozás + csatolmányok ---
@@ -2053,7 +2109,7 @@ def api_execute():
 
                 closed = False
                 close_error = None
-                if rc == 0:
+                if rc == 0 and status == 'success':
                     try:
                         _github_close_issue(owner, repo_name, issue_number)
                         closed = True
@@ -2107,13 +2163,15 @@ def api_execute():
         }
         execution_results.append(result_entry)
 
+        api_status = 'ok' if status == 'success' else ('cancelled' if status == 'cancelled' else 'fail')
         result_obj = {
-            'success': rc == 0,
+            'success': status == 'success',
             'repo': repo,
             'branch': branch,
             'returncode': rc,
             'results_dir': out_dir,
-            'status': "ok" if rc == 0 else "fail",
+            'status': api_status,
+            'run_status': status,
             'issue': issue_info,
         }
         save_execution_results()
