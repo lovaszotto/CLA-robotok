@@ -8,7 +8,7 @@
 <meta http-equiv="Expires" content="0">
 <title>{{ page_title }} - Robot Kezelő v2.1</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <style>
 .tab-content > .row { margin-bottom: 0 !important; }
 body {
@@ -261,13 +261,13 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     <ul class="nav nav-tabs flex-grow-1 mb-0" id="mainTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="true">
-                <i class="bi bi-play-circle"></i> Telepített robotok
+                <i class="bi {% if is_sandbox %}bi-heart-pulse{% else %}bi-play-circle{% endif %}"></i> {% if is_sandbox %}Robot műtő{% else %}Telepített robotok{% endif %}
             </button>
         </li>
         <!-- Repo/Robot/Tag lista tab-link eltávolítva -->
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false">
-                <i class="bi bi-download"></i> Letölthető robotok
+                <i class="bi bi-download"></i> {% if is_sandbox %}Robot raktár{% else %}Letölthető robotok{% endif %}
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -308,18 +308,13 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                <div class="row" id="runnable-list">
                    {% set runnable_repos = [] %}
                    {% for repo in repos %}
-                       {% set runnable_branches = [] %}
-                       {% for branch in repo.branches %}
-                           {% if repo.name ~ '|' ~ branch in downloaded_keys %}
-                               {% set _ = runnable_branches.append(branch) %}
-                           {% endif %}
-                       {% endfor %}
+                       {% set runnable_branches = (repo.downloaded_branches or []) %}
                        {% if runnable_branches %}
                            {% set _ = runnable_repos.append(repo.name) %}
                            <div class="col-12 col-md-6 mb-4 repo-card-col repo-item" data-repo-name="{{ repo.name }}">
                                <div class="card repo-card h-100">
                                    <div class="card-header bg-success text-white">
-                                       <span class="card-title"><i class="bi bi-robot"></i> {{ repo.name }}</span>
+                                       <span class="card-title"><i class="bi bi-robot me-1" aria-hidden="true"></i>{{ repo.name }}</span>
                                    </div>
                                    <div class="card-body">
                                        <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
@@ -332,34 +327,50 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                    </button>
                                                    {% set rel_run = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
                                                    <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                                       data-bs-toggle="tooltip" data-bs-title="Verziók"
+                                                       data-bs-toggle="tooltip" data-bs-title="{% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}Nincs release info{% else %}Verziók{% endif %}"
                                                        data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="run"
                                                        data-repo-url="{{ repo.html_url or '' }}"
                                                        data-release-tag="{{ (rel_run.get('tag') if rel_run else '') }}"
                                                        data-release-title="{{ (rel_run.get('title') if rel_run else '') }}"
                                                        data-release-date="{{ (rel_run.get('date') if rel_run else '') }}"
                                                        onclick="branchInfoClicked(this)">
-                                                       <i class="bi bi-info-circle"></i>
+                                                       <i class="bi {% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i>
                                                    </button>
+                                                   {% if is_sandbox %}
+                                                       <button class="btn btn-outline-secondary btn-sm me-2" type="button"
+                                                           data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése"
+                                                           data-repo="{{ repo.name }}" data-branch="{{ branch }}"
+                                                           data-repo-url="{{ repo.html_url or '' }}"
+                                                           data-repo-fullname="{{ repo.full_name or '' }}"
+                                                           onclick="openCreateReleaseModal(this)">
+                                                           <i class="bi bi-box-seam"></i>
+                                                       </button>
+                                                   {% endif %}
                                                    <label for="runnable-{{ repo.name }}-{{ branch }}" class="mb-0 branch-name">{{ branch }}</label>
                                                    {% set lr = (last_run_by_key.get(repo.name ~ '|' ~ branch) if last_run_by_key else None) %}
-                                                   <span class="ms-2 small last-run-meta">
-                                                       {% if lr %}
-                                                           {% set lr_status = (lr.get('status') or '') %}
-                                                           <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% elif lr_status == 'cancelled' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1"
-                                                               data-bs-toggle="tooltip"
-                                                               data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
-                                                               {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
-                                                           </span>
-                                                           <span class="text-muted"
-                                                               data-bs-toggle="tooltip"
-                                                               data-bs-title="Utolsó futás ideje">{{ lr.get('timestamp') }}</span>
-                                                       {% else %}
-                                                           <span class="badge bg-secondary me-1"
-                                                               data-bs-toggle="tooltip"
-                                                               data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span>
-                                                       {% endif %}
-                                                   </span>
+                                                   {% if is_sandbox %}
+                                                       <span class="ms-2 small installed-version-meta" data-branch="{{ branch }}">
+                                                           <span class="badge bg-light text-dark border" data-bs-toggle="tooltip" data-bs-title="Telepített verzió">...</span>
+                                                       </span>
+                                                   {% else %}
+                                                       <span class="ms-2 small last-run-meta">
+                                                           {% if lr %}
+                                                               {% set lr_status = (lr.get('status') or '') %}
+                                                               <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% elif lr_status == 'cancelled' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1"
+                                                                   data-bs-toggle="tooltip"
+                                                                   data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
+                                                                   {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
+                                                               </span>
+                                                               <span class="text-muted"
+                                                                   data-bs-toggle="tooltip"
+                                                                   data-bs-title="Utolsó futás ideje">{{ lr.get('timestamp') }}</span>
+                                                           {% else %}
+                                                               <span class="badge bg-secondary me-1"
+                                                                   data-bs-toggle="tooltip"
+                                                                   data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span>
+                                                           {% endif %}
+                                                       </span>
+                                                   {% endif %}
                                                    <span class="ms-auto">
                                                        <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}', this)"></i>
                                                    </span>
@@ -425,14 +436,14 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             {% endif %}
                                         </button>
                                         <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                            data-bs-toggle="tooltip" data-bs-title="Verziók"
+                                            data-bs-toggle="tooltip" data-bs-title="{% if not rel or not (rel.get('tag') if rel else '') %}Nincs release info{% else %}Verziók{% endif %}"
                                             data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="download"
                                             data-repo-url="{{ repo.html_url or '' }}"
                                             data-release-tag="{{ (rel.get('tag') if rel else '') }}"
                                             data-release-title="{{ (rel.get('title') if rel else '') }}"
                                             data-release-date="{{ (rel.get('date') if rel else '') }}"
                                             onclick="branchInfoClicked(this)">
-                                            <i class="bi bi-info-circle"></i>
+                                            <i class="bi {% if not rel or not (rel.get('tag') if rel else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i>
                                         </button>
                                         <span class="branch-name">{{ branch }}</span>
                                      </div>
@@ -735,6 +746,39 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
 
                 <pre id="serverLogPre" class="server-log log-wrap"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Kiadás készítése MODAL (sandbox) -->
+<div class="modal fade" id="createReleaseModal" tabindex="-1" aria-labelledby="createReleaseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createReleaseModalLabel"><i class="bi bi-box-seam me-1"></i> Kiadás készítése</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body">
+                <div class="small text-muted mb-3" id="createReleaseTargetInfo">Repo: - | Robot: -</div>
+                <form id="createReleaseForm" onsubmit="return false;">
+                    <div class="mb-3">
+                        <label for="createReleaseTagName" class="form-label">TagName</label>
+                        <input type="text" class="form-control" id="createReleaseTagName" placeholder="pl. v1.2.3" autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label for="createReleaseTitle" class="form-label">ReleaseTitle</label>
+                        <input type="text" class="form-control" id="createReleaseTitle" placeholder="pl. Új kiadás" autocomplete="off">
+                    </div>
+                    <div class="mb-0">
+                        <label for="createReleaseNotes" class="form-label">ReleaseNotes</label>
+                        <textarea class="form-control" id="createReleaseNotes" rows="6" placeholder="Kiadási megjegyzések..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
+                <button type="button" class="btn btn-primary" id="createReleaseCreateBtn">Kiadás készítése</button>
             </div>
         </div>
     </div>
@@ -1097,6 +1141,16 @@ async function updateRunnableUpdateIcons() {
     const buttons = Array.from(container.querySelectorAll('button[data-mode="run"][data-repo][data-branch]'));
     if (!buttons.length) return;
 
+    const escHtml = (value) => {
+        const s = (value === null || value === undefined) ? '' : String(value);
+        return s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    };
+
     const branches = Array.from(new Set(buttons.map(b => (b.getAttribute('data-branch') || '').trim()).filter(Boolean)));
     if (!branches.length) return;
 
@@ -1136,11 +1190,27 @@ async function updateRunnableUpdateIcons() {
             iconEl.className = 'bi bi-bell-fill';
             iconEl.style.color = '#fd7e14';
             try { btn.setAttribute('data-bs-title', 'Új verzió elérhető'); } catch (e) { }
+        } else if (!latestTag) {
+            iconEl.className = 'bi bi-hammer';
+            iconEl.style.color = '';
+            try { btn.setAttribute('data-bs-title', 'Nincs release info'); } catch (e) { }
         } else {
             iconEl.className = 'bi bi-info-circle';
             iconEl.style.color = '';
             try { btn.setAttribute('data-bs-title', 'Verziók'); } catch (e) { }
         }
+
+        // Sandbox módban: jelenítsük meg a telepített verziót a placeholder helyén
+        try {
+            const metas = Array.from(container.querySelectorAll('.installed-version-meta'))
+                .filter(el => String(el.getAttribute('data-branch') || '').trim() === br);
+            if (metas.length) {
+                const ver = (installed && installed !== 'NONE') ? installed : 'NONE';
+                metas.forEach(el => {
+                    el.innerHTML = `<span class="badge bg-light text-dark border" data-bs-toggle="tooltip" data-bs-title="Telepített verzió">${escHtml(ver)}</span>`;
+                });
+            }
+        } catch (e) { }
 
         // Tooltip frissítése (ha már létrejött)
         try {
@@ -1158,6 +1228,7 @@ function renderRunnableRepos(repos) {
     if (!repos || repos.length === 0) {
         return '<div class="col-12 text-center"><h2 class="text-muted mt-5">Nincs telepített, futtatható robot.</h2></div>';
     }
+    const sandboxEnabled = !!document.getElementById('sandboxMode')?.checked;
     const escAttr = (value) => {
         const s = (value === null || value === undefined) ? '' : String(value);
         return s
@@ -1177,7 +1248,7 @@ function renderRunnableRepos(repos) {
             <div class="card repo-card h-100" style="background-color: #e3f2fd !important;">
                 <div class="card-header text-white">
                     <h5 class="card-title mb-0">
-                        <i class="bi bi-github"></i>
+                        <i class="bi bi-robot"></i>
                         <a href="${repo.html_url || '#'}" target="_blank" class="text-white text-decoration-none">
                             ${repo.name}
                         </a>
@@ -1195,7 +1266,11 @@ function renderRunnableRepos(repos) {
                                     <i class="bi bi-play-fill"></i>
                                 </button>
                                 <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="Verziók"
+                                    data-bs-toggle="tooltip" data-bs-title="${(() => {
+                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                        const hasRelease = !!(rel && rel.tag);
+                                        return hasRelease ? 'Verziók' : 'Nincs release info';
+                                    })()}"
                                     data-repo="${repo.name}"
                                     data-branch="${branch}"
                                     data-mode="run"
@@ -1204,11 +1279,21 @@ function renderRunnableRepos(repos) {
                                     data-release-title="${escAttr((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
                                     data-release-date="${escAttr((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
                                     onclick="branchInfoClicked(this)">
-                                    <i class="bi bi-info-circle"></i>
+                                    ${(() => {
+                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                        const hasRelease = !!(rel && rel.tag);
+                                        return `<i class=\"bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}\"></i>`;
+                                    })()}
                                 </button>
                                 <i class="bi bi-trash text-danger me-2" style="cursor: pointer;" onclick="deleteRunnableBranch('${repo.name}', '${branch}', this)" title="Eltávolítás a futtathatók közül"></i>
+                                ${sandboxEnabled ? `<button class="btn btn-outline-secondary btn-sm me-2" type="button"
+                                    data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése"
+                                    data-repo="${escAttr(repo.name)}" data-branch="${escAttr(branch)}"
+                                    data-repo-url="${escAttr(repo.html_url || '')}"
+                                    data-repo-fullname="${escAttr(repo.full_name || '')}"
+                                    onclick="openCreateReleaseModal(this)"><i class="bi bi-box-seam"></i></button>` : ''}
                                 <span class="branch-name">${branch}</span>
-                                ${(() => {
+                                ${sandboxEnabled ? `<span class="ms-2 small installed-version-meta" data-branch="${escAttr(branch)}"><span class="badge bg-light text-dark border" data-bs-toggle="tooltip" data-bs-title="Telepített verzió">...</span></span>` : (() => {
                                     try {
                                         const lr = lastRunByBranch ? lastRunByBranch[branch] : null;
                                         if (!lr) return '<span class="ms-2 small last-run-meta"><span class="badge bg-secondary me-1" data-bs-toggle="tooltip" data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span></span>';
@@ -1235,6 +1320,109 @@ function renderRunnableRepos(repos) {
         `;
     });
     return html;
+}
+
+// --- Kiadás készítése (sandbox) ---
+function openCreateReleaseModal(btn) {
+    try {
+        const modalEl = document.getElementById('createReleaseModal');
+        if (!modalEl || !window.bootstrap) {
+            showToast('A kiadás készítése modal nem elérhető.', 'danger');
+            return;
+        }
+
+        const repo = (btn && btn.dataset) ? (btn.dataset.repo || '') : '';
+        const branch = (btn && btn.dataset) ? (btn.dataset.branch || '') : '';
+        const repoUrl = (btn && btn.dataset) ? (btn.dataset.repoUrl || '') : '';
+        const repoFullName = (btn && btn.dataset) ? (btn.dataset.repoFullname || '') : '';
+
+        modalEl.__createReleaseState = { repo, branch, repoUrl, repoFullName };
+
+        const infoEl = document.getElementById('createReleaseTargetInfo');
+        const repoDisplay = (repoFullName && repoFullName.includes('/')) ? repoFullName : repo;
+        if (infoEl) {
+            infoEl.textContent = `Repo: ${repoDisplay || '-'}${branch ? (' | Robot: ' + branch) : ''}`;
+        }
+
+        const tagEl = document.getElementById('createReleaseTagName');
+        const titleEl = document.getElementById('createReleaseTitle');
+        const notesEl = document.getElementById('createReleaseNotes');
+        if (tagEl) tagEl.value = '';
+        if (titleEl) titleEl.value = branch ? `Release ${branch}` : '';
+        if (notesEl) notesEl.value = '';
+
+        if (!modalEl.__createReleaseHooked) {
+            const createBtn = document.getElementById('createReleaseCreateBtn');
+            const formEl = document.getElementById('createReleaseForm');
+
+            const submit = async () => {
+                const st = modalEl.__createReleaseState || {};
+                const tagName = String((document.getElementById('createReleaseTagName') || {}).value || '').trim();
+                const releaseTitle = String((document.getElementById('createReleaseTitle') || {}).value || '').trim();
+                const releaseNotes = String((document.getElementById('createReleaseNotes') || {}).value || '');
+
+                if (!tagName) {
+                    showToast('Add meg a TagName értéket.', 'warning');
+                    try { if (tagEl) tagEl.focus(); } catch (e) { }
+                    return;
+                }
+
+                const originalText = createBtn ? createBtn.innerHTML : '';
+                try {
+                    if (createBtn) {
+                        createBtn.disabled = true;
+                        createBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Kiadás készítése...';
+                    }
+
+                    const r = await fetch('/api/create_github_release', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            repo: st.repo || '',
+                            branch: st.branch || '',
+                            repo_url: st.repoUrl || '',
+                            repo_full_name: st.repoFullName || '',
+                            tag_name: tagName,
+                            release_title: releaseTitle,
+                            release_notes: releaseNotes,
+                        })
+                    });
+                    const data = await r.json().catch(() => ({}));
+                    if (!r.ok || !(data && data.success)) {
+                        const msg = (data && (data.error || data.details)) ? (data.error || data.details) : `HTTP ${r.status}`;
+                        throw new Error(msg);
+                    }
+
+                    const url = (data && data.html_url) ? String(data.html_url) : '';
+                    showToast(
+                        `Kiadás elkészült: <strong>${_escapeHtml(tagName)}</strong>` + (url ? ` — <a href="${_escapeHtml(url)}" target="_blank" rel="noopener">Megnyitás</a>` : ''),
+                        'success'
+                    );
+                    try {
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                    } catch (e) { }
+                } catch (e) {
+                    showToast('Kiadás készítése hiba: ' + String(e), 'danger');
+                } finally {
+                    if (createBtn) {
+                        createBtn.disabled = false;
+                        createBtn.innerHTML = originalText || 'Kiadás készítése';
+                    }
+                }
+            };
+
+            if (createBtn) createBtn.addEventListener('click', submit);
+            if (formEl) formEl.addEventListener('submit', (ev) => { try { ev.preventDefault(); } catch (e) { } submit(); });
+            modalEl.__createReleaseHooked = true;
+        }
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        setTimeout(() => { try { if (tagEl) tagEl.focus(); } catch (e) { } }, 200);
+    } catch (e) {
+        showToast('Kiadás modal hiba: ' + String(e), 'danger');
+    }
 }
 
 // Letölthető robotok tab frissítése AJAX-szal
@@ -1316,7 +1504,11 @@ function renderAvailableRepos(repos) {
                                     })()}
                                 </button>
                                 <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="Verziók"
+                                    data-bs-toggle="tooltip" data-bs-title="${(() => {
+                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                        const hasRelease = !!(rel && rel.tag);
+                                        return hasRelease ? 'Verziók' : 'Nincs release info';
+                                    })()}"
                                     data-repo="${repo.name}"
                                     data-branch="${branch}"
                                     data-mode="download"
@@ -1325,7 +1517,11 @@ function renderAvailableRepos(repos) {
                                     data-release-title="${escapeHtml((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
                                     data-release-date="${escapeHtml((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
                                     onclick="branchInfoClicked(this)">
-                                    <i class="bi bi-info-circle"></i>
+                                    ${(() => {
+                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                        const hasRelease = !!(rel && rel.tag);
+                                        return `<i class=\"bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}\"></i>`;
+                                    })()}
                                 </button>
                                 ${(() => {
                                     const rel = relMap && relMap[branch] ? relMap[branch] : null;

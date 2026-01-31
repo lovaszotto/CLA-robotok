@@ -432,6 +432,7 @@ def get_installed_keys():
     Visszaad: set(["<repo>|<branch>", ...])
     """
     keys = set()
+    is_sandbox = get_sandbox_mode()
     base_dir = get_installed_robots_dir()
     logger.info(f"[ROBOT ELLENŐRZÉS] Futtatható robotok keresése ebben a könyvtárban: {os.path.abspath(base_dir)}")
     try:
@@ -444,10 +445,15 @@ def get_installed_keys():
                     branch_path = os.path.join(repo_path, branch_name)
                     if not os.path.isdir(branch_path):
                         continue
-                    # Csak akkor tekintjük futtathatónak, ha van .venv mappa (ready to run)
-                    venv_folder = os.path.join(branch_path, '.venv')
-                    if os.path.isdir(venv_folder):
+                    if is_sandbox:
+                        # Sandbox módban csak klónozás történik (nincs telepito.bat, nincs .venv).
+                        # Ilyenkor minden repo/branch mappa „telepítettként” jelenjen meg a Telepített tabon.
                         keys.add(f"{repo_name}|{branch_name}")
+                    else:
+                        # Normál módban csak akkor tekintjük futtathatónak, ha van .venv mappa (ready to run)
+                        venv_folder = os.path.join(branch_path, '.venv')
+                        if os.path.isdir(venv_folder):
+                            keys.add(f"{repo_name}|{branch_name}")
     except Exception as e:
         logger.info(f"[INFO] Nem sikerült a futtatható kulcsokat felderíteni: {e}")
     return keys
@@ -1263,6 +1269,94 @@ def api_create_github_issue():
         return jsonify({'success': False, 'error': 'Issue létrehozás hiba', 'details': str(e)}), 500
 
 
+@app.route('/api/create_github_release', methods=['POST'])
+def api_create_github_release():
+    """GitHub Release létrehozása (tag + cím + release notes) tokennel.
+
+    Várt payload (JSON):
+      - repo_full_name (opcionális): "owner/repo"
+      - repo_url (opcionális): "https://github.com/owner/repo"
+      - repo (opcionális): "repo"
+      - branch (opcionális): target_commitish
+      - tag_name (kötelező)
+      - release_title (opcionális)
+      - release_notes (opcionális)
+    """
+    token = _get_github_token()
+    if not token:
+        return jsonify({'success': False, 'error': 'Hiányzó GitHub token (Beállítások -> GitHub token)'}), 403
+
+    data = request.get_json(silent=True) or {}
+    repo_full_name = (data.get('repo_full_name') or '').strip()
+    repo_url = (data.get('repo_url') or '').strip()
+    repo_name = (data.get('repo') or data.get('repo_name') or '').strip()
+    branch = (data.get('branch') or '').strip()
+    tag_name = (data.get('tag_name') or '').strip()
+    release_title = (data.get('release_title') or '').strip()
+    release_notes = (data.get('release_notes') or '')
+
+    if not tag_name:
+        return jsonify({'success': False, 'error': 'Hiányzó TagName (tag_name)'}), 400
+
+    def _parse_owner_repo_from_inputs(full_name: str, url: str, name_only: str) -> tuple[str, str]:
+        full_name = (full_name or '').strip()
+        if '/' in full_name:
+            o, r = full_name.split('/', 1)
+            return (o.strip(), r.strip())
+        url = (url or '').strip()
+        m = re.search(r'github\.com/([^/]+)/([^/]+)', url, flags=re.IGNORECASE)
+        if m:
+            return (m.group(1).strip(), m.group(2).strip().replace('.git', ''))
+        # Fallback: settings owner + name-only (ha adott)
+        settings = _get_github_settings()
+        owner = (settings.get('owner') or 'lovaszotto').strip()
+        return (owner, (name_only or '').strip())
+
+    owner, repo = _parse_owner_repo_from_inputs(repo_full_name, repo_url, repo_name)
+    if not owner or not repo:
+        return jsonify({'success': False, 'error': 'Hiányzó vagy érvénytelen repo azonosító (repo_full_name/repo_url/repo).'}), 400
+
+    payload: dict = {
+        'tag_name': tag_name,
+        'name': release_title or tag_name,
+        'body': release_notes or '',
+        'draft': False,
+        'prerelease': False,
+    }
+    if branch:
+        payload['target_commitish'] = branch
+
+    url = f'https://api.github.com/repos/{owner}/{repo}/releases'
+    try:
+        resp = requests.post(url, headers=_github_headers(), json=payload, timeout=30)
+        if resp.status_code in (200, 201):
+            j = resp.json() or {}
+            return jsonify({
+                'success': True,
+                'id': j.get('id'),
+                'tag_name': j.get('tag_name') or tag_name,
+                'name': j.get('name') or (release_title or tag_name),
+                'html_url': j.get('html_url'),
+                'repo': f'{owner}/{repo}',
+            })
+
+        detail = ''
+        try:
+            j = resp.json() or {}
+            detail = j.get('message') or str(j)
+        except Exception:
+            detail = (resp.text or '').strip()
+
+        return jsonify({
+            'success': False,
+            'error': f'GitHub API hiba (status={resp.status_code})',
+            'details': detail,
+        }), 502
+    except Exception as e:
+        logger.info(f"[GITHUB-RELEASE] Létrehozás hiba: {e}")
+        return jsonify({'success': False, 'error': 'Release létrehozás hiba', 'details': str(e)}), 500
+
+
 def _safe_path_basename(path: str) -> str:
     try:
         return pathlib.Path(path).name
@@ -1906,17 +2000,33 @@ def index():
 
     # Előre kiszámoljuk a futtatható (telepített) és letölthető branch-eket repo szinten
     installed_keys = get_installed_keys()
+    installed_branches_by_repo: dict[str, list[str]] = {}
+    if is_sandbox:
+        # Sandbox módban a telepített listát a SandboxRobots könyvtárból kell építeni,
+        # mert nincs .venv és a remote branch lekérdezés best-effort (akár üres is lehet).
+        for key in installed_keys:
+            try:
+                repo_name, branch_name = key.split('|', 1)
+                installed_branches_by_repo.setdefault(repo_name, []).append(branch_name)
+            except Exception:
+                continue
     for repo in repos:
-        safe_repo = repo['name'].replace('/', '_')
-        # Megjegyzés: az InstalledRobots-ban a mappanevek a tényleges repo/branch neveket tartalmazzák
-        repo['downloaded_branches'] = [
-            branch for branch in repo['branches']
-            if f"{repo['name']}|{branch}" in installed_keys
-        ]
-        repo['available_branches'] = [
-            branch for branch in repo['branches']
-            if f"{repo['name']}|{branch}" not in installed_keys
-        ]
+        # Megjegyzés: a könyvtárstruktúra <base>/<repo>/<branch>/
+        if is_sandbox:
+            repo['downloaded_branches'] = sorted(set(installed_branches_by_repo.get(repo['name'], []) or []))
+            repo['available_branches'] = [
+                branch for branch in (repo.get('branches') or [])
+                if branch not in set(repo['downloaded_branches'] or [])
+            ]
+        else:
+            repo['downloaded_branches'] = [
+                branch for branch in (repo.get('branches') or [])
+                if f"{repo['name']}|{branch}" in installed_keys
+            ]
+            repo['available_branches'] = [
+                branch for branch in (repo.get('branches') or [])
+                if f"{repo['name']}|{branch}" not in installed_keys
+            ]
 
         # Branch-enként a legfrissebb release tag/cím/dátum (best-effort)
         # (kell a futtatható és a letölthető tab Info ablakához is)
@@ -1973,18 +2083,34 @@ def refresh_data():
     # Mindig friss adatokat olvasunk, semmilyen cache-t nem használunk
     repos = get_repository_data()  # Ez mindig újraolvassa a repo metaadatokat
     installed_keys = get_installed_keys()
+    is_sandbox = get_sandbox_mode()
+    installed_branches_by_repo: dict[str, list[str]] = {}
+    if is_sandbox:
+        for key in installed_keys:
+            try:
+                repo_name, branch_name = key.split('|', 1)
+                installed_branches_by_repo.setdefault(repo_name, []).append(branch_name)
+            except Exception:
+                continue
     logger.info(f"[API/REFRESH] installed_keys: {installed_keys}")
     for repo in repos:
         repo['branches'] = get_branches_for_repo(repo['name'])  # Mindig újraolvassa a branch-eket
         logger.info(f"[API/REFRESH] repo: {repo['name']}, branches: {repo['branches']}")
-        repo['downloaded_branches'] = [
-            branch for branch in repo['branches']
-            if f"{repo['name']}|{branch}" in installed_keys
-        ]
-        repo['available_branches'] = [
-            branch for branch in repo['branches']
-            if f"{repo['name']}|{branch}" not in installed_keys
-        ]
+        if is_sandbox:
+            repo['downloaded_branches'] = sorted(set(installed_branches_by_repo.get(repo['name'], []) or []))
+            repo['available_branches'] = [
+                branch for branch in (repo.get('branches') or [])
+                if branch not in set(repo['downloaded_branches'] or [])
+            ]
+        else:
+            repo['downloaded_branches'] = [
+                branch for branch in (repo.get('branches') or [])
+                if f"{repo['name']}|{branch}" in installed_keys
+            ]
+            repo['available_branches'] = [
+                branch for branch in (repo.get('branches') or [])
+                if f"{repo['name']}|{branch}" not in installed_keys
+            ]
         logger.info(f"[API/REFRESH] repo: {repo['name']}, available_branches: {repo['available_branches']}")
     return jsonify(repos)
 
@@ -2470,16 +2596,20 @@ def delete_runnable_branch():
         if not repo_name or not branch_name:
             logger.warning("[DELETE] Hiányzó repo vagy branch név!")
             return jsonify({'success': False, 'error': 'Repository és robot név szükséges'})
-        # Letöltött robot könyvtár törlése a DownloadedRobots alól
-        logger.info(f"[DELETE] delete_downloaded_robot_directory hívás: repo={repo_name}, branch={branch_name}")
-        deleted_downloaded, info_down = delete_downloaded_robot_directory(repo_name, branch_name)
-        status_down = 'törölve' if deleted_downloaded else 'nem található, nincs mit törölni'
-        logger.info(f"[DELETE] DownloadedRobots: {repo_name}/{branch_name}: {status_down}. {info_down}")
+        # Telepített (runnable) robot könyvtár törlése: normál módban DownloadedRobots, sandbox módban SandboxRobots.
+        is_sandbox = get_sandbox_mode()
+        base_dir = get_installed_robots_dir()
+        logger.info(f"[DELETE] sandbox_mode={is_sandbox} base_dir={base_dir}")
+        logger.info(f"[DELETE] _delete_robot_directory hívás: base_dir={base_dir} repo={repo_name} branch={branch_name}")
+        deleted_any, info_down = _delete_robot_directory(base_dir, repo_name, branch_name)
+        status_down = 'törölve' if deleted_any else 'nem található, nincs mit törölni'
+        logger.info(f"[DELETE] BASE_DIR ({'SANDBOX' if is_sandbox else 'DOWNLOADED'}): {repo_name}/{branch_name}: {status_down}. {info_down}")
         response = {
-            'success': deleted_downloaded,
-            'message': f'Robot {repo_name}/{branch_name} eltávolítva' if deleted_downloaded else info_down,
-            'deleted': deleted_downloaded,
-            'deleted_downloaded': deleted_downloaded
+            'success': deleted_any,
+            'message': f'Robot {repo_name}/{branch_name} eltávolítva' if deleted_any else info_down,
+            'deleted': deleted_any,
+            # Backward-compat: frontend might display/inspect this field
+            'deleted_downloaded': deleted_any
         }
         logger.info(f"[DELETE] Válasz: {response}")
         return jsonify(response)
@@ -3063,16 +3193,32 @@ def install_robot_with_params(repo: str, branch: str):
 # --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
 @app.route('/api/runnable_repos', methods=['GET'])
 def api_runnable_repos():
-    """Csak a futtatható (telepített, .venv mappával rendelkező) branch-ek repo-nként."""
+    """Csak a futtatható/telepített branch-ek repo-nként.
+
+    Normál módban: csak .venv-es (telepített) branchek.
+    Sandbox módban: a SandboxRobots alatti klónok (nincs .venv elvárás).
+    """
     repos = get_repository_data()
     installed_keys = get_installed_keys()
+    is_sandbox = get_sandbox_mode()
+    installed_branches_by_repo: dict[str, list[str]] = {}
+    if is_sandbox:
+        for key in installed_keys:
+            try:
+                repo_name, branch_name = key.split('|', 1)
+                installed_branches_by_repo.setdefault(repo_name, []).append(branch_name)
+            except Exception:
+                continue
     result = []
     for repo in repos:
         repo_copy = dict(repo)
-        repo_copy['branches'] = [
-            branch for branch in repo.get('branches', get_branches_for_repo(repo['name']))
-            if f"{repo['name']}|{branch}" in installed_keys
-        ]
+        if is_sandbox:
+            repo_copy['branches'] = sorted(set(installed_branches_by_repo.get(repo.get('name') or repo_copy.get('name') or '', []) or []))
+        else:
+            repo_copy['branches'] = [
+                branch for branch in repo.get('branches', get_branches_for_repo(repo['name']))
+                if f"{repo['name']}|{branch}" in installed_keys
+            ]
 
         # Legutóbbi futás meta (status + timestamp) branch-enként
         try:
