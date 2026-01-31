@@ -1139,7 +1139,8 @@ function refreshRunnableRobots() {
 async function updateRunnableUpdateIcons() {
     const container = document.getElementById('runnable-list') || document;
     const buttons = Array.from(container.querySelectorAll('button[data-mode="run"][data-repo][data-branch]'));
-    if (!buttons.length) return;
+    const metaEls = Array.from(container.querySelectorAll('.installed-version-meta[data-branch]'));
+    if (!buttons.length && !metaEls.length) return;
 
     const escHtml = (value) => {
         const s = (value === null || value === undefined) ? '' : String(value);
@@ -1151,7 +1152,12 @@ async function updateRunnableUpdateIcons() {
             .replace(/'/g, '&#39;');
     };
 
-    const branches = Array.from(new Set(buttons.map(b => (b.getAttribute('data-branch') || '').trim()).filter(Boolean)));
+    const branches = Array.from(new Set(
+        ([])
+            .concat(buttons.map(b => (b.getAttribute('data-branch') || '').trim()))
+            .concat(metaEls.map(el => (el.getAttribute('data-branch') || '').trim()))
+            .filter(Boolean)
+    ));
     if (!branches.length) return;
 
     window.__installedVersionCache = window.__installedVersionCache || {};
@@ -1401,6 +1407,10 @@ function openCreateReleaseModal(btn) {
                     try {
                         const modal = bootstrap.Modal.getInstance(modalEl);
                         if (modal) modal.hide();
+                    } catch (e) { }
+                    // Kiadás készítése után frissítsük a Robot műtő (telepített) listát
+                    try {
+                        if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots();
                     } catch (e) { }
                 } catch (e) {
                     showToast('Kiadás készítése hiba: ' + String(e), 'danger');
