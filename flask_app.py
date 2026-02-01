@@ -5,7 +5,7 @@ import requests
 
 # ...existing code...
 # --- Szükséges importok ---
-from flask import Flask, render_template, render_template_string, jsonify, request, send_from_directory, session
+from flask import Flask, render_template, render_template_string, jsonify, request, send_from_directory, session, Response
 import json
 import subprocess
 import os
@@ -50,6 +50,22 @@ app = Flask(__name__)
 # Csak WARNING szinttől logoljon a werkzeug (HTTP kérések ne menjenek a server.log-ba)
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
+
+
+@app.route('/api/help_manual', methods=['GET'])
+def api_help_manual():
+    """Returns the FELHASZNALOI_KEZIKONYV.md content as UTF-8 plain text."""
+    manual_path = os.path.join(os.path.dirname(__file__), 'FELHASZNALOI_KEZIKONYV.md')
+    if not os.path.exists(manual_path):
+        return Response('A felhasználói kézikönyv nem található.', mimetype='text/plain; charset=utf-8', status=404)
+
+    try:
+        with open(manual_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except Exception as e:
+        return Response(f'Hiba a kézikönyv beolvasásakor: {e}', mimetype='text/plain; charset=utf-8', status=500)
+
+    return Response(content, mimetype='text/plain; charset=utf-8')
 
 # --- Running Robot process registry (for cancel/kill) ---
 # Key format: run:<repo>:<branch>

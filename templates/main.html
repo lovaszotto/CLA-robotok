@@ -228,6 +228,66 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     background-color: #cfe8ff !important; /* világoskék */
     color: #0b3d91 !important; /* sötétkék */
 }
+
+.help-manual-md {
+    width: 100%;
+    height: 70vh;
+    margin: 0;
+    padding: 14px 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    font-weight: 400;
+    color: #111111;
+    background: #ffffff;
+    border: 1px solid rgba(17, 24, 39, 0.18);
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.04);
+    overflow: auto;
+    white-space: normal;
+}
+
+.help-manual-md h1, .help-manual-md h2, .help-manual-md h3 {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+.help-manual-md h1 { font-size: 1.55rem; }
+.help-manual-md h2 { font-size: 1.25rem; }
+.help-manual-md h3 { font-size: 1.05rem; }
+
+.help-manual-md code {
+    background: rgba(2, 6, 23, 0.06);
+    padding: 0.12rem 0.25rem;
+    border-radius: 6px;
+}
+.help-manual-md pre {
+    background: #0b1220;
+    color: #e9eef7;
+    padding: 12px 14px;
+    border-radius: 10px;
+    overflow: auto;
+}
+.help-manual-md pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.help-manual-md table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.5rem 0 1rem 0;
+}
+.help-manual-md th, .help-manual-md td {
+    border: 1px solid rgba(17, 24, 39, 0.18);
+    padding: 6px 8px;
+    vertical-align: top;
+}
+.help-manual-md th {
+    background: rgba(2, 6, 23, 0.04);
+    font-weight: 700;
+}
 </style>
 </head>
 <body>
@@ -289,6 +349,11 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="log-tab" data-bs-toggle="tab" data-bs-target="#log" type="button" role="tab" aria-controls="log" aria-selected="false">
                 <i class="bi bi-file-earmark-text"></i> Log
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="help-tab" data-bs-toggle="tab" data-bs-target="#help" type="button" role="tab" aria-controls="help" aria-selected="false">
+                <i class="bi bi-question-circle"></i> Segítség
             </button>
         </li>
     </ul>
@@ -745,6 +810,28 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <pre id="serverLogPre" class="server-log log-wrap"></pre>
             </div>
         </div>
+
+        <div class="tab-pane fade" id="help" role="tabpanel" aria-labelledby="help-tab">
+            <div class="page-section py-4 opaque-panel">
+                <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+                    <div class="d-flex align-items-baseline gap-3">
+                        <h2 class="mb-0">Segítség</h2>
+                        <span class="small text-muted">FELHASZNALOI_KEZIKONYV.md</span>
+                    </div>
+
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Kézikönyv műveletek">
+                        <button type="button" class="btn btn-outline-primary" id="helpManualRefreshBtn" title="Frissítés">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        <a class="btn btn-outline-secondary" id="helpManualOpenBtn" href="/api/help_manual" target="_blank" rel="noopener" title="Megnyitás új ablakban">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <div id="helpManualContent" class="help-manual-md">Betöltés...</div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -974,6 +1061,8 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
 <script src="/static/main.js" defer></script>
 <script>
 // --- Repo/Robot/Tag lista MODAL betöltés ---
@@ -1646,6 +1735,63 @@ function filterReposAvailable() {
     });
 }
 
+// --- Segítség / Kézikönyv ---
+window.__helpManualLoaded = window.__helpManualLoaded || false;
+window.__helpManualLoading = window.__helpManualLoading || false;
+
+function renderHelpManualMarkdown(mdText) {
+    try {
+        if (window.marked && typeof window.marked.parse === 'function') {
+            const rawHtml = window.marked.parse(String(mdText || ''), { gfm: true, breaks: true });
+            if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+                return window.DOMPurify.sanitize(rawHtml, { USE_PROFILES: { html: true } });
+            }
+            return rawHtml;
+        }
+    } catch (e) {
+        // ignore
+    }
+    return null;
+}
+
+async function loadHelpManual(forceReload = false) {
+    if (window.__helpManualLoading) return;
+    if (window.__helpManualLoaded && !forceReload) return;
+
+    const container = document.getElementById('helpManualContent');
+    if (!container) return;
+
+    window.__helpManualLoading = true;
+    container.textContent = 'Betöltés...';
+
+    try {
+        const resp = await fetch('/api/help_manual', { cache: 'no-store' });
+        const text = await resp.text();
+        if (!resp.ok) {
+            container.textContent = text || 'Hiba történt a kézikönyv betöltésekor.';
+            showToast('Hiba: a kézikönyv betöltése sikertelen.', 'danger');
+            window.__helpManualLoaded = false;
+            return;
+        }
+
+        const rendered = renderHelpManualMarkdown(text || '');
+        if (rendered !== null) {
+            container.style.whiteSpace = '';
+            container.innerHTML = rendered;
+        } else {
+            container.style.whiteSpace = 'pre-wrap';
+            container.textContent = text || '';
+        }
+        window.__helpManualLoaded = true;
+    } catch (e) {
+        container.textContent = 'Hiba történt a kézikönyv betöltésekor.';
+        showToast('Hiba: nem sikerült elérni a kézikönyvet.', 'danger');
+        window.__helpManualLoaded = false;
+    } finally {
+        window.__helpManualLoading = false;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     setGlobalFilterEnabledState();
     initTooltips();
@@ -1656,8 +1802,18 @@ document.addEventListener('DOMContentLoaded', function () {
             setGlobalFilterEnabledState();
             filterActiveTabRobots();
             setTimeout(() => { try { updateRunnableUpdateIcons(); } catch (e) {} }, 50);
+
+            const activeId = getActiveMainTabId();
+            if (activeId === 'help-tab') {
+                loadHelpManual(false);
+            }
         });
     });
+
+    const helpRefreshBtn = document.getElementById('helpManualRefreshBtn');
+    if (helpRefreshBtn) {
+        helpRefreshBtn.addEventListener('click', () => loadHelpManual(true));
+    }
 });
 
 async function branchInfoClicked(button) {
