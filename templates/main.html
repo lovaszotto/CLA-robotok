@@ -320,7 +320,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                            <div class="col-12 col-md-6 mb-4 repo-card-col repo-item" data-repo-name="{{ repo.name }}">
                                <div class="card repo-card h-100">
                                    <div class="card-header bg-success text-white">
-                                       <span class="card-title"><i class="bi bi-robot me-1" aria-hidden="true"></i>{{ repo.name }}</span>
+                                       <span class="card-title"><i class="bi bi-robot me-1" aria-hidden="true"></i>{{ repo.name }} <span class="opacity-75 ms-1">({{ runnable_branches|length }})</span></span>
                                    </div>
                                    <div class="card-body">
                                        <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
@@ -414,7 +414,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             <h5 class="card-title mb-0">
                                 <i class="bi bi-github"></i>
                                 <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
-                                    {{ repo.name }}
+                                    {{ repo.name }} <span class="opacity-75 ms-1">({{ repo.available_branches|length }})</span>
                                 </a>
                             </h5>
                         </div>
@@ -442,7 +442,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                             onclick="branchInfoClicked(this)">
                                             <i class="bi {% if not rel or not (rel.get('tag') if rel else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i>
                                         </button>
-                                        <span class="branch-name">{{ branch }}</span>
+                                                    <span class="branch-name">{{ branch }}</span>
                                      </div>
                                 {% endfor %}
                             </div>
@@ -1256,6 +1256,7 @@ function renderRunnableRepos(repos) {
     let html = '';
     repos.forEach(repo => {
         if (!repo.branches || repo.branches.length === 0) return;
+        const cardCount = Array.isArray(repo.branches) ? repo.branches.length : 0;
         const relMap = repo.available_branch_releases || {};
         const lastRunByBranch = repo.last_run_by_branch || {};
         html += `
@@ -1265,7 +1266,7 @@ function renderRunnableRepos(repos) {
                     <h5 class="card-title mb-0">
                         <i class="bi bi-robot"></i>
                         <a href="${repo.html_url || '#'}" target="_blank" class="text-white text-decoration-none">
-                            ${repo.name}
+                            ${repo.name} <span class="opacity-75 ms-1">(${cardCount})</span>
                         </a>
                     </h5>
                 </div>
@@ -1498,6 +1499,7 @@ function renderAvailableRepos(repos) {
     let html = '';
     repos.forEach(repo => {
         if (!repo.branches || repo.branches.length === 0) return;
+        const cardCount = Array.isArray(repo.branches) ? repo.branches.length : 0;
         const relMap = repo.available_branch_releases || {};
         html += `
         <div class="col-12 col-md-4 mb-4 repo-item-available" data-repo-name="${repo.name}">
@@ -1506,7 +1508,7 @@ function renderAvailableRepos(repos) {
                     <h5 class="card-title mb-0">
                         <i class="bi bi-github"></i>
                         <a href="${repo.html_url || '#'}" target="_blank" class="text-white text-decoration-none">
-                            ${repo.name}
+                            ${repo.name} <span class="opacity-75 ms-1">(${cardCount})</span>
                         </a>
                     </h5>
                     ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
