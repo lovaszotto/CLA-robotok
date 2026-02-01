@@ -223,7 +223,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .wait-stop-indicator { cursor: pointer; }
 .wait-stop-inactive { opacity: 0.35; }
 
-/* Sandbox: Telepített verzió badge színek */
+/* Fejlesztői mód: Telepített verzió badge színek */
 .installed-version-badge {
     background-color: #cfe8ff !important; /* világoskék */
     color: #0b3d91 !important; /* sötétkék */
@@ -326,33 +326,33 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     <div class="d-flex align-items-center mb-3" style="gap: 1rem;">
     <ul class="nav nav-tabs flex-grow-1 mb-0" id="mainTab" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="true">
+            <button class="nav-link active" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="true" data-menu-tooltip="1" data-bs-toggle-tooltip="1" data-bs-placement="bottom" data-bs-title="{% if is_sandbox %}Telepített robotok futtatása és verziók kezelése (Robot műtő).{% else %}Telepített robotok futtatása és kezelése.{% endif %}">
                 <i class="bi {% if is_sandbox %}bi-heart-pulse{% else %}bi-play-circle{% endif %}"></i> {% if is_sandbox %}Robot műtő{% else %}Telepített robotok{% endif %}
             </button>
         </li>
         <!-- Repo/Robot/Tag lista tab-link eltávolítva -->
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false">
+            <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="{% if is_sandbox %}Robotok letöltése/telepítése és elérhető verziók megtekintése (Robot raktár).{% else %}Robotok letöltése/telepítése és elérhető verziók megtekintése.{% endif %}">
                 <i class="bi bi-download"></i> {% if is_sandbox %}Robot raktár{% else %}Letölthető robotok{% endif %}
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results" type="button" role="tab" aria-controls="results" aria-selected="false">
+            <button class="nav-link" id="results-tab" data-bs-toggle="tab" data-bs-target="#results" type="button" role="tab" aria-controls="results" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="Korábbi futások eredményeinek listázása és megnyitása.">
                 <i class="bi bi-bar-chart"></i> Eredmények
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false">
+            <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="GitHub token, módok (fejlesztői) és egyéb beállítások.">
                 <i class="bi bi-gear"></i> Beállítások
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="log-tab" data-bs-toggle="tab" data-bs-target="#log" type="button" role="tab" aria-controls="log" aria-selected="false">
+            <button class="nav-link" id="log-tab" data-bs-toggle="tab" data-bs-target="#log" type="button" role="tab" aria-controls="log" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="A szerver napló (log) megtekintése, keresése és letöltése.">
                 <i class="bi bi-file-earmark-text"></i> Log
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="help-tab" data-bs-toggle="tab" data-bs-target="#help" type="button" role="tab" aria-controls="help" aria-selected="false">
+            <button class="nav-link" id="help-tab" data-bs-toggle="tab" data-bs-target="#help" type="button" role="tab" aria-controls="help" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="Felhasználói kézikönyv megtekintése.">
                 <i class="bi bi-question-circle"></i> Segítség
             </button>
         </li>
@@ -393,7 +393,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                            <ul class="list-unstyled">
                                                {% for branch in runnable_branches %}
                                                <li class="branch-checkbox d-flex align-items-center">
-                                                   <button class="btn btn-success btn-sm me-2" title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}" onclick="executeSingleRobot(this)">
+                                                   <button class="btn btn-success btn-sm me-2" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}" onclick="executeSingleRobot(this)">
                                                        <i class="bi bi-play-fill"></i>
                                                    </button>
                                                    {% set rel_run = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
@@ -649,7 +649,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 
                                     <div class="form-check form-switch mt-2">
                                         <input class="form-check-input" type="checkbox" id="sandboxMode" onchange="updateSandboxMode()">
-                                        <label class="form-check-label" for="sandboxMode">Sandbox mód (csak letöltés, telepítés nélkül)</label>
+                                        <label class="form-check-label" for="sandboxMode">Fejlesztői mód (csak letöltés, telepítés nélkül)</label>
                                     </div>
                                 </div>
                             </div>
@@ -835,7 +835,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     </div>
 </div>
 
-<!-- Kiadás készítése MODAL (sandbox) -->
+<!-- Kiadás készítése MODAL (fejlesztői mód) -->
 <div class="modal fade" id="createReleaseModal" tabindex="-1" aria-labelledby="createReleaseModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -1292,7 +1292,7 @@ async function updateRunnableUpdateIcons() {
             try { btn.setAttribute('data-bs-title', 'Verziók'); } catch (e) { }
         }
 
-        // Sandbox módban: jelenítsük meg a telepített verziót a placeholder helyén
+        // Fejlesztői módban: jelenítsük meg a telepített verziót a placeholder helyén
         try {
             const repoName = String(btn.getAttribute('data-repo') || '').trim();
             const repoUrl = String(btn.getAttribute('data-repo-url') || '').trim();
@@ -1364,7 +1364,7 @@ function renderRunnableRepos(repos) {
                     <div class="branches-container">
                         ${repo.branches.map(branch => `
                             <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;" id="branch-${repo.name}-${branch}">
-                                <button class="btn btn-success btn-sm me-2" title="Futtatás"
+                                <button class="btn btn-success btn-sm me-2" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás"
                                     data-repo="${repo.name}"
                                     data-branch="${branch}"
                                     onclick="executeSingleRobot(this)">
@@ -1429,7 +1429,7 @@ function renderRunnableRepos(repos) {
     return html;
 }
 
-// --- Kiadás készítése (sandbox) ---
+// --- Kiadás készítése (fejlesztői mód) ---
 function openCreateReleaseModal(btn) {
     try {
         const modalEl = document.getElementById('createReleaseModal');
@@ -1505,7 +1505,7 @@ function openCreateReleaseModal(btn) {
                         `Kiadás elkészült: <strong>${_escapeHtml(tagName)}</strong>` + (url ? ` — <a href="${_escapeHtml(url)}" target="_blank" rel="noopener">Megnyitás</a>` : ''),
                         'success'
                     );
-                    // Az új tag legyen az "utoljára letöltött/telepített" verzió (dev/sandbox)
+                    // Az új tag legyen az "utoljára letöltött/telepített" verzió (fejlesztői mód)
                     try {
                         window.__installedVersionCache = window.__installedVersionCache || {};
                         if (st && st.branch) window.__installedVersionCache[String(st.branch).trim()] = String(tagName).trim();
@@ -1558,9 +1558,15 @@ function refreshAvailableRobots() {
 
 function initTooltips() {
     try {
-        const tList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        const tList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"], [data-menu-tooltip="1"]'));
         tList.forEach(function (el) {
-            try { new bootstrap.Tooltip(el); } catch (e) { }
+            try {
+                const title = (el.getAttribute('data-bs-title') || el.getAttribute('title') || '').trim();
+                if (!title) return;
+                const existing = bootstrap.Tooltip.getInstance(el);
+                if (existing) return;
+                new bootstrap.Tooltip(el);
+            } catch (e) { }
         });
     } catch (e) {
         // noop
@@ -3323,7 +3329,7 @@ function loadSettings() {
     try { loadGitHubSettings(); } catch (e) { /* ignore */ }
 }
 
-// Sandbox Mode kezelés (backend a forrás)
+// Fejlesztői mód kezelés (backend a forrás)
 async function updateSandboxMode() {
     const sm = _safeEl('sandboxMode');
     if (!sm) return;
@@ -3342,7 +3348,7 @@ async function updateSandboxMode() {
             return;
         }
 
-        showToast(isEnabled ? 'Sandbox mód bekapcsolva' : 'Sandbox mód kikapcsolva', 'success');
+        showToast(isEnabled ? 'Fejlesztői mód bekapcsolva' : 'Fejlesztői mód kikapcsolva', 'success');
         if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots();
         if (typeof refreshAvailableRobots === 'function') refreshAvailableRobots();
 

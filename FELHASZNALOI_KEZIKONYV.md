@@ -53,14 +53,14 @@ Leállítás:
 
 ---
 
-## 5. Módok: Normál mód vs. Fejlesztői (Sandbox) mód
+## 5. Módok: Normál mód vs. Fejlesztői mód
 A felület két „üzemmódban” tud működni:
 
 ### Normál mód
 - telepített robotok a `DownloadedRobots` alatt
 - Letölthető robotok jellemzően csak akkor látszanak, ha van hozzájuk release/tag információ
 
-### Fejlesztői (Sandbox) mód
+### Fejlesztői mód
 - telepített robotok a `SandboxRobots` könyvtárból listázódnak
 - a UI megnevezései fejlesztői fókuszúak (pl. Robot műtő / Robot raktár)
 - extra funkció: GitHub „Kiadás készítése” (Release) modal
@@ -86,7 +86,7 @@ Kártya fejléc (repo név):
 Egy robot sorában tipikusan:
 - **Futtatás** gomb (▶) – az adott robot futtatása
 - **Release/Verziók** info gomb (i / hammer / bell) – verzió/release információk
-- **(Sandboxban)** **Új kiadás készítése** gomb (box-seam) – GitHub release létrehozása
+- **(Fejlesztői módban)** **Új kiadás készítése** gomb (box-seam) – GitHub release létrehozása
 - **Telepített verzió badge** – világoskék háttérrel, sötétkék szöveggel
   - kattintható GitHub link (release tag oldal)
   - tooltip: „Részletes verzió információk”
@@ -130,7 +130,7 @@ Token nélkül:
 ---
 
 ## 8. Fejlesztői mód: „Kiadás készítése” (GitHub Release)
-A Robot műtőben (sandbox/dev módban) a box-seam gombra kattintva feljön a modal:
+A Robot műtőben (fejlesztői módban) a box-seam gombra kattintva feljön a modal:
 - **TagName** (szöveg)
 - **ReleaseTitle** (szöveg)
 - **ReleaseNotes** (többsoros)
@@ -168,7 +168,7 @@ Mit próbálj:
 ## 10. Fogalmak
 - **Repo**: GitHub repository
 - **Robot**: a UI-ban a branch (Robot Framework csomag/robot variáns)
-- **Telepített verzió**: az utoljára letöltött/telepített tag (sandboxban kiadás után is frissül)
+- **Telepített verzió**: az utoljára letöltött/telepített tag (fejlesztői módban kiadás után is frissül)
 
 ---
 
