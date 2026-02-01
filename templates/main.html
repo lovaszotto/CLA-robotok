@@ -318,7 +318,9 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
                 <h1 class="mb-0 bi bi-robot"> {{ page_title }}</h1>
                 <div class="timestamp">
-                    <div>CLA-ssistant &copy; {{ datetime.now().year }} / Verzió: {{ version }} </div>
+                    <div>
+                        CLA-ssistant &copy; {{ datetime.now().year }} / Verzió: {{ version }}{% if build_date %} / {{ build_date }}{% endif %}
+                    </div>
                 </div>
             </div>
         </div>

@@ -57,6 +57,7 @@ Leállítás:
 A felület két „üzemmódban” tud működni:
 
 ### Normál mód
+- **Alapértelmezett mód** (ha nem kapcsolod be külön a Fejlesztői módot)
 - telepített robotok a `DownloadedRobots` alatt
 - Letölthető robotok jellemzően csak akkor látszanak, ha van hozzájuk release/tag információ
 
@@ -76,7 +77,7 @@ Megjegyzés:
 ### 6.1. Globális szűrő
 Felül található egy szűrő mező (pl. „Robot szűrése…”), ami az éppen aktív tab robotjait szűri.
 
-### 6.2. Robot műtő (Telepített robotok)
+### 6.2. Telepített robotok (Robot műtő)
 Itt a már telepített robotok jelennek meg kártyákon.
 
 Kártya fejléc (repo név):
@@ -95,7 +96,7 @@ Egy robot sorában tipikusan:
 Megszakítás (STOP):
 - A futó robot megszakítható a STOP funkcióval (ha elérhető a felületen).
 
-### 6.3. Robot raktár (Letölthető robotok)
+### 6.3. Letölthető robotok (Robot raktár)
 Itt a letölthető robotok jelennek meg.
 
 Kártya fejléc (repo név):
