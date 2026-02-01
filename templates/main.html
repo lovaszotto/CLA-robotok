@@ -1404,6 +1404,11 @@ function openCreateReleaseModal(btn) {
                         `Kiadás elkészült: <strong>${_escapeHtml(tagName)}</strong>` + (url ? ` — <a href="${_escapeHtml(url)}" target="_blank" rel="noopener">Megnyitás</a>` : ''),
                         'success'
                     );
+                    // Az új tag legyen az "utoljára letöltött/telepített" verzió (dev/sandbox)
+                    try {
+                        window.__installedVersionCache = window.__installedVersionCache || {};
+                        if (st && st.branch) window.__installedVersionCache[String(st.branch).trim()] = String(tagName).trim();
+                    } catch (e) { }
                     try {
                         const modal = bootstrap.Modal.getInstance(modalEl);
                         if (modal) modal.hide();

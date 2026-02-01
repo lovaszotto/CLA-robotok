@@ -1331,6 +1331,12 @@ def api_create_github_release():
         resp = requests.post(url, headers=_github_headers(), json=payload, timeout=30)
         if resp.status_code in (200, 201):
             j = resp.json() or {}
+            # Fejlesztői/sandbox módban: új kiadás után ezt tekintsük az utoljára letöltött (telepített) verziónak.
+            try:
+                if get_sandbox_mode() and branch:
+                    _write_installed_version(branch, str(j.get('tag_name') or tag_name))
+            except Exception as e:
+                logger.info(f"[GITHUB-RELEASE] installed_version mentés hiba: {e}")
             return jsonify({
                 'success': True,
                 'id': j.get('id'),
