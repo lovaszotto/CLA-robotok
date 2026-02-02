@@ -87,6 +87,12 @@ Kártya fejléc (repo név):
 Egy robot sorában tipikusan:
 - **Futtatás** gomb (▶) – az adott robot futtatása
 - **Release/Verziók** info gomb (i / hammer / bell) – verzió/release információk
+  - `i` (info): van release információ
+  - `hammer` (kalapács): nincs release információ
+  - `bell` (harang): új verzió elérhető (**csak Normál módban**, Fejlesztői módban nem jelez)
+- **Környezet beállítás** gomb (sliders) – a robothoz tartozó `*.config` fájl(ok) megtekintése/szerkesztése
+  - a modalban legördülőből választható ki a kívánt `*.config` fájl
+  - ha csak 1 db `*.config` van, automatikusan kiválasztódik
 - **(Fejlesztői módban)** **Új kiadás készítése** gomb (box-seam) – GitHub release létrehozása
 - **Telepített verzió badge** – világoskék háttérrel, sötétkék szöveggel
   - kattintható GitHub link (release tag oldal)
@@ -136,6 +142,9 @@ A Robot műtőben (fejlesztői módban) a box-seam gombra kattintva feljön a mo
 - **ReleaseTitle** (szöveg)
 - **ReleaseNotes** (többsoros)
 
+Megjegyzés:
+- A **TagName** mező alapértelmezés szerint a jelenlegi „latest” release tag-et próbálja felajánlani (ha elérhető).
+
 Gombok:
 - **Mégsem**
 - **Kiadás készítése**
@@ -143,7 +152,9 @@ Gombok:
 Siker esetén:
 - toast üzenet + GitHub link
 - a Robot műtő tab frissül
-- a létrehozott tag **telepített (utoljára letöltött) verzióként** elmentődik a robothoz
+
+Hiba esetén:
+- Ha a GitHub `422`-vel jelez (pl. már létező tag), a hibaüzenet erre külön felhívja a figyelmet (pl. „Ilyen verziószámú kiadás már létezik”).
 
 ---
 
@@ -169,7 +180,7 @@ Mit próbálj:
 ## 10. Fogalmak
 - **Repo**: GitHub repository
 - **Robot**: a UI-ban a branch (Robot Framework csomag/robot variáns)
-- **Telepített verzió**: az utoljára letöltött/telepített tag (fejlesztői módban kiadás után is frissül)
+- **Telepített verzió**: az utoljára letöltött/telepített tag
 
 ---
 

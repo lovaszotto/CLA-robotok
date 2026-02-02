@@ -398,6 +398,12 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                    <button class="btn btn-success btn-sm me-2" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}" onclick="executeSingleRobot(this)">
                                                        <i class="bi bi-play-fill"></i>
                                                    </button>
+                                                   <button class="btn btn-outline-secondary btn-sm me-2" type="button"
+                                                       data-bs-toggle="tooltip" data-bs-title="Környezet beállítás"
+                                                       data-repo="{{ repo.name }}" data-branch="{{ branch }}"
+                                                       onclick="openEnvironmentSettings(this)">
+                                                       <i class="bi bi-sliders"></i>
+                                                   </button>
                                                    {% set rel_run = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
                                                    <button class="btn btn-outline-info btn-sm me-2" type="button"
                                                        data-bs-toggle="tooltip" data-bs-title="{% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}Nincs release info{% else %}Verziók{% endif %}"
@@ -862,6 +868,35 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégsem</button>
                 <button type="button" class="btn btn-primary" id="createReleaseCreateBtn">Kiadás készítése</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Robot .config szerkesztése (Telepített robotok -> Környezet beállítás) -->
+<div class="modal fade" id="robotConfigModal" tabindex="-1" aria-labelledby="robotConfigModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="robotConfigModalLabel"><i class="bi bi-sliders me-1"></i> Környezet beállítás (.config)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="small text-muted mb-2" id="robotConfigTargetInfo">Repo: - | Robot: -</div>
+                <div class="mb-2">
+                    <label for="robotConfigFileSelect" class="form-label mb-1">Konfig fájl</label>
+                    <select class="form-select form-select-sm" id="robotConfigFileSelect"></select>
+                </div>
+                <div class="d-flex gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="robotConfigReloadBtn">Újratöltés</button>
+                    <span class="small text-muted align-self-center" id="robotConfigStatus"></span>
+                </div>
+                <textarea class="form-control font-monospace" id="robotConfigText" rows="14" placeholder=".config tartalom..."></textarea>
+                <div class="form-text">A fájl helye: <code>&lt;base&gt;/&lt;repo&gt;/&lt;branch&gt;/&lt;valami&gt;.config</code></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Mégse</button>
+                <button type="button" class="btn btn-primary" id="robotConfigSaveBtn">Mentés</button>
             </div>
         </div>
     </div>
@@ -1371,6 +1406,13 @@ function renderRunnableRepos(repos) {
                                     onclick="executeSingleRobot(this)">
                                     <i class="bi bi-play-fill"></i>
                                 </button>
+                                <button class="btn btn-outline-secondary btn-sm me-2" type="button"
+                                    data-bs-toggle="tooltip" data-bs-title="Környezet beállítás"
+                                    data-repo="${escAttr(repo.name)}"
+                                    data-branch="${escAttr(branch)}"
+                                    onclick="openEnvironmentSettings(this)">
+                                    <i class="bi bi-sliders"></i>
+                                </button>
                                 <button class="btn btn-outline-info btn-sm me-2" type="button"
                                     data-bs-toggle="tooltip" data-bs-title="${(() => {
                                         const rel = relMap && relMap[branch] ? relMap[branch] : null;
@@ -1544,6 +1586,148 @@ function openCreateReleaseModal(btn) {
         setTimeout(() => { try { if (tagEl) tagEl.focus(); } catch (e) { } }, 200);
     } catch (e) {
         showToast('Kiadás modal hiba: ' + String(e), 'danger');
+    }
+}
+
+function openEnvironmentSettings(btn) {
+    try {
+        const modalEl = document.getElementById('robotConfigModal');
+        if (!modalEl || !window.bootstrap) {
+            showToast('A környezet beállítás modal nem elérhető.', 'danger');
+            return;
+        }
+
+        const repo = (btn && btn.getAttribute) ? (btn.getAttribute('data-repo') || '') : '';
+        const branch = (btn && btn.getAttribute) ? (btn.getAttribute('data-branch') || '') : '';
+        modalEl.__robotConfigState = { repo, branch };
+
+        const infoEl = document.getElementById('robotConfigTargetInfo');
+        if (infoEl) infoEl.textContent = `Repo: ${repo || '-'}${branch ? (' | Robot: ' + branch) : ''}`;
+
+        const textEl = document.getElementById('robotConfigText');
+        const fileEl = document.getElementById('robotConfigFileSelect');
+        const statusEl = document.getElementById('robotConfigStatus');
+        const saveBtn = document.getElementById('robotConfigSaveBtn');
+        const reloadBtn = document.getElementById('robotConfigReloadBtn');
+
+        const setBusy = (busy, msg) => {
+            try {
+                if (saveBtn) saveBtn.disabled = !!busy;
+                if (reloadBtn) reloadBtn.disabled = !!busy;
+            } catch (e) { }
+            try { if (statusEl) statusEl.textContent = msg || ''; } catch (e) { }
+        };
+
+        const loadFiles = async () => {
+            const st = modalEl.__robotConfigState || {};
+            setBusy(true, 'Fájlok betöltése...');
+            try {
+                const qs = new URLSearchParams({ repo: st.repo || '', branch: st.branch || '' });
+                const r = await fetch(`/api/robot_config_files?${qs.toString()}`);
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !(j && j.success)) {
+                    const msg = (j && (j.error || j.details)) ? (j.error || j.details) : `HTTP ${r.status}`;
+                    throw new Error(msg);
+                }
+                const files = (j && Array.isArray(j.files)) ? j.files : [];
+                if (fileEl) {
+                    fileEl.innerHTML = '';
+                    if (!files.length) {
+                        fileEl.innerHTML = '<option value="">(Nincs *.config fájl)</option>';
+                        try { fileEl.disabled = true; } catch (e) { }
+                    } else {
+                        // Ha csak 1 config fájl van, automatikusan azt választjuk ki.
+                        try { fileEl.disabled = (files.length === 1); } catch (e) { }
+                        files.forEach(fn => {
+                            const opt = document.createElement('option');
+                            opt.value = String(fn);
+                            opt.textContent = String(fn);
+                            fileEl.appendChild(opt);
+                        });
+                    }
+                }
+
+                // Default selection: first
+                try {
+                    const first = files.length ? String(files[0]) : '';
+                    const selected = fileEl ? String(fileEl.value || '') : '';
+                    const picked = (files.length === 1) ? first : (selected || first);
+                    if (fileEl && picked) fileEl.value = picked;
+                    modalEl.__robotConfigState = { ...(modalEl.__robotConfigState || {}), filename: picked };
+                } catch (e) { }
+                setBusy(false, files.length ? 'Fájlok betöltve' : 'Nincs *.config fájl');
+                return files;
+            } catch (e) {
+                setBusy(false, '');
+                showToast('Nem sikerült betölteni a config fájl listát: ' + String(e), 'danger');
+                return [];
+            }
+        };
+
+        const load = async () => {
+            const st = modalEl.__robotConfigState || {};
+            setBusy(true, 'Betöltés...');
+            try {
+                const filename = (fileEl && fileEl.value) ? String(fileEl.value) : (st.filename || '');
+                const qs = new URLSearchParams({ repo: st.repo || '', branch: st.branch || '', filename });
+                const r = await fetch(`/api/robot_config?${qs.toString()}`);
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !(j && j.success)) {
+                    const msg = (j && (j.error || j.details)) ? (j.error || j.details) : `HTTP ${r.status}`;
+                    throw new Error(msg);
+                }
+                if (textEl) textEl.value = String(j.content || '');
+                setBusy(false, j.exists ? 'Betöltve' : 'Nincs fájl (üres tartalom)');
+            } catch (e) {
+                setBusy(false, '');
+                showToast('Nem sikerült betölteni a .config fájlt: ' + String(e), 'danger');
+            }
+        };
+
+        const save = async () => {
+            const st = modalEl.__robotConfigState || {};
+            const filename = (fileEl && fileEl.value) ? String(fileEl.value) : (st.filename || '');
+            const content = textEl ? String(textEl.value || '') : '';
+            setBusy(true, 'Mentés...');
+            try {
+                const r = await fetch('/api/robot_config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ repo: st.repo || '', branch: st.branch || '', filename, content })
+                });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !(j && j.success)) {
+                    const msg = (j && (j.error || j.details)) ? (j.error || j.details) : `HTTP ${r.status}`;
+                    throw new Error(msg);
+                }
+                setBusy(false, 'Mentve');
+                showToast('Környezet beállítások mentve.', 'success');
+            } catch (e) {
+                setBusy(false, '');
+                showToast('Nem sikerült menteni a .config fájlt: ' + String(e), 'danger');
+            }
+        };
+
+        if (!modalEl.__robotConfigHooked) {
+            if (reloadBtn) reloadBtn.addEventListener('click', () => load());
+            if (saveBtn) saveBtn.addEventListener('click', () => save());
+            if (fileEl) fileEl.addEventListener('change', () => load());
+            modalEl.__robotConfigHooked = true;
+        }
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        setTimeout(() => { try { if (textEl) textEl.focus(); } catch (e) { } }, 200);
+        (async () => {
+            const files = await loadFiles();
+            if (files && files.length) {
+                await load();
+            } else {
+                try { if (textEl) textEl.value = ''; } catch (e) { }
+            }
+        })();
+    } catch (e) {
+        showToast('Környezet beállítás hiba: ' + String(e), 'danger');
     }
 }
 

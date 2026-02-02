@@ -727,6 +727,175 @@ def _write_installed_version(branch_raw: str, version: str) -> None:
         f.write((version or '').strip() or 'NONE')
 
 
+def _resolve_robot_branch_dir(repo: str, branch: str) -> str:
+    """Return absolute path to <base>/<repo>/<branch> with safety checks."""
+    repo = (repo or '').strip()
+    branch = (branch or '').strip()
+    if not repo or not branch:
+        raise ValueError('Hiányzó repo/branch.')
+
+    if any(sep in repo for sep in ('/', '\\')) or any(sep in branch for sep in ('/', '\\')):
+        raise ValueError('Érvénytelen repo/branch (path separator).')
+    if '..' in repo or '..' in branch:
+        raise ValueError('Érvénytelen repo/branch (..).')
+
+    base_dir = get_installed_robots_dir()
+    if not base_dir:
+        raise ValueError('Robot base könyvtár nem elérhető.')
+
+    target = os.path.normpath(os.path.join(base_dir, repo, branch))
+    try:
+        if os.path.commonpath([os.path.abspath(base_dir), os.path.abspath(target)]) != os.path.abspath(base_dir):
+            raise ValueError('Biztonsági okból megtagadva (base ellenőrzés).')
+    except Exception:
+        if not os.path.abspath(target).startswith(os.path.abspath(base_dir)):
+            raise ValueError('Biztonsági okból megtagadva (prefix ellenőrzés).')
+    return target
+
+
+def _safe_config_filename(name: str) -> str:
+    """Validate and normalize a single config filename like 'something.config'."""
+    name = (name or '').strip()
+    if not name:
+        raise ValueError('Hiányzó config fájlnév.')
+    if any(sep in name for sep in ('/', '\\')) or '..' in name:
+        raise ValueError('Érvénytelen config fájlnév.')
+    # Only allow safe characters and require *.config
+    if not re.fullmatch(r'[A-Za-z0-9._-]+\.config', name, flags=0):
+        raise ValueError('Érvénytelen config fájlnév (várt: *.config).')
+    return name
+
+
+@app.route('/api/robot_config_files', methods=['GET'])
+def api_robot_config_files():
+    """List *.config files for a robot under <base>/<repo>/<branch>/"""
+    repo = (request.args.get('repo') or '').strip()
+    branch = (request.args.get('branch') or '').strip()
+    try:
+        branch_dir = _resolve_robot_branch_dir(repo, branch)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    if not os.path.isdir(branch_dir):
+        return jsonify({'success': False, 'error': 'Robot könyvtár nem található.'}), 404
+
+    try:
+        files = []
+        for name in os.listdir(branch_dir):
+            if not name.lower().endswith('.config'):
+                continue
+            try:
+                safe = _safe_config_filename(name)
+            except Exception:
+                continue
+            full = os.path.join(branch_dir, safe)
+            if os.path.isfile(full):
+                files.append(safe)
+        files = sorted(set(files), key=lambda s: s.lower())
+        return jsonify({'success': True, 'repo': repo, 'branch': branch, 'files': files})
+    except Exception as e:
+        logger.info(f"[CONFIG] *.config listázás hiba: {e}")
+        return jsonify({'success': False, 'error': f'Config listázás hiba: {e}'}), 500
+
+
+@app.route('/api/robot_config', methods=['GET'])
+def api_get_robot_config():
+    """Get a robot *.config file content (under <base>/<repo>/<branch>/<filename>)."""
+    repo = (request.args.get('repo') or '').strip()
+    branch = (request.args.get('branch') or '').strip()
+    filename = (request.args.get('filename') or '').strip()
+    try:
+        branch_dir = _resolve_robot_branch_dir(repo, branch)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    if not os.path.isdir(branch_dir):
+        return jsonify({'success': False, 'error': 'Robot könyvtár nem található.'}), 404
+
+    if filename:
+        try:
+            filename = _safe_config_filename(filename)
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+    else:
+        # Default: first available *.config
+        try:
+            candidates = [n for n in os.listdir(branch_dir) if n.lower().endswith('.config')]
+            candidates = sorted([c for c in candidates if re.fullmatch(r'[A-Za-z0-9._-]+\.config', c)], key=lambda s: s.lower())
+            filename = candidates[0] if candidates else ''
+        except Exception:
+            filename = ''
+
+    if not filename:
+        return jsonify({'success': True, 'repo': repo, 'branch': branch, 'filename': '', 'exists': False, 'content': ''})
+
+    config_path = os.path.join(branch_dir, filename)
+    if not os.path.exists(config_path):
+        return jsonify({'success': True, 'repo': repo, 'branch': branch, 'filename': filename, 'exists': False, 'content': ''})
+
+    try:
+        if os.path.getsize(config_path) > 1_000_000:
+            return jsonify({'success': False, 'error': 'A .config fájl túl nagy (max 1MB).'}), 413
+    except Exception:
+        pass
+
+    try:
+        with open(config_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        return jsonify({'success': True, 'repo': repo, 'branch': branch, 'filename': filename, 'exists': True, 'content': content})
+    except Exception as e:
+        logger.info(f"[CONFIG] .config olvasás hiba: {e}")
+        return jsonify({'success': False, 'error': f'.config olvasás hiba: {e}'}), 500
+
+
+@app.route('/api/robot_config', methods=['POST'])
+def api_set_robot_config():
+    """Write a robot *.config file content with atomic replace."""
+    data = request.get_json(silent=True) or {}
+    repo = (data.get('repo') or '').strip()
+    branch = (data.get('branch') or '').strip()
+    filename = (data.get('filename') or '').strip()
+    content = data.get('content')
+    if content is None:
+        content = ''
+    content = str(content)
+
+    try:
+        branch_dir = _resolve_robot_branch_dir(repo, branch)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    try:
+        filename = _safe_config_filename(filename)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    if not os.path.isdir(branch_dir):
+        return jsonify({'success': False, 'error': 'Robot könyvtár nem található.'}), 404
+
+    try:
+        if len(content.encode('utf-8', errors='replace')) > 1_000_000:
+            return jsonify({'success': False, 'error': 'A .config tartalma túl nagy (max 1MB).'}), 413
+    except Exception:
+        pass
+
+    config_path = os.path.join(branch_dir, filename)
+    tmp_path = config_path + '.tmp'
+    try:
+        with open(tmp_path, 'w', encoding='utf-8', errors='replace', newline='') as f:
+            f.write(content)
+        os.replace(tmp_path, config_path)
+        return jsonify({'success': True, 'repo': repo, 'branch': branch, 'filename': filename, 'saved': True})
+    except Exception as e:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
+        logger.info(f"[CONFIG] .config mentés hiba: {e}")
+        return jsonify({'success': False, 'error': f'.config mentés hiba: {e}'}), 500
+
+
 def _try_get_latest_release_tag_for_branch(repo_name: str, branch: str) -> str:
     """A telepítés pillanatában lekéri a branch legfrissebb GitHub release tag-jét.
 
