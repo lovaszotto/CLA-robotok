@@ -384,7 +384,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                        {% set runnable_branches = (repo.downloaded_branches or []) %}
                        {% if runnable_branches %}
                            {% set _ = runnable_repos.append(repo.name) %}
-                           <div class="col-12 col-md-6 mb-4 repo-card-col repo-item" data-repo-name="{{ repo.name }}">
+                           <div class="col-12 col-md-6 mb-4 repo-item" data-repo-name="{{ repo.name }}">
                                <div class="card repo-card h-100">
                                    <div class="card-header bg-success text-white">
                                        <span class="card-title"><i class="bi bi-robot me-1" aria-hidden="true"></i>{{ repo.name }} <span class="opacity-75 ms-1">({{ runnable_branches|length }})</span></span>
@@ -392,67 +392,85 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                    <div class="card-body">
                                        <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
                                        <div class="branches-container">
-                                           <ul class="list-unstyled">
-                                               {% for branch in runnable_branches %}
-                                               <li class="branch-checkbox d-flex align-items-center">
-                                                   <button class="btn btn-success btn-sm me-2" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}" onclick="executeSingleRobot(this)">
-                                                       <i class="bi bi-play-fill"></i>
-                                                   </button>
-                                                   <button class="btn btn-outline-secondary btn-sm me-2" type="button"
-                                                       data-bs-toggle="tooltip" data-bs-title="Környezet beállítás"
-                                                       data-repo="{{ repo.name }}" data-branch="{{ branch }}"
-                                                       onclick="openEnvironmentSettings(this)">
-                                                       <i class="bi bi-sliders"></i>
-                                                   </button>
-                                                   {% set rel_run = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
-                                                   <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                                       data-bs-toggle="tooltip" data-bs-title="{% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}Nincs release info{% else %}Verziók{% endif %}"
-                                                       data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="run"
-                                                       data-repo-url="{{ repo.html_url or '' }}"
-                                                       data-release-tag="{{ (rel_run.get('tag') if rel_run else '') }}"
-                                                       data-release-title="{{ (rel_run.get('title') if rel_run else '') }}"
-                                                       data-release-date="{{ (rel_run.get('date') if rel_run else '') }}"
-                                                       onclick="branchInfoClicked(this)">
-                                                       <i class="bi {% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i>
-                                                   </button>
-                                                   {% if is_sandbox %}
-                                                       <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                                           data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése"
-                                                           data-repo="{{ repo.name }}" data-branch="{{ branch }}"
-                                                           data-repo-url="{{ repo.html_url or '' }}"
-                                                           data-repo-fullname="{{ repo.full_name or '' }}"
-                                                           onclick="openCreateReleaseModal(this)">
-                                                           <i class="bi bi-box-seam"></i>
-                                                       </button>
-                                                   {% endif %}
-                                                   <label for="runnable-{{ repo.name }}-{{ branch }}" class="mb-0 branch-name">{{ branch }}</label>
-                                                   {% set lr = (last_run_by_key.get(repo.name ~ '|' ~ branch) if last_run_by_key else None) %}
-                                                   <span class="ms-2 small installed-version-meta" data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-repo-url="{{ repo.html_url or '' }}">
-                                                       <span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span>
-                                                   </span>
-                                                   <span class="ms-2 small last-run-meta">
-                                                       {% if lr %}
-                                                           {% set lr_status = (lr.get('status') or '') %}
-                                                           <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% elif lr_status == 'cancelled' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1"
-                                                               data-bs-toggle="tooltip"
-                                                               data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
-                                                               {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
-                                                           </span>
-                                                           <span class="text-muted"
-                                                               data-bs-toggle="tooltip"
-                                                               data-bs-title="Utolsó futás ideje">{{ lr.get('timestamp') }}</span>
-                                                       {% else %}
-                                                           <span class="badge bg-secondary me-1"
-                                                               data-bs-toggle="tooltip"
-                                                               data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span>
-                                                       {% endif %}
-                                                   </span>
-                                                   <span class="ms-auto">
-                                                       <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}', this)"></i>
-                                                   </span>
-                                               </li>
-                                               {% endfor %}
-                                           </ul>
+                                           {% for branch in runnable_branches %}
+                                               {% set parts = (branch.split('-', 1) if branch else []) %}
+                                               {% if parts and (parts|length > 1) %}
+                                                   {% set branch_title = (parts[0] ~ ' – ' ~ (parts[1] | replace('-', ' ') | replace('_', ' '))) %}
+                                               {% else %}
+                                                   {% set branch_title = (branch | replace('-', ' ') | replace('_', ' ')) %}
+                                               {% endif %}
+                                               {% set rel_run = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
+                                               {% set lr = (last_run_by_key.get(repo.name ~ '|' ~ branch) if last_run_by_key else None) %}
+
+                                               <div class="branch-checkbox border rounded p-2 mb-2">
+                                                   <div class="d-flex align-items-start">
+                                                       <div class="flex-grow-1">
+                                                           <div class="h6 mb-1">
+                                                               <i class="bi bi-circle-fill text-success me-2" aria-hidden="true"></i><span class="branch-name">{{ branch_title }}</span>
+                                                           </div>
+
+                                                           <div class="d-flex align-items-center flex-wrap gap-2">
+                                                               <span class="small installed-version-meta" data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-repo-url="{{ repo.html_url or '' }}">
+                                                                   <span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span>
+                                                               </span>
+                                                               <span class="small last-run-meta">
+                                                                   {% if lr %}
+                                                                       {% set lr_status = (lr.get('status') or '') %}
+                                                                       <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% elif lr_status == 'cancelled' %}bg-warning text-dark{% else %}bg-secondary{% endif %}"
+                                                                           data-bs-toggle="tooltip"
+                                                                           data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
+                                                                           {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
+                                                                       </span>
+                                                                       <span class="text-muted ms-1"
+                                                                           data-bs-toggle="tooltip"
+                                                                           data-bs-title="Utolsó futás ideje">{{ lr.get('timestamp') }}</span>
+                                                                   {% else %}
+                                                                       <span class="badge bg-secondary"
+                                                                           data-bs-toggle="tooltip"
+                                                                           data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span>
+                                                                   {% endif %}
+                                                               </span>
+                                                           </div>
+
+                                                           <div class="mt-2 d-flex align-items-center flex-wrap gap-2">
+                                                               <button class="btn btn-success btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás" data-repo="{{ repo.name }}" data-branch="{{ branch }}" onclick="executeSingleRobot(this)">
+                                                                   <i class="bi bi-play-fill"></i> Futtatás
+                                                               </button>
+                                                               <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                                   data-bs-toggle="tooltip" data-bs-title="Környezet beállítás"
+                                                                   data-repo="{{ repo.name }}" data-branch="{{ branch }}"
+                                                                   onclick="openEnvironmentSettings(this)">
+                                                                   <i class="bi bi-sliders"></i> Beállítás
+                                                               </button>
+                                                               <button class="btn btn-outline-info btn-sm" type="button"
+                                                                   data-bs-toggle="tooltip" data-bs-title="{% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}Nincs release info{% else %}Verziók{% endif %}"
+                                                                   data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="run"
+                                                                   data-repo-url="{{ repo.html_url or '' }}"
+                                                                   data-release-tag="{{ (rel_run.get('tag') if rel_run else '') }}"
+                                                                   data-release-title="{{ (rel_run.get('title') if rel_run else '') }}"
+                                                                   data-release-date="{{ (rel_run.get('date') if rel_run else '') }}"
+                                                                   onclick="branchInfoClicked(this)">
+                                                                   <i class="bi {% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i> Info
+                                                               </button>
+                                                               {% if is_sandbox %}
+                                                                   <button class="btn btn-outline-info btn-sm" type="button"
+                                                                       data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése"
+                                                                       data-repo="{{ repo.name }}" data-branch="{{ branch }}"
+                                                                       data-repo-url="{{ repo.html_url or '' }}"
+                                                                       data-repo-fullname="{{ repo.full_name or '' }}"
+                                                                       onclick="openCreateReleaseModal(this)">
+                                                                       <i class="bi bi-box-seam"></i>
+                                                                   </button>
+                                                               {% endif %}
+                                                           </div>
+                                                       </div>
+
+                                                       <div class="ms-2">
+                                                           <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}', this)"></i>
+                                                       </div>
+                                                   </div>
+                                               </div>
+                                           {% endfor %}
                                        </div>
                                    </div>
                                </div>
@@ -478,9 +496,9 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             <div class="row" id="repoContainerAvailable">
             {% for repo in repos %}
                 {% if repo.available_branches|length > 0 %}
-                <div class="col-12 col-md-4 mb-4 repo-item-available" data-repo-name="{{ repo.name }}">
+                <div class="col-12 col-md-6 mb-4 repo-item-available" data-repo-name="{{ repo.name }}">
                     <div class="card repo-card h-100">
-                        <div class="card-header text-white">
+                        <div class="card-header bg-success text-white">
                             <h5 class="card-title mb-0">
                                 <i class="bi bi-github"></i>
                                 <a href="{{ repo.html_url }}" target="_blank" class="text-white text-decoration-none">
@@ -492,28 +510,43 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                             <p class="card-text">{{ repo.description or 'Nincs leírás' }}</p>
                             <div class="branches-container">
                                 {% for branch in repo.available_branches %}
-                                    <div class="branch-checkbox d-flex align-items-center" id="branch-available-{{ repo.name }}-{{ branch }}">
-                                        {% set rel = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
-                                        <button class="btn btn-warning btn-sm me-2 text-dark"
-                                            type="button"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Azonnali letöltés"
-                                            title="Azonnali letöltés"
-                                            onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
-                                            <i class="bi bi-download"></i>
-                                        </button>
-                                        <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                            data-bs-toggle="tooltip" data-bs-title="{% if not rel or not (rel.get('tag') if rel else '') %}Nincs release info{% else %}Verziók{% endif %}"
-                                            data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="download"
-                                            data-repo-url="{{ repo.html_url or '' }}"
-                                            data-release-tag="{{ (rel.get('tag') if rel else '') }}"
-                                            data-release-title="{{ (rel.get('title') if rel else '') }}"
-                                            data-release-date="{{ (rel.get('date') if rel else '') }}"
-                                            onclick="branchInfoClicked(this)">
-                                            <i class="bi {% if not rel or not (rel.get('tag') if rel else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i>
-                                        </button>
-                                                    <span class="branch-name">{{ branch }}</span>
-                                     </div>
+                                    {% set rel = (repo.get('available_branch_releases', {}) or {}).get(branch) %}
+                                    {% set parts = (branch.split('-', 1) if branch else []) %}
+                                    {% if parts and (parts|length > 1) %}
+                                        {% set branch_title = (parts[0] ~ ' – ' ~ (parts[1] | replace('-', ' ') | replace('_', ' '))) %}
+                                    {% else %}
+                                        {% set branch_title = (branch | replace('-', ' ') | replace('_', ' ')) %}
+                                    {% endif %}
+
+                                    <div class="branch-checkbox border rounded p-2 mb-2" id="branch-available-{{ repo.name }}-{{ branch }}">
+                                        <div class="h6 mb-1"><i class="bi bi-circle-fill text-success me-2" aria-hidden="true"></i><span class="branch-name">{{ branch_title }}</span></div>
+
+                                        <div class="d-flex align-items-center flex-wrap gap-2">
+                                            {% if rel and (rel.get('tag') if rel else '') %}
+                                                <span class="badge border text-dark" data-bs-toggle="tooltip" data-bs-title="Legfrissebb kiadás tag">{{ rel.get('tag') }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary" data-bs-toggle="tooltip" data-bs-title="Nincs release információ">Nincs release info</span>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="mt-2 d-flex align-items-center flex-wrap gap-2">
+                                            <button class="btn btn-warning btn-sm text-dark" type="button"
+                                                data-bs-toggle="tooltip" data-bs-title="Azonnali letöltés" title="Azonnali letöltés"
+                                                onclick='installRobot({{ repo.name | tojson }}, {{ branch | tojson }}, this)'>
+                                                <i class="bi bi-download"></i> Letöltés
+                                            </button>
+                                            <button class="btn btn-outline-info btn-sm" type="button"
+                                                data-bs-toggle="tooltip" data-bs-title="{% if not rel or not (rel.get('tag') if rel else '') %}Nincs release info{% else %}Verziók{% endif %}"
+                                                data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-mode="download"
+                                                data-repo-url="{{ repo.html_url or '' }}"
+                                                data-release-tag="{{ (rel.get('tag') if rel else '') }}"
+                                                data-release-title="{{ (rel.get('title') if rel else '') }}"
+                                                data-release-date="{{ (rel.get('date') if rel else '') }}"
+                                                onclick="branchInfoClicked(this)">
+                                                <i class="bi {% if not rel or not (rel.get('tag') if rel else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i> Info
+                                            </button>
+                                        </div>
+                                    </div>
                                 {% endfor %}
                             </div>
                         </div>
@@ -1364,6 +1397,19 @@ async function updateRunnableUpdateIcons() {
 }
 
 // Telepített robotok HTML generálása JSON-ból
+function formatRobotTitle(branch) {
+    const raw = String(branch || '').trim();
+    if (!raw) return '';
+    const s = raw.replace(/_/g, ' ');
+    const idx = s.indexOf('-');
+    if (idx >= 0) {
+        const first = s.slice(0, idx).trim();
+        const rest = s.slice(idx + 1).replace(/-/g, ' ').trim();
+        if (first && rest) return `${first} – ${rest}`;
+    }
+    return s.replace(/-/g, ' ').trim();
+}
+
 function renderRunnableRepos(repos) {
     if (!repos || repos.length === 0) {
         return '<div class="col-12 text-center"><h2 class="text-muted mt-5">Nincs telepített, futtatható robot.</h2></div>';
@@ -1381,89 +1427,75 @@ function renderRunnableRepos(repos) {
     let html = '';
     repos.forEach(repo => {
         if (!repo.branches || repo.branches.length === 0) return;
-        const cardCount = Array.isArray(repo.branches) ? repo.branches.length : 0;
         const relMap = repo.available_branch_releases || {};
         const lastRunByBranch = repo.last_run_by_branch || {};
+
+        const repoName = escAttr(repo.name || '');
+        const repoUrl = escAttr(repo.html_url || '');
+        const repoFullName = escAttr(repo.full_name || '');
+        const repoDesc = escAttr(repo.description || 'Nincs leírás');
+        const count = Array.isArray(repo.branches) ? repo.branches.length : 0;
+
         html += `
-        <div class="col-12 col-md-6 mb-4 repo-item" data-repo-name="${repo.name}">
-            <div class="card repo-card h-100" style="background-color: #e3f2fd !important;">
-                <div class="card-header text-white">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-robot"></i>
-                        <a href="${repo.html_url || '#'}" target="_blank" class="text-white text-decoration-none">
-                            ${repo.name} <span class="opacity-75 ms-1">(${cardCount})</span>
-                        </a>
-                    </h5>
+        <div class="col-12 col-md-6 mb-4 repo-item" data-repo-name="${repoName}">
+            <div class="card repo-card h-100">
+                <div class="card-header bg-success text-white">
+                    <span class="card-title"><i class="bi bi-robot me-1" aria-hidden="true"></i>${repoName} <span class="opacity-75 ms-1">(${count})</span></span>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">${repo.description || 'Nincs leírás'}</p>
+                    <p class="card-text">${repoDesc}</p>
                     <div class="branches-container">
-                        ${repo.branches.map(branch => `
-                            <div class="branch-checkbox d-flex align-items-center" style="margin-bottom: 5px;" id="branch-${repo.name}-${branch}">
-                                <button class="btn btn-success btn-sm me-2" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás"
-                                    data-repo="${repo.name}"
-                                    data-branch="${branch}"
-                                    onclick="executeSingleRobot(this)">
-                                    <i class="bi bi-play-fill"></i>
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="Környezet beállítás"
-                                    data-repo="${escAttr(repo.name)}"
-                                    data-branch="${escAttr(branch)}"
-                                    onclick="openEnvironmentSettings(this)">
-                                    <i class="bi bi-sliders"></i>
-                                </button>
-                                <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="${(() => {
-                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
-                                        const hasRelease = !!(rel && rel.tag);
-                                        return hasRelease ? 'Verziók' : 'Nincs release info';
-                                    })()}"
-                                    data-repo="${repo.name}"
-                                    data-branch="${branch}"
-                                    data-mode="run"
-                                    data-repo-url="${escAttr(repo.html_url || '')}"
-                                    data-release-tag="${escAttr((relMap && relMap[branch] && relMap[branch].tag) ? relMap[branch].tag : '')}"
-                                    data-release-title="${escAttr((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
-                                    data-release-date="${escAttr((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
-                                    onclick="branchInfoClicked(this)">
-                                    ${(() => {
-                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
-                                        const hasRelease = !!(rel && rel.tag);
-                                        return `<i class=\"bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}\"></i>`;
-                                    })()}
-                                </button>
-                                ${sandboxEnabled ? `<button class="btn btn-outline-info btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése"
-                                    data-repo="${escAttr(repo.name)}" data-branch="${escAttr(branch)}"
-                                    data-repo-url="${escAttr(repo.html_url || '')}"
-                                    data-repo-fullname="${escAttr(repo.full_name || '')}"
-                                    onclick="openCreateReleaseModal(this)"><i class="bi bi-box-seam"></i></button>` : ''}
-                                <span class="branch-name">${branch}</span>
-                                <span class="ms-2 small installed-version-meta" data-repo="${escAttr(repo.name)}" data-branch="${escAttr(branch)}" data-repo-url="${escAttr(repo.html_url || '')}"><span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span></span>
-                                ${(() => {
-                                    try {
-                                        const lr = lastRunByBranch ? lastRunByBranch[branch] : null;
-                                        if (!lr) return '<span class="ms-2 small last-run-meta"><span class="badge bg-secondary me-1" data-bs-toggle="tooltip" data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span></span>';
-                                        const st = String(lr.status || '').trim();
-                                        const ts = String(lr.timestamp || '').trim();
-                                        const badgeClass = (st === 'success') ? 'bg-success' : (st === 'failed') ? 'bg-danger' : (st === 'cancelled') ? 'bg-warning text-dark' : 'bg-secondary';
-                                        const badgeText = (st === 'success') ? 'Siker' : (st === 'failed') ? 'Hiba' : (st === 'cancelled') ? 'Megszakítva' : 'Futás';
-                                        const rc = (lr.returncode !== undefined && lr.returncode !== null) ? String(lr.returncode) : '';
-                                        const statusTip = `Utolsó futás státusza: ${st}${rc ? ` (rc=${rc})` : ''}`;
-                                        return `<span class="ms-2 small last-run-meta">` +
-                                            `<span class="badge ${badgeClass} me-1" data-bs-toggle="tooltip" data-bs-title="${escAttr(statusTip)}">${badgeText}</span>` +
-                                            `<span class="text-muted" data-bs-toggle="tooltip" data-bs-title="Utolsó futás ideje">${escAttr(ts)}</span>` +
-                                        `</span>`;
-                                    } catch (e) {
-                                        return '';
+                        ${(repo.branches || []).map(branch => {
+                            const br = String(branch || '');
+                            const rel = (relMap && relMap[br]) ? relMap[br] : null;
+                            const hasRelease = !!(rel && rel.tag);
+
+                            const lastRunHtml = (() => {
+                                try {
+                                    const lr = lastRunByBranch ? lastRunByBranch[br] : null;
+                                    if (!lr) {
+                                        return '<span class="small last-run-meta"><span class="badge bg-secondary" data-bs-toggle="tooltip" data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span></span>';
                                     }
-                                })()}
-                                <span class="ms-auto">
-                                    <i class="bi bi-trash text-danger" style="cursor: pointer;" onclick="deleteRunnableBranch('${repo.name}', '${branch}', this)" title="Eltávolítás a futtathatók közül"></i>
-                                </span>
+                                    const st = String(lr.status || '').trim();
+                                    const ts = String(lr.timestamp || '').trim();
+                                    const badgeClass = (st === 'success') ? 'bg-success' : (st === 'failed') ? 'bg-danger' : (st === 'cancelled') ? 'bg-warning text-dark' : 'bg-secondary';
+                                    const badgeText = (st === 'success') ? 'Siker' : (st === 'failed') ? 'Hiba' : (st === 'cancelled') ? 'Megszakítva' : 'Futás';
+                                    const rc = (lr.returncode !== undefined && lr.returncode !== null) ? String(lr.returncode) : '';
+                                    const statusTip = `Utolsó futás státusza: ${st}${rc ? ` (rc=${rc})` : ''}`;
+                                    return `<span class="small last-run-meta">` +
+                                        `<span class="badge ${badgeClass}" data-bs-toggle="tooltip" data-bs-title="${escAttr(statusTip)}">${badgeText}</span>` +
+                                        (ts ? `<span class="text-muted ms-1" data-bs-toggle="tooltip" data-bs-title="Utolsó futás ideje">${escAttr(ts)}</span>` : '') +
+                                    `</span>`;
+                                } catch (e) {
+                                    return '';
+                                }
+                            })();
+
+                            return `
+                            <div class="branch-checkbox border rounded p-2 mb-2">
+                                <div class="d-flex align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="h6 mb-1"><i class="bi bi-circle-fill text-success me-2" aria-hidden="true"></i><span class="branch-name">${escAttr(formatRobotTitle(br) || br)}</span></div>
+                                        <div class="d-flex align-items-center flex-wrap gap-2">
+                                            <span class="small installed-version-meta" data-repo="${repoName}" data-branch="${escAttr(br)}" data-repo-url="${repoUrl}">
+                                                <span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span>
+                                            </span>
+                                            ${lastRunHtml}
+                                        </div>
+                                        <div class="mt-2 d-flex align-items-center flex-wrap gap-2">
+                                            <button class="btn btn-success btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás" data-repo="${repoName}" data-branch="${escAttr(br)}" onclick="executeSingleRobot(this)"><i class="bi bi-play-fill"></i> Futtatás</button>
+                                            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Környezet beállítás" data-repo="${repoName}" data-branch="${escAttr(br)}" onclick="openEnvironmentSettings(this)"><i class="bi bi-sliders"></i> Beállítás</button>
+                                            <button class="btn btn-outline-info btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="${hasRelease ? 'Verziók' : 'Nincs release info'}" data-repo="${repoName}" data-branch="${escAttr(br)}" data-mode="run" data-repo-url="${repoUrl}" data-release-tag="${escAttr(hasRelease ? (rel.tag || '') : '')}" data-release-title="${escAttr(hasRelease ? (rel.title || '') : '')}" data-release-date="${escAttr(hasRelease ? (rel.date || '') : '')}" onclick="branchInfoClicked(this)"><i class="bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}"></i> Info</button>
+                                            ${sandboxEnabled ? `<button class="btn btn-outline-info btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése" data-repo="${repoName}" data-branch="${escAttr(br)}" data-repo-url="${repoUrl}" data-repo-fullname="${repoFullName}" onclick="openCreateReleaseModal(this)"><i class="bi bi-box-seam"></i></button>` : ''}
+                                        </div>
+                                    </div>
+                                    <div class="ms-2">
+                                        <i class="bi bi-trash text-danger" style="cursor: pointer;" onclick="deleteRunnableBranch('${repoName}', '${escAttr(br)}', this)" title="Eltávolítás a futtathatók közül"></i>
+                                    </div>
+                                </div>
                             </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             </div>
@@ -1491,8 +1523,8 @@ function openCreateReleaseModal(btn) {
         // A szomszédos "Verziók" (info) gombon ott van a data-release-tag.
         let latestTag = '';
         try {
-            const row = (btn && btn.closest) ? btn.closest('.branch-checkbox') : null;
-            const infoBtn = row ? row.querySelector('button[data-mode="run"][data-release-tag]') : null;
+            const container = (btn && btn.closest) ? (btn.closest('.card') || btn.closest('.repo-item') || btn.closest('.branch-checkbox')) : null;
+            const infoBtn = container ? container.querySelector('button[data-mode="run"][data-release-tag]') : null;
             latestTag = String((infoBtn && (infoBtn.getAttribute('data-release-tag') || (infoBtn.dataset ? infoBtn.dataset.releaseTag : ''))) || '').trim();
         } catch (e) { /* ignore */ }
 
@@ -1787,49 +1819,58 @@ function renderAvailableRepos(repos) {
         const cardCount = Array.isArray(repo.branches) ? repo.branches.length : 0;
         const relMap = repo.available_branch_releases || {};
         html += `
-        <div class="col-12 col-md-4 mb-4 repo-item-available" data-repo-name="${repo.name}">
+        <div class="col-12 col-md-6 mb-4 repo-item-available" data-repo-name="${escapeHtml(repo.name)}">
             <div class="card repo-card h-100">
-                <div class="card-header text-white">
+                <div class="card-header bg-success text-white">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-github"></i>
                         <a href="${repo.html_url || '#'}" target="_blank" class="text-white text-decoration-none">
-                            ${repo.name} <span class="opacity-75 ms-1">(${cardCount})</span>
+                            ${escapeHtml(repo.name)} <span class="opacity-75 ms-1">(${cardCount})</span>
                         </a>
                     </h5>
-                    ${repo.updated_at ? `<small class="opacity-75">${repo.updated_at.slice(0,10)}</small>` : ''}
                 </div>
                 <div class="card-body">
                     <p class="card-text">${repo.description || 'Nincs leírás'}</p>
                     <div class="branches-container">
                         ${repo.branches.map(branch => `
-                            <div class="branch-checkbox d-flex align-items-center" id="branch-available-${repo.name}-${branch}">
-                                <button class="btn btn-warning btn-sm me-2 text-dark" type="button" data-bs-toggle="tooltip" data-bs-title="Azonnali letöltés" title="Azonnali letöltés" onclick='installRobot(${JSON.stringify(repo.name)}, ${JSON.stringify(branch)}, this)'>
-                                    <i class="bi bi-download"></i>
-                                </button>
-                                <button class="btn btn-outline-info btn-sm me-2" type="button"
-                                    data-bs-toggle="tooltip" data-bs-title="${(() => {
-                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
-                                        const hasRelease = !!(rel && rel.tag);
-                                        return hasRelease ? 'Verziók' : 'Nincs release info';
-                                    })()}"
-                                    data-repo="${repo.name}"
-                                    data-branch="${branch}"
-                                    data-mode="download"
-                                    data-repo-url="${escapeHtml(repo.html_url || '')}"
-                                    data-release-tag="${escapeHtml((relMap && relMap[branch] && relMap[branch].tag) ? relMap[branch].tag : '')}"
-                                    data-release-title="${escapeHtml((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
-                                    data-release-date="${escapeHtml((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
-                                    onclick="branchInfoClicked(this)">
-                                    ${(() => {
-                                        const rel = relMap && relMap[branch] ? relMap[branch] : null;
-                                        const hasRelease = !!(rel && rel.tag);
-                                        return `<i class=\"bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}\"></i>`;
-                                    })()}
-                                </button>
+                            <div class="branch-checkbox border rounded p-2 mb-2" id="branch-available-${escapeHtml(repo.name)}-${escapeHtml(branch)}">
+                                ${(() => {
+                                    const title = formatRobotTitle(branch) || String(branch || '');
+                                    return `<div class="h6 mb-1"><i class=\"bi bi-circle-fill text-success me-2\" aria-hidden=\"true\"></i><span class=\"branch-name\">${escapeHtml(title)}</span></div>`;
+                                })()}
                                 ${(() => {
                                     const rel = relMap && relMap[branch] ? relMap[branch] : null;
-                                    return `<span class="branch-name">${escapeHtml(branch)}</span>`;
+                                    const hasRelease = !!(rel && rel.tag);
+                                    if (hasRelease) {
+                                        return `<div class="d-flex align-items-center flex-wrap gap-2"><span class="badge border text-dark" data-bs-toggle="tooltip" data-bs-title="Legfrissebb kiadás tag">${escapeHtml(rel.tag)}</span></div>`;
+                                    }
+                                    return `<div class="d-flex align-items-center flex-wrap gap-2"><span class="badge bg-secondary" data-bs-toggle="tooltip" data-bs-title="Nincs release információ">Nincs release info</span></div>`;
                                 })()}
+                                <div class="mt-2 d-flex align-items-center flex-wrap gap-2">
+                                    <button class="btn btn-warning btn-sm text-dark" type="button" data-bs-toggle="tooltip" data-bs-title="Azonnali letöltés" title="Azonnali letöltés" onclick='installRobot(${JSON.stringify(repo.name)}, ${JSON.stringify(branch)}, this)'>
+                                        <i class="bi bi-download"></i> Letöltés
+                                    </button>
+                                    <button class="btn btn-outline-info btn-sm" type="button"
+                                        data-bs-toggle="tooltip" data-bs-title="${(() => {
+                                            const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                            const hasRelease = !!(rel && rel.tag);
+                                            return hasRelease ? 'Verziók' : 'Nincs release info';
+                                        })()}"
+                                        data-repo="${escapeHtml(repo.name)}"
+                                        data-branch="${escapeHtml(branch)}"
+                                        data-mode="download"
+                                        data-repo-url="${escapeHtml(repo.html_url || '')}"
+                                        data-release-tag="${escapeHtml((relMap && relMap[branch] && relMap[branch].tag) ? relMap[branch].tag : '')}"
+                                        data-release-title="${escapeHtml((relMap && relMap[branch] && relMap[branch].title) ? relMap[branch].title : '')}"
+                                        data-release-date="${escapeHtml((relMap && relMap[branch] && relMap[branch].date) ? relMap[branch].date : '')}"
+                                        onclick="branchInfoClicked(this)">
+                                        ${(() => {
+                                            const rel = relMap && relMap[branch] ? relMap[branch] : null;
+                                            const hasRelease = !!(rel && rel.tag);
+                                            return `<i class=\"bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}\"></i> Info`;
+                                        })()}
+                                    </button>
+                                </div>
                             </div>
                         `).join('')}
                     </div>

@@ -18,31 +18,5 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260202_073647",
     "type": "bulk"
-  },
-  {
-    "id": 3,
-    "timestamp": "2026-02-02 10:44:58",
-    "repo": "IKK-Robotok",
-    "branch": "IKK01_Duplikáció-ellenőrzés",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "IKK-Robotok__IKK01_Duplikáció-ellenőrzés__20260202_104319",
-    "type": "install",
-    "installed_version": "IKK01_V1.1.0",
-    "stdout": "Install OK (release=IKK01_V1.1.0)",
-    "stderr": ""
-  },
-  {
-    "id": 4,
-    "timestamp": "2026-02-02 10:47:06",
-    "repo": "IKK-Robotok",
-    "branch": "IKK04-Dokumentum-WEB-Ellenőrzés",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20260202_104530",
-    "type": "install",
-    "installed_version": "V1.3.0",
-    "stdout": "Install OK (release=V1.3.0)",
-    "stderr": ""
   }
 ]
