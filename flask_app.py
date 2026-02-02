@@ -19,6 +19,7 @@ import pathlib
 import base64
 import zipfile
 import io
+import tempfile
 from datetime import datetime
 import logging
 
@@ -1482,6 +1483,163 @@ def _github_close_issue(owner: str, repo_name: str, issue_number: int) -> dict:
     if resp.status_code != 200:
         raise RuntimeError(f"GitHub close issue failed (status={resp.status_code}): {(resp.text or '').strip()}")
     return resp.json() or {}
+
+
+def _parse_owner_repo_from_github_url(url: str) -> tuple[str, str]:
+    """Extract (owner, repo) from a GitHub clone/html URL.
+
+    Supports:
+    - https://github.com/<owner>/<repo>.git
+    - https://github.com/<owner>/<repo>
+    - git@github.com:<owner>/<repo>.git
+    """
+    raw = (url or '').strip()
+    if not raw:
+        raise ValueError('Missing GitHub URL')
+
+    m = re.search(r'github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/\.]+)', raw, flags=re.IGNORECASE)
+    if not m:
+        raise ValueError(f'Cannot parse owner/repo from URL: {raw}')
+    return m.group('owner'), m.group('repo')
+
+
+def _github_get_latest_release_tag(owner: str, repo_name: str) -> str | None:
+    """Return tag_name from GitHub's /releases/latest (best-effort)."""
+    try:
+        url = f'https://api.github.com/repos/{owner}/{repo_name}/releases/latest'
+        headers = _github_headers()
+        resp = requests.get(url, headers=headers, timeout=20)
+        if resp.status_code in (401, 403) and headers.get('Authorization', '').startswith('token '):
+            headers2 = dict(headers)
+            headers2['Authorization'] = headers2['Authorization'].replace('token ', 'Bearer ', 1)
+            resp = requests.get(url, headers=headers2, timeout=20)
+        if resp.status_code != 200:
+            return None
+        data = resp.json() or {}
+        tag = (data.get('tag_name') or '').strip()
+        return tag or None
+    except Exception:
+        return None
+
+
+def _clear_dir_except(target_dir: str, keep_names: set[str] | None = None):
+    keep_names = keep_names or set()
+    try:
+        for name in os.listdir(target_dir):
+            if name in keep_names:
+                continue
+            p = os.path.join(target_dir, name)
+            try:
+                if os.path.isdir(p) and not os.path.islink(p):
+                    shutil.rmtree(p, ignore_errors=True)
+                else:
+                    os.remove(p)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _github_download_zipball_bytes(owner: str, repo_name: str, tag: str) -> bytes:
+    """Download repo zipball for a given tag (release)."""
+    url = f'https://api.github.com/repos/{owner}/{repo_name}/zipball/{tag}'
+    headers = _github_headers()
+    resp = requests.get(url, headers=headers, timeout=120)
+    if resp.status_code in (401, 403) and headers.get('Authorization', '').startswith('token '):
+        headers2 = dict(headers)
+        headers2['Authorization'] = headers2['Authorization'].replace('token ', 'Bearer ', 1)
+        resp = requests.get(url, headers=headers2, timeout=120)
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Zipball letöltés sikertelen (status={resp.status_code}, repo={owner}/{repo_name}, tag={tag}): {(resp.text or '').strip()}"
+        )
+    return resp.content or b''
+
+
+def _extract_github_zipball_to_dir(zip_bytes: bytes, target_dir: str, preserve_names: set[str] | None = None):
+    """Extract a GitHub zipball (which contains a single top-level folder) into target_dir."""
+    preserve_names = preserve_names or {'.venv'}
+    os.makedirs(target_dir, exist_ok=True)
+    _clear_dir_except(target_dir, preserve_names)
+
+    tmp_root = tempfile.mkdtemp(prefix='cla_zip_')
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            zf.extractall(tmp_root)
+
+        entries = [os.path.join(tmp_root, n) for n in os.listdir(tmp_root)]
+        src_root = None
+        if len(entries) == 1 and os.path.isdir(entries[0]):
+            src_root = entries[0]
+        else:
+            src_root = tmp_root
+
+        for name in os.listdir(src_root):
+            src = os.path.join(src_root, name)
+            if name in preserve_names:
+                continue
+            dst = os.path.join(target_dir, name)
+            if os.path.isdir(src) and not os.path.islink(src):
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+            else:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
+
+        # Windows cmd.exe is picky: many .bat/.cmd scripts break when checked out with LF-only.
+        _normalize_line_endings_in_dir(target_dir, exts={'.bat', '.cmd'})
+    finally:
+        try:
+            shutil.rmtree(tmp_root, ignore_errors=True)
+        except Exception:
+            pass
+
+
+def _normalize_line_endings_in_dir(root_dir: str, exts: set[str] | None = None):
+    """Convert LF-only files to CRLF for selected extensions (best-effort)."""
+    exts = exts or set()
+    root_dir = root_dir or ''
+    if not root_dir or not os.path.isdir(root_dir):
+        return
+    try:
+        for base, _dirs, files in os.walk(root_dir):
+            for fn in files:
+                try:
+                    ext = os.path.splitext(fn)[1].lower()
+                    if ext not in exts:
+                        continue
+                    _normalize_file_crlf(os.path.join(base, fn))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def _normalize_file_crlf(path: str):
+    """If a file contains LF but no CR, rewrite it with CRLF line endings."""
+    try:
+        p = path or ''
+        if not p or not os.path.isfile(p):
+            return
+        data = None
+        try:
+            data = pathlib.Path(p).read_bytes()
+        except Exception:
+            with open(p, 'rb') as f:
+                data = f.read()
+        if not data:
+            return
+        if b'\r' in data:
+            return
+        if b'\n' not in data:
+            return
+        new_data = data.replace(b'\n', b'\r\n')
+        try:
+            pathlib.Path(p).write_bytes(new_data)
+        except Exception:
+            with open(p, 'wb') as f:
+                f.write(new_data)
+    except Exception:
+        pass
 
 
 def _github_create_issue_comment(owner: str, repo_name: str, issue_number: int, body: str) -> dict:
@@ -2995,7 +3153,8 @@ def install_robot_with_params(repo: str, branch: str):
     safe_branch = (branch or 'unknown').replace('/', '_')
     logger.info(f"[INSTALL] install_robot_with_params indult: repo='{repo}', branch='{branch}', safe_repo='{safe_repo}', safe_branch='{safe_branch}', timestamp='{timestamp}'")
     # 1. Könyvtárak létrehozása (repo és branch szint)
-    if get_sandbox_mode():
+    is_sandbox = bool(get_sandbox_mode())
+    if is_sandbox:
         base_dir = _normalize_dir_from_vars('SANDBOX_ROBOTS')
         if not base_dir:
             base_dir = os.path.join(os.getcwd(), 'SandboxRobots')
@@ -3030,103 +3189,134 @@ def install_robot_with_params(repo: str, branch: str):
         logger.error(f"[INSTALL][ERROR] Nem található repo URL: {repo}")
         return 1, '', '', f'Nem található repo URL: {repo}'
 
-    # 3. Klónozás, ha nincs meg a branch könyvtárban .git
-    try:
-        git_dir = os.path.join(branch_dir, '.git')
-        if not os.path.exists(git_dir):
-            clone_cmd = [
-                'git', 'clone', '--branch', branch, '--single-branch', repo_url, branch_dir
-            ]
-            logger.info(f"[INSTALL] Klónozás indítása: {' '.join(clone_cmd)}")
-            result = subprocess.Popen(
-                clone_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                encoding="utf-8",
-                errors="ignore"
-            )
-            output_lines = []
-            for line in result.stdout:
-                try:
-                    safe_line = line.strip()
-                    if isinstance(safe_line, bytes):
-                        safe_line = safe_line.decode('utf-8', errors='replace')
-                    else:
-                        safe_line = str(safe_line)
-                    logger.info(f"[INSTALL][CLONE]: {safe_line}")
-                    output_lines.append(safe_line)
-                except Exception as e:
-                    logger.warning(f"[INSTALL][CLONE][LOGGING ERROR]: {e}")
-            result.wait()
-            logger.info(f"[INSTALL] Klónozás befejezve: rc={result.returncode}, output={output_lines[:10]}")
-            if result.returncode != 0:
-                logger.error(f"[INSTALL][ERROR] Klónozás sikertelen: rc={result.returncode}, output={output_lines[:10]}")
-                return 1, '', '\n'.join(output_lines), ''
-        else:
-            # Force pull: fetch + reset --hard
-            fetch_cmd = ['git', '-C', branch_dir, 'fetch', 'origin']
-            logger.info(f"[INSTALL] Fetch indítása: {' '.join(fetch_cmd)}")
-            fetch_result = subprocess.Popen(
-                fetch_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                encoding="utf-8",
-                errors="ignore"
-            )
-            fetch_lines = []
-            for line in fetch_result.stdout:
-                try:
-                    safe_line = line.strip()
-                    if isinstance(safe_line, bytes):
-                        safe_line = safe_line.decode('utf-8', errors='replace')
-                    else:
-                        safe_line = str(safe_line)
-                    logger.info(f"[INSTALL][FETCH]: {safe_line}")
-                    fetch_lines.append(safe_line)
-                except Exception as e:
-                    logger.warning(f"[INSTALL][FETCH][LOGGING ERROR]: {e}")
-            fetch_result.wait()
-            logger.info(f"[INSTALL] Fetch befejezve: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
-            if fetch_result.returncode != 0:
-                logger.error(f"[INSTALL][ERROR] Fetch sikertelen: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
-                return 1, '', '\n'.join(fetch_lines), ''
-            reset_cmd = ['git', '-C', branch_dir, 'reset', '--hard', f'origin/{branch}']
-            logger.info(f"[INSTALL] Reset --hard indítása: {' '.join(reset_cmd)}")
-            reset_result = subprocess.Popen(
-                reset_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                encoding="utf-8",
-                errors="ignore"
-            )
-            reset_lines = []
-            for line in reset_result.stdout:
-                try:
-                    safe_line = line.strip()
-                    if isinstance(safe_line, bytes):
-                        safe_line = safe_line.decode('utf-8', errors='replace')
-                    else:
-                        safe_line = str(safe_line)
-                    logger.info(f"[INSTALL][RESET]: {safe_line}")
-                    reset_lines.append(safe_line)
-                except Exception as e:
-                    logger.warning(f"[INSTALL][RESET][LOGGING ERROR]: {e}")
-            reset_result.wait()
-            logger.info(f"[INSTALL] Reset --hard befejezve: rc={reset_result.returncode}, output={reset_lines[:10]}")
-            if reset_result.returncode != 0:
-                logger.error(f"[INSTALL][ERROR] Reset --hard sikertelen: rc={reset_result.returncode}, output={reset_lines[:10]}")
-                return 1, '', '\n'.join(reset_lines), ''
-    except Exception as e:
-        logger.error(f"[INSTALL][ERROR] Git klónozás/pull hiba: {e}")
-        return 1, '', '', f'Git klónozás/pull hiba: {e}'
+    installed_version: str | None = None
 
-    if get_sandbox_mode():
+    # 3. Forrás beszerzése
+    if not is_sandbox:
+        # Normál mód: ne klónozzunk; a latest release zipball-t töltsük le és csomagoljuk ki.
+        try:
+            owner, repo_name = _parse_owner_repo_from_github_url(repo_url)
+
+            # Preferáljuk a branch-hez tartozó legfrissebb release tag-et (ha elérhető)
+            tag = None
+            try:
+                tag = _try_get_latest_release_tag_for_branch(repo, branch)
+            except Exception:
+                tag = None
+            tag = (tag or '').strip()
+            if not tag or tag.upper() == 'NONE':
+                tag = _github_get_latest_release_tag(owner, repo_name)
+
+            if not tag:
+                msg = f"Nem található latest release tag: {owner}/{repo_name}"
+                logger.error(f"[INSTALL][ERROR] {msg}")
+                return 1, '', '', msg
+
+            logger.info(f"[INSTALL] Normál mód: latest release letöltés: {owner}/{repo_name} tag={tag}")
+            zip_bytes = _github_download_zipball_bytes(owner, repo_name, tag)
+            _extract_github_zipball_to_dir(zip_bytes, branch_dir, preserve_names={'.venv'})
+            installed_version = tag
+            logger.info(f"[INSTALL] Release kicsomagolva ide: {branch_dir}")
+        except Exception as e:
+            logger.error(f"[INSTALL][ERROR] Release letöltés/kicsomagolás hiba: {e}")
+            return 1, '', '', f'Release letöltés/kicsomagolás hiba: {e}'
+    else:
+        # Fejlesztői mód: marad a git klónozás/pull
+        try:
+            git_dir = os.path.join(branch_dir, '.git')
+            if not os.path.exists(git_dir):
+                clone_cmd = [
+                    'git', 'clone', '--branch', branch, '--single-branch', repo_url, branch_dir
+                ]
+                logger.info(f"[INSTALL] Klónozás indítása: {' '.join(clone_cmd)}")
+                result = subprocess.Popen(
+                    clone_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    encoding="utf-8",
+                    errors="ignore"
+                )
+                output_lines = []
+                for line in result.stdout:
+                    try:
+                        safe_line = line.strip()
+                        if isinstance(safe_line, bytes):
+                            safe_line = safe_line.decode('utf-8', errors='replace')
+                        else:
+                            safe_line = str(safe_line)
+                        logger.info(f"[INSTALL][CLONE]: {safe_line}")
+                        output_lines.append(safe_line)
+                    except Exception as e:
+                        logger.warning(f"[INSTALL][CLONE][LOGGING ERROR]: {e}")
+                result.wait()
+                logger.info(f"[INSTALL] Klónozás befejezve: rc={result.returncode}, output={output_lines[:10]}")
+                if result.returncode != 0:
+                    logger.error(f"[INSTALL][ERROR] Klónozás sikertelen: rc={result.returncode}, output={output_lines[:10]}")
+                    return 1, '', '\n'.join(output_lines), ''
+            else:
+                # Force pull: fetch + reset --hard
+                fetch_cmd = ['git', '-C', branch_dir, 'fetch', 'origin']
+                logger.info(f"[INSTALL] Fetch indítása: {' '.join(fetch_cmd)}")
+                fetch_result = subprocess.Popen(
+                    fetch_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    encoding="utf-8",
+                    errors="ignore"
+                )
+                fetch_lines = []
+                for line in fetch_result.stdout:
+                    try:
+                        safe_line = line.strip()
+                        if isinstance(safe_line, bytes):
+                            safe_line = safe_line.decode('utf-8', errors='replace')
+                        else:
+                            safe_line = str(safe_line)
+                        logger.info(f"[INSTALL][FETCH]: {safe_line}")
+                        fetch_lines.append(safe_line)
+                    except Exception as e:
+                        logger.warning(f"[INSTALL][FETCH][LOGGING ERROR]: {e}")
+                fetch_result.wait()
+                logger.info(f"[INSTALL] Fetch befejezve: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
+                if fetch_result.returncode != 0:
+                    logger.error(f"[INSTALL][ERROR] Fetch sikertelen: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
+                    return 1, '', '\n'.join(fetch_lines), ''
+                reset_cmd = ['git', '-C', branch_dir, 'reset', '--hard', f'origin/{branch}']
+                logger.info(f"[INSTALL] Reset --hard indítása: {' '.join(reset_cmd)}")
+                reset_result = subprocess.Popen(
+                    reset_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    encoding="utf-8",
+                    errors="ignore"
+                )
+                reset_lines = []
+                for line in reset_result.stdout:
+                    try:
+                        safe_line = line.strip()
+                        if isinstance(safe_line, bytes):
+                            safe_line = safe_line.decode('utf-8', errors='replace')
+                        else:
+                            safe_line = str(safe_line)
+                        logger.info(f"[INSTALL][RESET]: {safe_line}")
+                        reset_lines.append(safe_line)
+                    except Exception as e:
+                        logger.warning(f"[INSTALL][RESET][LOGGING ERROR]: {e}")
+                reset_result.wait()
+                logger.info(f"[INSTALL] Reset --hard befejezve: rc={reset_result.returncode}, output={reset_lines[:10]}")
+                if reset_result.returncode != 0:
+                    logger.error(f"[INSTALL][ERROR] Reset --hard sikertelen: rc={reset_result.returncode}, output={reset_lines[:10]}")
+                    return 1, '', '\n'.join(reset_lines), ''
+        except Exception as e:
+            logger.error(f"[INSTALL][ERROR] Git klónozás/pull hiba: {e}")
+            return 1, '', '', f'Git klónozás/pull hiba: {e}'
+
         logger.info(f"[INSTALL] SANDBOX_MODE: csak klónozás történt, nincs telepito.bat, nincs .venv ellenőrzés")
         return 0, branch_dir, 'Sandbox clone OK', ''
     # 4. telepito.bat futtatása CSAK ha nincs .venv mappa a letöltött branch könyvtárban
@@ -3180,7 +3370,8 @@ def install_robot_with_params(repo: str, branch: str):
 
     # --- Telepített verzió rögzítése (installed_versions/<branch>.txt) ---
     try:
-        installed_version = _try_get_latest_release_tag_for_branch(repo, branch)
+        if not installed_version:
+            installed_version = _try_get_latest_release_tag_for_branch(repo, branch)
         _write_installed_version(branch, installed_version)
         logger.info(f"[INSTALL] Telepített verzió rögzítve: branch='{branch}', version='{installed_version}'")
     except Exception as e:
@@ -3209,7 +3400,13 @@ def install_robot_with_params(repo: str, branch: str):
         logger.info(f"[INSTALL] Letöltési log.html létrehozva: {log_path}")
     except Exception as e:
         logger.error(f"[INSTALL][ERROR] Nem sikerült letöltési logot írni: {e}")
-    return 0, results_dir_name, 'Install OK', ''
+    stdout_msg = 'Install OK'
+    try:
+        if installed_version:
+            stdout_msg = f"Install OK (release={installed_version})"
+    except Exception:
+        pass
+    return 0, results_dir_name, stdout_msg, ''
 # --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
 
 # --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
