@@ -1223,6 +1223,7 @@ function refreshRunnableRobots() {
 
 async function updateRunnableUpdateIcons() {
     const container = document.getElementById('runnable-list') || document;
+    const sandboxEnabled = !!document.getElementById('sandboxMode')?.checked;
     const buttons = Array.from(container.querySelectorAll('button[data-mode="run"][data-repo][data-branch]'));
     const metaEls = Array.from(container.querySelectorAll('.installed-version-meta[data-repo][data-branch]'));
     if (!buttons.length && !metaEls.length) return;
@@ -1273,7 +1274,8 @@ async function updateRunnableUpdateIcons() {
         const latestTag = (btn.getAttribute('data-release-tag') || '').trim();
         const installed = String((window.__installedVersionCache && br) ? (window.__installedVersionCache[br] || '') : '').trim();
 
-        const hasUpdate = Boolean(installed && installed !== 'NONE' && latestTag && installed !== latestTag);
+        // Fejlesztői módban (sandbox): ne jelezzünk "új verzió" (harang) figyelmeztetést.
+        const hasUpdate = !sandboxEnabled && Boolean(installed && installed !== 'NONE' && latestTag && installed !== latestTag);
         const iconEl = btn.querySelector('i');
         if (!iconEl) return;
 
@@ -1443,6 +1445,15 @@ function openCreateReleaseModal(btn) {
         const repoUrl = (btn && btn.dataset) ? (btn.dataset.repoUrl || '') : '';
         const repoFullName = (btn && btn.dataset) ? (btn.dataset.repoFullname || '') : '';
 
+        // Default TagName: a jelenlegi legfrissebb verzió tag-je (ha ismert).
+        // A szomszédos "Verziók" (info) gombon ott van a data-release-tag.
+        let latestTag = '';
+        try {
+            const row = (btn && btn.closest) ? btn.closest('.branch-checkbox') : null;
+            const infoBtn = row ? row.querySelector('button[data-mode="run"][data-release-tag]') : null;
+            latestTag = String((infoBtn && (infoBtn.getAttribute('data-release-tag') || (infoBtn.dataset ? infoBtn.dataset.releaseTag : ''))) || '').trim();
+        } catch (e) { /* ignore */ }
+
         modalEl.__createReleaseState = { repo, branch, repoUrl, repoFullName };
 
         const infoEl = document.getElementById('createReleaseTargetInfo');
@@ -1454,7 +1465,7 @@ function openCreateReleaseModal(btn) {
         const tagEl = document.getElementById('createReleaseTagName');
         const titleEl = document.getElementById('createReleaseTitle');
         const notesEl = document.getElementById('createReleaseNotes');
-        if (tagEl) tagEl.value = '';
+        if (tagEl) tagEl.value = latestTag || '';
         if (titleEl) titleEl.value = branch ? `Release ${branch}` : '';
         if (notesEl) notesEl.value = '';
 
@@ -1505,11 +1516,6 @@ function openCreateReleaseModal(btn) {
                         `Kiadás elkészült: <strong>${_escapeHtml(tagName)}</strong>` + (url ? ` — <a href="${_escapeHtml(url)}" target="_blank" rel="noopener">Megnyitás</a>` : ''),
                         'success'
                     );
-                    // Az új tag legyen az "utoljára letöltött/telepített" verzió (fejlesztői mód)
-                    try {
-                        window.__installedVersionCache = window.__installedVersionCache || {};
-                        if (st && st.branch) window.__installedVersionCache[String(st.branch).trim()] = String(tagName).trim();
-                    } catch (e) { }
                     try {
                         const modal = bootstrap.Modal.getInstance(modalEl);
                         if (modal) modal.hide();
@@ -1826,6 +1832,7 @@ async function branchInfoClicked(button) {
     const repo = button?.getAttribute('data-repo') || '';
     const branch = button?.getAttribute('data-branch') || '';
     const mode = button?.getAttribute('data-mode') || '';
+    const sandboxEnabled = !!document.getElementById('sandboxMode')?.checked;
     const repoUrl = (button?.getAttribute('data-repo-url') || '').trim();
     const relTag = (button?.getAttribute('data-release-tag') || '').trim();
     const relTitle = (button?.getAttribute('data-release-title') || '').trim();
@@ -1905,7 +1912,7 @@ async function branchInfoClicked(button) {
                 const ldate = latest.date ? String(latest.date).slice(0, 10) : '';
                 const latestParts = [ldate, lt].filter(Boolean);
                 lines.push(`- Legfrissebb verzió: ${latestParts.join(' — ') || '-'}`);
-                if (installedVersion && installedVersion !== 'NONE' && lt && installedVersion !== lt) {
+                if (!sandboxEnabled && installedVersion && installedVersion !== 'NONE' && lt && installedVersion !== lt) {
                     lines.push(`- Állapot: új verzió elérhető (${installedVersion} → ${lt})`);
                 } else if (installedVersion && installedVersion !== 'NONE' && lt && installedVersion === lt) {
                     lines.push('- Állapot: naprakész');
@@ -1961,7 +1968,7 @@ async function branchInfoClicked(button) {
                     /Robot verziók:/,
                     `<a href="${releasesUrl}" target="_blank" rel="noopener">Robot verziók:</a>`
                 );
-                if (plain.includes('Állapot: új verzió elérhető')) {
+                if (!sandboxEnabled && plain.includes('Állapot: új verzió elérhető')) {
                     htmlMsg = htmlMsg.replace(/(-\s*Állapot:\s*új verzió elérhető[^<]*)(<br>|$)/gi, '<b>$1</b>$2');
                 }
                 showInfoBox(plain, header, 'OK', htmlMsg);
@@ -3494,8 +3501,9 @@ function showInfoBox(message, title = 'Információ', okText = 'OK', messageHtml
         }
     }
 
-    // Ha az állapot "új verzió elérhető", legyen a sor félkövér.
-    if (msg.includes('Állapot: új verzió elérhető')) {
+    // Ha az állapot "új verzió elérhető", legyen a sor félkövér (kivéve fejlesztői mód).
+    const sandboxEnabled = !!document.getElementById('sandboxMode')?.checked;
+    if (!sandboxEnabled && msg.includes('Állapot: új verzió elérhető')) {
         try {
             let html = escapeHtml(msg).replace(/\n/g, '<br>');
             html = html.replace(/(-\s*Állapot:\s*új verzió elérhető[^<]*)(<br>|$)/gi, '<b>$1</b>$2');

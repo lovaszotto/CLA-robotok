@@ -1348,12 +1348,8 @@ def api_create_github_release():
         resp = requests.post(url, headers=_github_headers(), json=payload, timeout=30)
         if resp.status_code in (200, 201):
             j = resp.json() or {}
-            # Fejlesztői/sandbox módban: új kiadás után ezt tekintsük az utoljára letöltött (telepített) verziónak.
-            try:
-                if get_sandbox_mode() and branch:
-                    _write_installed_version(branch, str(j.get('tag_name') or tag_name))
-            except Exception as e:
-                logger.info(f"[GITHUB-RELEASE] installed_version mentés hiba: {e}")
+            # Megjegyzés: a release létrehozása önmagában nem jelent letöltést/telepítést,
+            # ezért itt nem módosítjuk a telepített (letöltött) robotok verziószámát.
             return jsonify({
                 'success': True,
                 'id': j.get('id'),
@@ -1362,6 +1358,50 @@ def api_create_github_release():
                 'html_url': j.get('html_url'),
                 'repo': f'{owner}/{repo}',
             })
+
+        # 422 = Validation Failed (gyakran: tag_name már létezik)
+        if resp.status_code == 422:
+            detail = ''
+            try:
+                j = resp.json() or {}
+                detail = j.get('message') or str(j)
+            except Exception:
+                j = {}
+                detail = (resp.text or '').strip()
+
+            duplicate = False
+            try:
+                errors = j.get('errors') if isinstance(j, dict) else None
+                if isinstance(errors, list):
+                    for e in errors:
+                        if not isinstance(e, dict):
+                            continue
+                        code = str(e.get('code') or '').lower()
+                        field = str(e.get('field') or '').lower()
+                        message = str(e.get('message') or '').lower()
+                        if code == 'already_exists' and (field in ('tag_name', 'tag') or 'tag_name' in message or 'tag' in message):
+                            duplicate = True
+                            break
+            except Exception:
+                duplicate = False
+
+            try:
+                low = str(detail or '').lower()
+                if ('already_exists' in low) or ('already exists' in low and ('tag' in low or 'tag_name' in low)):
+                    duplicate = True
+            except Exception:
+                pass
+
+            if duplicate:
+                msg = f'Ilyen verziószámú kiadás már létezik (TagName: {tag_name}).'
+            else:
+                msg = f'GitHub validációs hiba (status=422).'
+
+            return jsonify({
+                'success': False,
+                'error': msg,
+                'details': detail,
+            }), 422
 
         detail = ''
         try:
