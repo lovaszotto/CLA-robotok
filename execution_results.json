@@ -58,5 +58,38 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS01-CPS-Mezo-ellenor__20260202_120849",
     "type": "schedule"
+  },
+  {
+    "id": 7,
+    "timestamp": "2026-02-02 13:00:52",
+    "repo": "CPS-Robotok",
+    "branch": "CPS01-CPS-Mezo-ellenor",
+    "status": "failed",
+    "returncode": 252,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS01-CPS-Mezo-ellenor__20260202_130004",
+    "type": "schedule"
+  },
+  {
+    "id": 8,
+    "timestamp": "2026-02-02 14:57:01",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20260202_145658",
+    "type": "install",
+    "installed_version": "v3.1.16",
+    "stdout": "Install OK (release=v3.1.16)",
+    "stderr": ""
+  },
+  {
+    "id": 9,
+    "timestamp": "2026-02-02 14:57:26",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260202_145726",
+    "type": "bulk"
   }
 ]

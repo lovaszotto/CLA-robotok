@@ -119,7 +119,9 @@ Egy robot sorában:
 Az Ütemezett robotok tab egy naptár nézet, ahol robot futásokat lehet időzíteni.
 
 Naptár használat:
-- a naptár napjain megjelenhet jelölés / számláló: ez az adott napra eső **aktív** ütemezések darabszáma
+- a naptár napjain megjelenhet jelölés / számláló: a számláló az adott napra eső **aktív** ütemezések darabszáma
+- a zöld jelölés a **nem ismétlődő (egyszeri)** ütemezéseket jelzi
+- az **ismétlődő** ütemezések a naptárban külön (eltérő színű) jelöléssel is megjelennek azokon a napokon, ahová az ismétlés miatt esnek
 - kattints egy napra → megjelenik az adott napi ütemezések listája
 
 Új ütemezés létrehozása:
@@ -144,17 +146,24 @@ Naptár használat:
 - **Szerkesztés** (ceruza): ugyanazzal a modallal módosítható dátum/idő/robot/ismétlődés
 - **Törlés** (kuka): törli az ütemezést
 
-Automatikus futtatás (scheduler):
-- az ütemezéseket a backend egy egyszerű, beépített schedulerrel futtatja (kb. 15 mp-enként ellenőriz)
-- csak addig fut, amíg a CLA-ssistant szerver fut (ha leáll a Flask app, az ütemezések sem futnak)
-- kikapcsolás: indítás előtt állítsd a környezeti változót: `ENABLE_SCHEDULER=0`
+Robot szűrése:
+- a felső **„Robot szűrése…”** mező csak a **Telepített robotok** és a **Letölthető robotok** tabon jelenik meg
+- a beírt szöveg alapján repo névre és robot (branch) névre is szűr
 
 Tárolás:
 - az ütemezések fájlba mentődnek: `scheduled_jobs.json` (a projekt mappában)
 - a futások eredményei bekerülnek az Eredmények tabra is (az `execution_results.json`-ba mentve)
 
+Ütemezések „resetelése” (törlés / újrakezdés):
+- ha teljesen tiszta lappal szeretnél indulni, állítsd le a szervert (CTRL+C), majd
+  - nevezd át a `scheduled_jobs.json` fájlt (pl. `scheduled_jobs.backup.json`), vagy
+  - töröld a `scheduled_jobs.json` fájlt
+- a következő indításkor a rendszer üres ütemezéslistával indul
+
 Megjegyzés:
-- a globális „Robot szűrése…” mező az Ütemezett robotok tabon nem releváns (ott nincs repo-lista szűrés)
+- ha az Eredmények listát is „resetelni” szeretnéd, ugyanígy leállítás után az `execution_results.json` törölhető/átnevezhető
+
+
 
 ### 6.5. Futási eredmények
 A Futási eredmények tab a korábbi futások listáját/megnyitható logjait kezeli.

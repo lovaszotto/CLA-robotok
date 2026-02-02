@@ -226,6 +226,53 @@ def _schedule_date_key(dt: datetime) -> str:
     return dt.strftime('%Y-%m-%d')
 
 
+def _iter_schedule_occurrences_in_range(
+    run_at_dt: datetime,
+    repeat: str,
+    repeat_days: list[int] | None,
+    weekdays_only: bool,
+    start_dt: datetime,
+    end_dt_exclusive: datetime,
+    max_steps: int = 2000,
+):
+    """Yields occurrence datetimes in [start_dt, end_dt_exclusive).
+
+    Note: We treat schedule.run_at as the next occurrence (not historical).
+    """
+    if run_at_dt is None:
+        return
+    repeat = (repeat or 'none').strip().lower()
+
+    if repeat == 'none':
+        if start_dt <= run_at_dt < end_dt_exclusive:
+            yield run_at_dt
+        return
+
+    cur = run_at_dt
+
+    # Fast-forward to start
+    for _ in range(max_steps):
+        if cur >= end_dt_exclusive:
+            return
+        if cur >= start_dt:
+            break
+        nxt = _compute_next_run_at(cur, repeat, repeat_days, weekdays_only)
+        if not nxt or nxt <= cur:
+            return
+        cur = nxt
+
+    # Yield occurrences within range
+    for _ in range(max_steps):
+        if cur >= end_dt_exclusive:
+            return
+        if cur >= start_dt:
+            yield cur
+        nxt = _compute_next_run_at(cur, repeat, repeat_days, weekdays_only)
+        if not nxt or nxt <= cur:
+            return
+        cur = nxt
+
+
 def _add_execution_result(repo: str, branch: str, status: str, returncode: int | None, results_dir: str | None, run_type: str = 'schedule'):
     """Append an entry to execution_results and persist."""
     try:
@@ -4020,38 +4067,118 @@ def api_schedules_get():
     with SCHEDULES_LOCK:
         items = _load_schedules()
 
-    out = []
+    # Basic validation
+    if month and not re.fullmatch(r'\d{4}-\d{2}', month):
+        return jsonify({'success': False, 'error': 'Érvénytelen month (YYYY-MM)'}), 400
+    if date and not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date):
+        return jsonify({'success': False, 'error': 'Érvénytelen date (YYYY-MM-DD)'}), 400
+
+    month_start = None
+    month_end_excl = None
+    date_start = None
+    date_end_excl = None
+    if month and not date:
+        try:
+            y, m = [int(x) for x in month.split('-')]
+            month_start = datetime(y, m, 1, 0, 0, 0)
+            month_end_excl = _add_months(month_start, 1)
+        except Exception:
+            month_start = None
+            month_end_excl = None
+    if date:
+        try:
+            y, m, d = [int(x) for x in date.split('-')]
+            date_start = datetime(y, m, d, 0, 0, 0)
+            date_end_excl = date_start + timedelta(days=1)
+        except Exception:
+            date_start = None
+            date_end_excl = None
+
+    out: list[dict] = []
+
+    # useful for calendar markers (month view)
+    by_date_total: dict[str, int] = {}
+    by_date_once: dict[str, int] = {}
+    by_date_recurring: dict[str, int] = {}
+
     for it in (items or []):
         try:
             run_at = (it.get('run_at') or '').strip()
             if not run_at:
                 continue
             dt = datetime.fromisoformat(run_at)
-            if month and _schedule_month_key(dt) != month:
+
+            repeat = (it.get('repeat') or 'none')
+            weekdays_only = bool(it.get('weekdays_only', False))
+            repeat_days = it.get('repeat_days', None)
+            if not isinstance(repeat_days, list):
+                repeat_days = None
+
+            if month_start is not None and month_end_excl is not None:
+                # Month query: include schedules that have ANY occurrence in the month
+                occs = list(_iter_schedule_occurrences_in_range(
+                    dt,
+                    repeat,
+                    repeat_days,
+                    weekdays_only,
+                    month_start,
+                    month_end_excl,
+                ))
+                if not occs:
+                    continue
+                out.append(it)
+
+                # Markers: only enabled schedules count
+                if bool(it.get('enabled', True)):
+                    is_rec = (str(repeat).strip().lower() != 'none')
+                    for occ_dt in occs:
+                        ds = _schedule_date_key(occ_dt)
+                        by_date_total[ds] = by_date_total.get(ds, 0) + 1
+                        if is_rec:
+                            by_date_recurring[ds] = by_date_recurring.get(ds, 0) + 1
+                        else:
+                            by_date_once[ds] = by_date_once.get(ds, 0) + 1
                 continue
-            if date and _schedule_date_key(dt) != date:
+
+            if date_start is not None and date_end_excl is not None:
+                # Date query: include schedules that occur on that day.
+                occs = list(_iter_schedule_occurrences_in_range(
+                    dt,
+                    repeat,
+                    repeat_days,
+                    weekdays_only,
+                    date_start,
+                    date_end_excl,
+                ))
+                if not occs:
+                    continue
+                occ_dt = occs[0]
+                it_copy = dict(it)
+                it_copy['occurrence_run_at'] = occ_dt.isoformat(timespec='seconds')
+                out.append(it_copy)
                 continue
+
+            # No query -> return all
             out.append(it)
         except Exception:
             continue
 
-    # useful for calendar markers
-    by_date: dict[str, int] = {}
-    try:
-        if month and not date:
-            for it in out:
-                try:
-                    if not bool(it.get('enabled', True)):
-                        continue
-                    dt = datetime.fromisoformat((it.get('run_at') or '').strip())
-                    ds = _schedule_date_key(dt)
-                    by_date[ds] = by_date.get(ds, 0) + 1
-                except Exception:
-                    continue
-    except Exception:
-        by_date = {}
+    # sort date query by occurrence time
+    if date:
+        try:
+            out.sort(key=lambda x: (x.get('occurrence_run_at') or x.get('run_at') or ''))
+        except Exception:
+            pass
 
-    return jsonify({'success': True, 'items': out, 'by_date': by_date})
+    # Backward compatible: by_date == total
+    return jsonify({
+        'success': True,
+        'items': out,
+        'by_date': by_date_total,
+        'by_date_total': by_date_total,
+        'by_date_once': by_date_once,
+        'by_date_recurring': by_date_recurring,
+    })
 
 
 @app.route('/api/schedules', methods=['POST'])
@@ -4141,6 +4268,48 @@ def api_schedules_delete(schedule_id: str):
         _save_schedules(new_items)
 
     return jsonify({'success': True, 'removed': removed})
+
+
+@app.route('/api/schedules/purge', methods=['POST'])
+def api_schedules_purge():
+    """Delete all schedules for a given repo+branch.
+
+    JSON:
+      { repo: str, branch: str, include_running?: bool }
+
+    By default, running schedules are NOT deleted to avoid losing execution tracking.
+    """
+    data = request.get_json(silent=True) or {}
+    repo = (data.get('repo') or '').strip()
+    branch = (data.get('branch') or '').strip()
+    include_running = bool(data.get('include_running', False))
+
+    if not repo or not branch:
+        return jsonify({'success': False, 'error': 'Hiányzó repo vagy robot'}), 400
+
+    deleted = 0
+    skipped_running = 0
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+        new_items = []
+        for it in (items or []):
+            if (it.get('repo') or '').strip() == repo and (it.get('branch') or '').strip() == branch:
+                if not include_running and (it.get('status') == 'running'):
+                    skipped_running += 1
+                    new_items.append(it)
+                else:
+                    deleted += 1
+                continue
+            new_items.append(it)
+        _save_schedules(new_items)
+
+    return jsonify({
+        'success': True,
+        'repo': repo,
+        'branch': branch,
+        'deleted': deleted,
+        'skipped_running': skipped_running,
+    })
 
 
 @app.route('/api/schedules/<schedule_id>', methods=['PATCH'])
@@ -4236,6 +4405,77 @@ def api_schedules_patch(schedule_id: str):
         _save_schedules(items)
 
     return jsonify({'success': True, 'updated': updated})
+
+
+@app.route('/print_schedules', methods=['GET'])
+def print_schedules_page():
+    """Printable page for scheduled runs within a date range.
+
+    Query:
+      - from=YYYY-MM-DD (inclusive)
+      - to=YYYY-MM-DD (inclusive)
+    """
+    from_str = (request.args.get('from') or '').strip()
+    to_str = (request.args.get('to') or '').strip()
+
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', from_str):
+        return Response('Érvénytelen from (YYYY-MM-DD)', mimetype='text/plain; charset=utf-8', status=400)
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', to_str):
+        return Response('Érvénytelen to (YYYY-MM-DD)', mimetype='text/plain; charset=utf-8', status=400)
+
+    try:
+        fy, fm, fd = [int(x) for x in from_str.split('-')]
+        ty, tm, td = [int(x) for x in to_str.split('-')]
+        start_dt = datetime(fy, fm, fd, 0, 0, 0)
+        end_dt_excl = datetime(ty, tm, td, 0, 0, 0) + timedelta(days=1)
+        if end_dt_excl <= start_dt:
+            return Response('A to dátumnak a from után kell lennie.', mimetype='text/plain; charset=utf-8', status=400)
+    except Exception:
+        return Response('Érvénytelen dátum paraméter.', mimetype='text/plain; charset=utf-8', status=400)
+
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+
+    rows: list[dict] = []
+    for it in (items or []):
+        try:
+            if not bool(it.get('enabled', True)):
+                continue
+            run_at_raw = (it.get('run_at') or '').strip()
+            if not run_at_raw:
+                continue
+            run_at_dt = datetime.fromisoformat(run_at_raw)
+            repeat = (it.get('repeat') or 'none')
+            weekdays_only = bool(it.get('weekdays_only', False))
+            repeat_days = it.get('repeat_days', None)
+            if not isinstance(repeat_days, list):
+                repeat_days = None
+
+            for occ_dt in _iter_schedule_occurrences_in_range(
+                run_at_dt,
+                repeat,
+                repeat_days,
+                weekdays_only,
+                start_dt,
+                end_dt_excl,
+            ):
+                rows.append({
+                    'run_at': occ_dt,
+                    'date': occ_dt.strftime('%Y-%m-%d'),
+                    'time': occ_dt.strftime('%H:%M'),
+                    'repo': (it.get('repo') or ''),
+                    'branch': (it.get('branch') or ''),
+                    'repeat': str(repeat).strip().lower(),
+                })
+        except Exception:
+            continue
+
+    try:
+        rows.sort(key=lambda r: r.get('run_at'))
+    except Exception:
+        pass
+
+    return render_template('print_schedules.html', from_date=from_str, to_date=to_str, rows=rows)
 
 
 # Új oldal: repositoryk, branchek és tagek megjelenítése

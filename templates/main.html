@@ -277,6 +277,39 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     border-radius: 999px;
     background: rgba(25,135,84,0.9);
 }
+.scheduled-calendar .sched-mark.sched-mark-recurring {
+    background: rgba(111,66,193,0.95);
+    box-shadow: 0 0 0 1px rgba(111,66,193,0.35);
+    right: 18px;
+}
+
+/* Jelmagyarázat (külön, mert a jelmagyarázat a .scheduled-calendar DIV-en kívül van) */
+.sched-legend {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: #6c757d;
+    font-size: 0.875rem;
+}
+.sched-legend .sched-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.sched-legend .sched-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    display: inline-block;
+    flex: 0 0 auto;
+}
+.sched-legend .sched-legend-dot.total {
+    background: rgba(25,135,84,0.9);
+}
+.sched-legend .sched-legend-dot.recurring {
+    background: rgba(111,66,193,0.95);
+    box-shadow: 0 0 0 1px rgba(111,66,193,0.35);
+}
 .scheduled-calendar .sched-count {
     position: absolute;
     right: 6px;
@@ -399,15 +432,15 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <i class="bi {% if is_sandbox %}bi-heart-pulse{% else %}bi-play-circle{% endif %}"></i> {% if is_sandbox %}Robot műtő{% else %}Telepített robotok{% endif %}
             </button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="scheduled-tab" data-bs-toggle="tab" data-bs-target="#scheduled-pane" type="button" role="tab" aria-controls="scheduled-pane" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="Ütemezett robotok áttekintése naptár nézetben.">
-                <i class="bi bi-calendar3"></i> Ütemezett robotok
-            </button>
-        </li>
         <!-- Repo/Robot/Tag lista tab-link eltávolítva -->
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="available-tab" data-bs-toggle="tab" data-bs-target="#available-pane" type="button" role="tab" aria-controls="available-pane" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="{% if is_sandbox %}Robotok letöltése/telepítése és elérhető verziók megtekintése (Robot raktár).{% else %}Robotok letöltése/telepítése és elérhető verziók megtekintése.{% endif %}">
                 <i class="bi bi-download"></i> {% if is_sandbox %}Robot raktár{% else %}Letölthető robotok{% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="scheduled-tab" data-bs-toggle="tab" data-bs-target="#scheduled-pane" type="button" role="tab" aria-controls="scheduled-pane" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="Ütemezett robotok áttekintése naptár nézetben.">
+                <i class="bi bi-calendar3"></i> Ütemezett robotok
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -431,7 +464,9 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
             </button>
         </li>
     </ul>
-    <div class="ms-auto" style="min-width: 280px;">
+    <!-- Globális robot szűrő: csak a Telepített + Letölthető tabokon jelenjen meg -->
+    <div class="ms-auto d-none" id="globalBranchFilterHome"></div>
+    <div class="ms-auto" id="globalBranchFilterWrap" style="min-width: 280px;">
         <div class="input-group glass-input-group">
             <span class="input-group-text bg-success text-white"><i class="bi bi-filter"></i></span>
             <input type="text" class="form-control" id="globalBranchFilter" placeholder="Robot szűrése..." onkeyup="filterActiveTabRobots()">
@@ -444,10 +479,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
            <div class="page-section pt-0 pb-4">
                <div class="row mb-4 align-items-center">
                    <div class="col-12 d-flex align-items-center">
-                       <div class="tab-hint small">
-                           <i class="bi bi-info-circle me-1"></i>
-                           Kattintson a futtatás gombra a robot indításához
-                       </div>
+                       <div id="globalBranchFilterSlotRunnable" class="w-100"></div>
                    </div>
                </div>
                <div class="row" id="runnable-list">
@@ -524,6 +556,12 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                                    onclick="branchInfoClicked(this)">
                                                                    <i class="bi {% if not rel_run or not (rel_run.get('tag') if rel_run else '') %}bi-hammer{% else %}bi-info-circle{% endif %}"></i> Info
                                                                </button>
+                                                               <button class="btn btn-outline-warning btn-sm text-dark d-none" type="button"
+                                                                   data-action="update" data-repo="{{ repo.name }}" data-branch="{{ branch }}"
+                                                                   data-bs-toggle="tooltip" data-bs-title="Frissítés (új verzió telepítése)"
+                                                                   onclick="updateInstalledRobot(this)">
+                                                                   <i class="bi bi-arrow-repeat"></i> Frissítés
+                                                               </button>
                                                                {% if is_sandbox %}
                                                                    <button class="btn btn-outline-info btn-sm" type="button"
                                                                        data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése"
@@ -556,119 +594,11 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
            </div>
         </div>
 
-        <!-- Ütemezett robotok TAB -->
-        <div class="tab-pane fade" id="scheduled-pane" role="tabpanel" aria-labelledby="scheduled-tab">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-calendar3 me-1"></i> Ütemezett robotok</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between mb-2">
-                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedPrevMonthBtn" title="Előző hónap"><i class="bi bi-chevron-left"></i></button>
-                        <div id="schedMonthLabel" class="fw-semibold"></div>
-                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedNextMonthBtn" title="Következő hónap"><i class="bi bi-chevron-right"></i></button>
-                    </div>
-                    <div id="scheduledCalendar" class="scheduled-calendar"></div>
-
-                    <div class="d-flex align-items-center justify-content-between mt-3">
-                        <div class="fw-semibold" id="schedSelectedDateLabel">Válassz egy napot…</div>
-                        <button class="btn btn-success btn-sm" type="button" id="schedNewBtn" disabled>
-                            <i class="bi bi-plus-lg"></i> Új ütemezés
-                        </button>
-                    </div>
-
-                    <div class="mt-2" id="schedDayList">
-                        <div class="text-muted small">Kattints egy napra a részletekhez.</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Ütemezés modal -->
-        <div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header bg-success text-white">
-                        <h5 class="modal-title" id="scheduleModalTitle"><i class="bi bi-calendar-plus me-1"></i> Ütemezés</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Bezárás"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row g-3">
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Dátum</label>
-                                <input class="form-control" id="schedDateInput" type="date">
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Idő</label>
-                                <input class="form-control" id="schedTimeInput" type="time" value="08:00">
-                            </div>
-                            <div class="col-12 col-md-4">
-                                <label class="form-label">Ismétlődés</label>
-                                <select class="form-select" id="schedRepeatSelect">
-                                    <option value="none" selected>Egyszeri</option>
-                                    <option value="daily">Naponta</option>
-                                    <option value="weekly">Hetente</option>
-                                    <option value="monthly">Havonta</option>
-                                </select>
-                            </div>
-                            <div class="col-12 col-md-4 d-flex align-items-end">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="schedEnabledInput" checked>
-                                    <label class="form-check-label" for="schedEnabledInput">Aktív</label>
-                                </div>
-                            </div>
-
-                            <div class="col-12" id="schedWeekdaysOnlyRow" style="display:none;">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="schedWeekdaysOnlyInput">
-                                    <label class="form-check-label" for="schedWeekdaysOnlyInput">Csak hétköznap (H–P)</label>
-                                </div>
-                            </div>
-
-                            <div class="col-12" id="schedWeeklyDaysRow" style="display:none;">
-                                <label class="form-label">Heti napok</label>
-                                <div class="d-flex flex-wrap" style="gap: 0.75rem;">
-                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="0" id="schedWd0"><label class="form-check-label" for="schedWd0">H</label></div>
-                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="1" id="schedWd1"><label class="form-check-label" for="schedWd1">K</label></div>
-                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="2" id="schedWd2"><label class="form-check-label" for="schedWd2">Sze</label></div>
-                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="3" id="schedWd3"><label class="form-check-label" for="schedWd3">Cs</label></div>
-                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="4" id="schedWd4"><label class="form-check-label" for="schedWd4">P</label></div>
-                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="5" id="schedWd5"><label class="form-check-label" for="schedWd5">Szo</label></div>
-                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="6" id="schedWd6"><label class="form-check-label" for="schedWd6">V</label></div>
-                                </div>
-                                <div class="text-muted small mt-1">Ha nincs kijelölve nap, a kiválasztott dátum napja lesz alapértelmezett.</div>
-                            </div>
-
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">Repository</label>
-                                <select class="form-select" id="schedRepoSelect"></select>
-                            </div>
-                            <div class="col-12 col-md-6">
-                                <label class="form-label">Robot (branch)</label>
-                                <select class="form-select" id="schedBranchSelect"></select>
-                            </div>
-                        </div>
-
-                        <div class="alert alert-warning mt-3 mb-0 small">
-                            A scheduler a háttérben fut (15 mp-es ciklus). Kikapcsolás: indítás előtt `ENABLE_SCHEDULER=0`.
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Mégse</button>
-                        <button type="button" class="btn btn-success" id="schedSaveBtn"><i class="bi bi-save"></i> Mentés</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Letölthető robotok TAB -->
         <div class="tab-pane fade" id="available-pane" role="tabpanel">
             <div class="row mb-4 align-items-center">
                 <div class="col-12 d-flex align-items-center">
-                    <div class="tab-hint small">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Kattintson a letöltés gombra azonnali telepítéshez
-                    </div>
+                    <div id="globalBranchFilterSlotAvailable" class="w-100"></div>
                 </div>
             </div>
             <div class="row" id="repoContainerAvailable">
@@ -732,6 +662,160 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
                 {% endif %}
             {% endfor %}
+            </div>
+        </div>
+
+        <!-- Ütemezett robotok TAB -->
+        <div class="tab-pane fade" id="scheduled-pane" role="tabpanel" aria-labelledby="scheduled-tab">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-calendar3 me-1"></i> Ütemezett robotok</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedPrevMonthBtn" title="Előző hónap"><i class="bi bi-chevron-left"></i></button>
+                        <div id="schedMonthLabel" class="fw-semibold"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedTodayBtn" title="Ugrás a mai napra">Ma</button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedNextMonthBtn" title="Következő hónap"><i class="bi bi-chevron-right"></i></button>
+                    </div>
+                    <div class="sched-legend mb-2">
+                        <span class="sched-legend-item">
+                            <span class="sched-legend-dot total" aria-hidden="true"></span>
+                            Nem ismétlődő (egyszeri)
+                        </span>
+                        <span class="sched-legend-item">
+                            <span class="sched-legend-dot recurring" aria-hidden="true"></span>
+                            Ismétlődő (kivetített)
+                        </span>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-end mb-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedPrintOpenBtn" title="Nyomtatható lista">
+                            <i class="bi bi-printer"></i> Nyomtat
+                        </button>
+                    </div>
+
+                    <div id="scheduledCalendar" class="scheduled-calendar"></div>
+
+                    <div class="d-flex align-items-center justify-content-between mt-3">
+                        <div class="fw-semibold" id="schedSelectedDateLabel">Válassz egy napot…</div>
+                        <button class="btn btn-success btn-sm" type="button" id="schedNewBtn" disabled>
+                            <i class="bi bi-plus-lg"></i> Új ütemezés
+                        </button>
+                    </div>
+
+                    <div class="mt-2" id="schedDayList">
+                        <div class="text-muted small">Kattints egy napra a részletekhez.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ütemezés modal -->
+        <div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title" id="scheduleModalTitle"><i class="bi bi-calendar-plus me-1"></i> Ütemezés</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Dátum</label>
+                                <input class="form-control" id="schedDateInput" type="date">
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Idő</label>
+                                <input class="form-control" id="schedTimeInput" type="time" value="08:00">
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Ismétlődés</label>
+                                <select class="form-select" id="schedRepeatSelect">
+                                    <option value="none" selected>Egyszeri</option>
+                                    <option value="daily">Naponta</option>
+                                    <option value="weekly">Hetente</option>
+                                    <option value="monthly">Havonta</option>
+                                </select>
+                            </div>
+
+                            <div class="col-12" id="schedWeekdaysOnlyRow" style="display:none;">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="schedWeekdaysOnlyInput">
+                                    <label class="form-check-label" for="schedWeekdaysOnlyInput">Csak hétköznap (H–P)</label>
+                                </div>
+                            </div>
+
+                            <div class="col-12" id="schedWeeklyDaysRow" style="display:none;">
+                                <label class="form-label">Heti napok</label>
+                                <div class="d-flex flex-wrap" style="gap: 0.75rem;">
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="0" id="schedWd0"><label class="form-check-label" for="schedWd0">H</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="1" id="schedWd1"><label class="form-check-label" for="schedWd1">K</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="2" id="schedWd2"><label class="form-check-label" for="schedWd2">Sze</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="3" id="schedWd3"><label class="form-check-label" for="schedWd3">Cs</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="4" id="schedWd4"><label class="form-check-label" for="schedWd4">P</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="5" id="schedWd5"><label class="form-check-label" for="schedWd5">Szo</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="6" id="schedWd6"><label class="form-check-label" for="schedWd6">V</label></div>
+                                </div>
+                                <div class="text-muted small mt-1">Ha nincs kijelölve nap, a kiválasztott dátum napja lesz alapértelmezett.</div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Repository</label>
+                                <select class="form-select" id="schedRepoSelect"></select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Robot (branch)</label>
+                                <select class="form-select" id="schedBranchSelect"></select>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="schedEnabledInput" checked>
+                                    <label class="form-check-label" for="schedEnabledInput">Aktív</label>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Mégse</button>
+                        <button type="button" class="btn btn-success" id="schedSaveBtn"><i class="bi bi-save"></i> Mentés</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nyomtatás modal (dátum szűrő) -->
+        <div class="modal fade" id="schedPrintModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title"><i class="bi bi-printer me-1"></i> Nyomtatás</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="schedPrintForm" class="row g-3">
+                            <div class="col-12">
+                                <div class="text-muted small">Válaszd ki, mely időszak ütemezett futásait szeretnéd listázni.</div>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Tól</label>
+                                <input class="form-control" type="date" id="schedPrintFrom" required>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Ig</label>
+                                <input class="form-control" type="date" id="schedPrintTo" required>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">Mégse</button>
+                        <button class="btn btn-success" type="button" id="schedPrintGoBtn">
+                            <i class="bi bi-box-arrow-up-right"></i> Megnyitás
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
            <div class="tab-pane fade" id="results" role="tabpanel" aria-labelledby="results-tab">
@@ -1539,6 +1623,16 @@ async function updateRunnableUpdateIcons() {
             try { btn.setAttribute('data-bs-title', 'Verziók'); } catch (e) { }
         }
 
+        // "Frissítés" gomb megjelenítése csak akkor, ha tényleg van új verzió
+        try {
+            const repoName = String(btn.getAttribute('data-repo') || '').trim();
+            const updBtns = Array.from(container.querySelectorAll('button[data-action="update"][data-repo][data-branch]'))
+                .filter(el => String(el.getAttribute('data-branch') || '').trim() === br && String(el.getAttribute('data-repo') || '').trim() === repoName);
+            if (updBtns.length) {
+                updBtns.forEach(el => el.classList.toggle('d-none', !hasUpdate));
+            }
+        } catch (e) { /* ignore */ }
+
         // Fejlesztői módban: jelenítsük meg a telepített verziót a placeholder helyén
         try {
             const repoName = String(btn.getAttribute('data-repo') || '').trim();
@@ -1664,6 +1758,7 @@ function renderRunnableRepos(repos) {
                                             <button class="btn btn-success btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Futtatás" data-repo="${repoName}" data-branch="${escAttr(br)}" onclick="executeSingleRobot(this)"><i class="bi bi-play-fill"></i> Futtatás</button>
                                             <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Környezet beállítás" data-repo="${repoName}" data-branch="${escAttr(br)}" onclick="openEnvironmentSettings(this)"><i class="bi bi-sliders"></i> Beállítás</button>
                                             <button class="btn btn-outline-info btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="${hasRelease ? 'Verziók' : 'Nincs release info'}" data-repo="${repoName}" data-branch="${escAttr(br)}" data-mode="run" data-repo-url="${repoUrl}" data-release-tag="${escAttr(hasRelease ? (rel.tag || '') : '')}" data-release-title="${escAttr(hasRelease ? (rel.title || '') : '')}" data-release-date="${escAttr(hasRelease ? (rel.date || '') : '')}" onclick="branchInfoClicked(this)"><i class="bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}"></i> Info</button>
+                                            <button class="btn btn-outline-warning btn-sm text-dark d-none" type="button" data-action="update" data-bs-toggle="tooltip" data-bs-title="Frissítés (új verzió telepítése)" data-repo="${repoName}" data-branch="${escAttr(br)}" onclick="updateInstalledRobot(this)"><i class="bi bi-arrow-repeat"></i> Frissítés</button>
                                             ${sandboxEnabled ? `<button class="btn btn-outline-info btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése" data-repo="${repoName}" data-branch="${escAttr(br)}" data-repo-url="${repoUrl}" data-repo-fullname="${repoFullName}" onclick="openCreateReleaseModal(this)"><i class="bi bi-box-seam"></i></button>` : ''}
                                         </div>
                                     </div>
@@ -2098,9 +2193,24 @@ function filterActiveTabRobots() {
 function setGlobalFilterEnabledState() {
     const input = document.getElementById('globalBranchFilter');
     if (!input) return;
+    const wrap = document.getElementById('globalBranchFilterWrap');
+    const home = document.getElementById('globalBranchFilterHome');
+    const slotRun = document.getElementById('globalBranchFilterSlotRunnable');
+    const slotAvail = document.getElementById('globalBranchFilterSlotAvailable');
     const activeId = getActiveMainTabId();
     const isRobotTab = (activeId === 'runnable-tab' || activeId === 'available-tab');
     input.disabled = !isRobotTab;
+    try {
+        if (wrap) {
+            const target = (activeId === 'runnable-tab') ? slotRun
+                : (activeId === 'available-tab') ? slotAvail
+                : home;
+            if (target && wrap.parentElement !== target) {
+                target.appendChild(wrap);
+            }
+            wrap.classList.toggle('d-none', !isRobotTab);
+        }
+    } catch (e) { /* noop */ }
     if (!isRobotTab) {
         input.placeholder = 'Robot szűrése...';
     }
@@ -2238,7 +2348,14 @@ function initScheduledCalendar() {
     const calEl = document.getElementById('scheduledCalendar');
     const labelEl = document.getElementById('schedMonthLabel');
     const prevBtn = document.getElementById('schedPrevMonthBtn');
+    const todayBtn = document.getElementById('schedTodayBtn');
     const nextBtn = document.getElementById('schedNextMonthBtn');
+    const printOpenBtn = document.getElementById('schedPrintOpenBtn');
+    const printModalEl = document.getElementById('schedPrintModal');
+    const printFormEl = document.getElementById('schedPrintForm');
+    const printFromEl = document.getElementById('schedPrintFrom');
+    const printToEl = document.getElementById('schedPrintTo');
+    const printGoBtn = document.getElementById('schedPrintGoBtn');
     const selectedLabelEl = document.getElementById('schedSelectedDateLabel');
     const dayListEl = document.getElementById('schedDayList');
     const newBtn = document.getElementById('schedNewBtn');
@@ -2258,6 +2375,18 @@ function initScheduledCalendar() {
         runnableRepos: null,
     };
 
+    const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const addMonths = (date, months) => {
+        // Month arithmetic with day clamp (e.g. Jan 31 + 1 month => Feb last day)
+        const d = new Date(date.getTime());
+        const originalDay = d.getDate();
+        d.setDate(1);
+        d.setMonth(d.getMonth() + months);
+        const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+        d.setDate(Math.min(originalDay, lastDay));
+        return d;
+    };
+
     const monthKey = (year, monthZeroBased) => `${year}-${String(monthZeroBased + 1).padStart(2, '0')}`;
 
     const fetchMonthCounts = async (year, monthZeroBased) => {
@@ -2265,10 +2394,14 @@ function initScheduledCalendar() {
         try {
             const resp = await fetch(`/api/schedules?${new URLSearchParams({ month: mk }).toString()}`, { cache: 'no-store' });
             const data = await resp.json();
-            if (!resp.ok || !data?.success) return {};
-            return data.by_date || {};
+            if (!resp.ok || !data?.success) return { total: {}, recurring: {} };
+            return {
+                total: data.by_date_total || data.by_date || {},
+                once: data.by_date_once || {},
+                recurring: data.by_date_recurring || {},
+            };
         } catch (e) {
-            return {};
+            return { total: {}, recurring: {} };
         }
     };
 
@@ -2317,7 +2450,7 @@ function initScheduledCalendar() {
         const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         let html = '<div class="list-group">';
         for (const it of items) {
-            const runAt = String(it.run_at || '').replace('T', ' ');
+            const runAt = String(it.occurrence_run_at || it.run_at || '').replace('T', ' ');
             const status = String(it.status || 'pending');
             const repeat = String(it.repeat || 'none');
             const enabled = !!it.enabled;
@@ -2406,7 +2539,6 @@ function initScheduledCalendar() {
                         showToast('Nem sikerült törölni az ütemezést.', 'danger');
                         return;
                     }
-                    showToast('Ütemezés törölve.', 'success');
                     await refreshMonthAndRerender();
                     await renderDayList(window.__schedUiState.selectedDate);
                 } catch (e) {
@@ -2421,6 +2553,9 @@ function initScheduledCalendar() {
         window.__schedUiState.monthCounts = await fetchMonthCounts(year, month);
         render();
     };
+
+    // Make refresh available outside this initializer (e.g., when a robot is deleted).
+    window.__refreshScheduledCalendar = refreshMonthAndRerender;
 
     const openScheduleModal = async (dateStr) => {
         const modalEl = document.getElementById('scheduleModal');
@@ -2580,7 +2715,6 @@ function initScheduledCalendar() {
                     showToast(data?.error || 'Nem sikerült menteni az ütemezést.', 'danger');
                     return;
                 }
-                showToast(isEdit ? 'Ütemezés frissítve.' : 'Ütemezés elmentve.', 'success');
                 bootstrap.Modal.getOrCreateInstance(modalEl).hide();
                 await refreshMonthAndRerender();
                 await renderDayList(payload.date);
@@ -2616,16 +2750,21 @@ function initScheduledCalendar() {
         for (let i = 0; i < offset; i++) {
             html += '<div class="sched-cell sched-empty"></div>';
         }
-        const counts = window.__schedUiState.monthCounts || {};
+        const countsTotal = window.__schedUiState.monthCounts?.total || {};
+        const countsOnce = window.__schedUiState.monthCounts?.once || {};
+        const countsRecurring = window.__schedUiState.monthCounts?.recurring || {};
 
         for (let day = 1; day <= daysInMonth; day++) {
             const isToday = (year === todayY && month === todayM && day === todayD);
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const c = Number(counts[dateStr] || 0);
+            const c = Number(countsTotal[dateStr] || 0);
+            const o = Number(countsOnce[dateStr] || 0);
+            const r = Number(countsRecurring[dateStr] || 0);
             html += `<button type="button" class="sched-cell sched-day${isToday ? ' sched-today' : ''}" data-date="${dateStr}">
                         <span class="sched-num">${day}</span>
-                        ${c > 0 ? '<span class="sched-mark" aria-hidden="true"></span>' : ''}
-                        ${c > 0 ? `<span class="sched-count" title="${c} ütemezés">${c}</span>` : ''}
+                        ${o > 0 ? '<span class="sched-mark" aria-hidden="true" title="Nem ismétlődő ütemezés"></span>' : ''}
+                        ${r > 0 ? '<span class="sched-mark sched-mark-recurring" aria-hidden="true" title="Ismétlődő ütemezés"></span>' : ''}
+                        ${c > 0 ? `<span class="sched-count" title="${c} ütemezés${r > 0 ? ` (${r} ismétlődő)` : ''}">${c}</span>` : ''}
                     </button>`;
         }
         html += '</div>';
@@ -2654,6 +2793,49 @@ function initScheduledCalendar() {
         window.__scheduledCalState = { year: y, month: m };
         refreshMonthAndRerender();
     };
+
+    if (todayBtn) {
+        todayBtn.onclick = async () => {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = now.getMonth();
+            const d = now.getDate();
+            const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            window.__scheduledCalState = { year: y, month: m };
+            await refreshMonthAndRerender();
+            await renderDayList(dateStr);
+        };
+    }
+
+    const setPrintDefaults = () => {
+        if (!printFromEl || !printToEl) return;
+        const now = new Date();
+        const fromStr = isoDate(now);
+        const toStr = isoDate(addMonths(now, 1));
+        printFromEl.value = fromStr;
+        printToEl.value = toStr;
+    };
+
+    if (printOpenBtn && printModalEl) {
+        printOpenBtn.onclick = () => {
+            try { setPrintDefaults(); } catch (e) {}
+            bootstrap.Modal.getOrCreateInstance(printModalEl).show();
+        };
+    }
+
+    if (printGoBtn && printModalEl && printFromEl && printToEl) {
+        printGoBtn.onclick = () => {
+            if (printFormEl && typeof printFormEl.reportValidity === 'function') {
+                if (!printFormEl.reportValidity()) return;
+            }
+            const fromV = String(printFromEl.value || '').trim();
+            const toV = String(printToEl.value || '').trim();
+            if (!fromV || !toV) return;
+            const url = `/print_schedules?${new URLSearchParams({ from: fromV, to: toV }).toString()}`;
+            window.open(url, '_blank', 'noopener');
+            bootstrap.Modal.getOrCreateInstance(printModalEl).hide();
+        };
+    }
 
     if (newBtn) {
         newBtn.onclick = () => openScheduleModal(window.__schedUiState.selectedDate);
@@ -3147,6 +3329,26 @@ async function deleteRunnableBranch(repo, branch, iconEl) {
         .then(data => {
             if (data.deleted) {
                 showToast('Sikeres törlés: ' + repo + '/' + branch, 'success');
+                // Telepített robot törlésekor a hozzá tartozó ütemezéseket is töröljük
+                // (Frissítésnél külön gomb van; ott maradjanak meg az ütemezések.)
+                fetch('/api/schedules/purge', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ repo: repo, branch: branch, include_running: true })
+                    })
+                    .then(r => r.json().catch(() => ({})))
+                    .then(p => {
+                        if (p && p.success) {
+                            const d = Number(p.deleted || 0);
+                            if (d > 0) {
+                                showToast(`Ütemezések törölve: ${d} db`, 'warning');
+                            }
+                            if (typeof window.__refreshScheduledCalendar === 'function') {
+                                window.__refreshScheduledCalendar();
+                            }
+                        }
+                    })
+                    .catch(() => { /* ignore */ });
                 if (typeof refreshRunnableRobots === 'function') {
                     refreshRunnableRobots();
                 }
@@ -3188,6 +3390,83 @@ async function deleteRunnableBranch(repo, branch, iconEl) {
                 }
             } catch (e) { /* ignore */ }
         });
+}
+
+// --- Robot frissítés (törlés + telepítés) ---
+async function updateInstalledRobot(buttonEl) {
+    const repo = String(buttonEl?.dataset?.repo || '').trim();
+    const branch = String(buttonEl?.dataset?.branch || '').trim();
+    if (!repo || !branch) {
+        showToast('Hiányzó repo vagy robot azonosító.', 'danger');
+        return;
+    }
+
+    const ok = await showSureBox({
+        title: 'Robot frissítése',
+        message: `Új verzió érhető el ehhez a robothoz.\n\nRepository: ${repo}\nRobot: ${branch}\n\nSzeretnéd frissíteni? (A művelet törli a jelenlegi telepítést, majd újratelepíti.)`,
+        okText: 'Igen',
+        cancelText: 'Mégse',
+        okVariant: 'warning',
+        showCancel: true
+    });
+    if (!ok) return;
+
+    const originalHtml = buttonEl ? buttonEl.innerHTML : null;
+    const opKey = `install:${repo}:${branch}`;
+
+    try {
+        if (buttonEl) {
+            buttonEl.disabled = true;
+            buttonEl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Frissítés...';
+            buttonEl._waitOpKey = opKey;
+            try { buttonEl.dataset.waitKind = 'download'; } catch (e) { /* noop */ }
+        }
+        startGlobalWaitStopwatch(opKey, 'Frissítés folyamatban...');
+    } catch (e) { /* noop */ }
+
+    // 1) törlés
+    try {
+        const r = await fetch('/delete_runnable_branch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ repo_name: repo, branch_name: branch })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!(j && j.deleted)) {
+            const err = (j && (j.error || j.message)) ? String(j.error || j.message) : 'Nem sikerült törölni a robotot.';
+            throw new Error(err);
+        }
+    } catch (e) {
+        showToast('Frissítés hiba (törlés): ' + String(e), 'danger');
+        try { stopGlobalWaitStopwatch(opKey); } catch (x) { /* noop */ }
+        try {
+            if (buttonEl) {
+                buttonEl.disabled = false;
+                if (originalHtml !== null) buttonEl.innerHTML = originalHtml;
+            }
+        } catch (x) { /* noop */ }
+        return;
+    }
+
+    // 2) telepítés (külön megerősítés nélkül)
+    try {
+        if (buttonEl && originalHtml !== null) {
+            // Az installRobots a triggerButton aktuális HTML-jét menti el visszaállításhoz
+            buttonEl.innerHTML = originalHtml;
+            buttonEl.disabled = false;
+            buttonEl._waitOpKey = opKey;
+        }
+        installRobots([{ repo, branch }], { triggerButton: buttonEl });
+    } catch (e) {
+        showToast('Frissítés hiba (telepítés): ' + String(e), 'danger');
+        try { stopGlobalWaitStopwatch(opKey); } catch (x) { /* noop */ }
+        try {
+            if (buttonEl) {
+                buttonEl.disabled = false;
+                if (originalHtml !== null) buttonEl.innerHTML = originalHtml;
+            }
+        } catch (x) { /* noop */ }
+    }
 }
 
 // --- Toast segédfüggvény ---
