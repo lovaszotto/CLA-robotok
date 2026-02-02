@@ -1,10 +1,10 @@
 {
   "lovaszotto/CLA-robotok": {
-    "fetched_at": "2026-01-29T05:15:56",
+    "fetched_at": "2026-02-02T11:38:28",
     "releases": {}
   },
   "lovaszotto/CPS-Robotok": {
-    "fetched_at": "2026-01-29T05:15:59",
+    "fetched_at": "2026-02-02T11:38:31",
     "releases": {
       "CPS01-V1.0.0": {
         "name": "CPS01-Mező ellenőr - Alap kiadás",
@@ -13,8 +13,20 @@
     }
   },
   "lovaszotto/IKK-Robotok": {
-    "fetched_at": "2026-01-29T05:16:01",
+    "fetched_at": "2026-02-02T11:38:33",
     "releases": {
+      "V1.3.0": {
+        "name": "IKK04-Dokumentum-WEB-Ellenőrzés - Februári verzió",
+        "date": "2026-02-01T07:32:41Z"
+      },
+      "IKK04_V1.3.0": {
+        "name": "WEB ellenőrző - Harmadik kiadás",
+        "date": "2026-01-30T03:16:09Z"
+      },
+      "IKK04_V1.2.0": {
+        "name": "WEB ellenőrző - Második kiadás",
+        "date": "2026-01-30T02:39:01Z"
+      },
       "IKK04_V1.1.0": {
         "name": "Web ellenőrző - Első kiadás",
         "date": "2026-01-27T08:38:52Z"
@@ -30,7 +42,7 @@
     }
   },
   "lovaszotto/KBSZ-robotok": {
-    "fetched_at": "2026-01-29T05:16:03",
+    "fetched_at": "2026-02-02T11:38:36",
     "releases": {
       "KB01_V1.0.0": {
         "name": "KB01-Közbeszerzési értesító - Alap kiadás",
@@ -39,7 +51,48 @@
     }
   },
   "lovaszotto/SzotarRobi": {
-    "fetched_at": "2026-01-29T05:16:05",
-    "releases": {}
+    "fetched_at": "2026-02-02T11:38:38",
+    "releases": {
+      "v3.1.14": {
+        "name": "Release Szó-kikérdező",
+        "date": "2026-02-02T09:13:18Z"
+      },
+      "v3.1.13": {
+        "name": "Release Szó-kikérdező",
+        "date": "2026-02-02T09:10:20Z"
+      },
+      "v3.1.12": {
+        "name": "Release Szó-kikérdező",
+        "date": "2026-02-02T09:05:01Z"
+      },
+      "v2.0.0": {
+        "name": "Szó-kikérdező - V2-es verzió",
+        "date": "2026-01-31T04:44:58Z"
+      },
+      "V3.1.12": {
+        "name": "Szó-kikérdező - 3.1.12",
+        "date": "2026-02-02T08:54:50Z"
+      },
+      "V3.1.0": {
+        "name": "Szó-kikérdező - Harmadik kiadás",
+        "date": "2026-02-01T04:17:49Z"
+      },
+      "V3.0.0": {
+        "name": "Szó-kikérdező - V3",
+        "date": "2026-01-31T04:55:19Z"
+      },
+      "V1.3.2": {
+        "name": "Szó-kikérdező - Demo környezetből kiadva",
+        "date": "2026-02-02T08:38:03Z"
+      },
+      "V1.0.0": {
+        "name": "Szó kikérdező alap verzió",
+        "date": "2026-01-30T04:22:08Z"
+      },
+      "V.1.0": {
+        "name": "Szó-kikérdező - Második kiadás",
+        "date": "2026-01-31T04:41:23Z"
+      }
+    }
   }
 }

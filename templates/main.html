@@ -223,6 +223,73 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .wait-stop-indicator { cursor: pointer; }
 .wait-stop-inactive { opacity: 0.35; }
 
+/* --- Ütemezett robotok (naptár) --- */
+.scheduled-calendar .sched-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+.scheduled-calendar .sched-cell {
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 8px;
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+}
+.scheduled-calendar .sched-head {
+    font-weight: 600;
+    background: rgba(25,135,84,0.08);
+    border-color: rgba(25,135,84,0.25);
+}
+.scheduled-calendar .sched-empty {
+    background: rgba(0,0,0,0.03);
+    border-style: dashed;
+}
+.scheduled-calendar button.sched-day {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    justify-content: flex-start;
+    align-items: flex-start;
+    padding: 6px;
+}
+.scheduled-calendar button.sched-day:hover {
+    background: rgba(25,135,84,0.08);
+    border-color: rgba(25,135,84,0.35);
+}
+.scheduled-calendar .sched-today {
+    background: rgba(25,135,84,0.15);
+    border-color: rgba(25,135,84,0.6);
+    font-weight: 700;
+}
+
+.scheduled-calendar .sched-num {
+    font-weight: 600;
+}
+.scheduled-calendar .sched-mark {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(25,135,84,0.9);
+}
+.scheduled-calendar .sched-count {
+    position: absolute;
+    right: 6px;
+    top: 6px;
+    font-size: 11px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(25,135,84,0.12);
+    border: 1px solid rgba(25,135,84,0.35);
+    color: #145c32;
+}
+
 /* Fejlesztői mód: Telepített verzió badge színek */
 .installed-version-badge {
     background-color: #cfe8ff !important; /* világoskék */
@@ -330,6 +397,11 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="runnable-tab" data-bs-toggle="tab" data-bs-target="#runnable" type="button" role="tab" aria-controls="runnable" aria-selected="true" data-menu-tooltip="1" data-bs-toggle-tooltip="1" data-bs-placement="bottom" data-bs-title="{% if is_sandbox %}Telepített robotok futtatása és verziók kezelése (Robot műtő).{% else %}Telepített robotok futtatása és kezelése.{% endif %}">
                 <i class="bi {% if is_sandbox %}bi-heart-pulse{% else %}bi-play-circle{% endif %}"></i> {% if is_sandbox %}Robot műtő{% else %}Telepített robotok{% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="scheduled-tab" data-bs-toggle="tab" data-bs-target="#scheduled-pane" type="button" role="tab" aria-controls="scheduled-pane" aria-selected="false" data-menu-tooltip="1" data-bs-placement="bottom" data-bs-title="Ütemezett robotok áttekintése naptár nézetben.">
+                <i class="bi bi-calendar3"></i> Ütemezett robotok
             </button>
         </li>
         <!-- Repo/Robot/Tag lista tab-link eltávolítva -->
@@ -483,6 +555,112 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                </div>
            </div>
         </div>
+
+        <!-- Ütemezett robotok TAB -->
+        <div class="tab-pane fade" id="scheduled-pane" role="tabpanel" aria-labelledby="scheduled-tab">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-calendar3 me-1"></i> Ütemezett robotok</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedPrevMonthBtn" title="Előző hónap"><i class="bi bi-chevron-left"></i></button>
+                        <div id="schedMonthLabel" class="fw-semibold"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="schedNextMonthBtn" title="Következő hónap"><i class="bi bi-chevron-right"></i></button>
+                    </div>
+                    <div id="scheduledCalendar" class="scheduled-calendar"></div>
+
+                    <div class="d-flex align-items-center justify-content-between mt-3">
+                        <div class="fw-semibold" id="schedSelectedDateLabel">Válassz egy napot…</div>
+                        <button class="btn btn-success btn-sm" type="button" id="schedNewBtn" disabled>
+                            <i class="bi bi-plus-lg"></i> Új ütemezés
+                        </button>
+                    </div>
+
+                    <div class="mt-2" id="schedDayList">
+                        <div class="text-muted small">Kattints egy napra a részletekhez.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ütemezés modal -->
+        <div class="modal fade" id="scheduleModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title" id="scheduleModalTitle"><i class="bi bi-calendar-plus me-1"></i> Ütemezés</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Dátum</label>
+                                <input class="form-control" id="schedDateInput" type="date">
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Idő</label>
+                                <input class="form-control" id="schedTimeInput" type="time" value="08:00">
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label class="form-label">Ismétlődés</label>
+                                <select class="form-select" id="schedRepeatSelect">
+                                    <option value="none" selected>Egyszeri</option>
+                                    <option value="daily">Naponta</option>
+                                    <option value="weekly">Hetente</option>
+                                    <option value="monthly">Havonta</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-4 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="schedEnabledInput" checked>
+                                    <label class="form-check-label" for="schedEnabledInput">Aktív</label>
+                                </div>
+                            </div>
+
+                            <div class="col-12" id="schedWeekdaysOnlyRow" style="display:none;">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="schedWeekdaysOnlyInput">
+                                    <label class="form-check-label" for="schedWeekdaysOnlyInput">Csak hétköznap (H–P)</label>
+                                </div>
+                            </div>
+
+                            <div class="col-12" id="schedWeeklyDaysRow" style="display:none;">
+                                <label class="form-label">Heti napok</label>
+                                <div class="d-flex flex-wrap" style="gap: 0.75rem;">
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="0" id="schedWd0"><label class="form-check-label" for="schedWd0">H</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="1" id="schedWd1"><label class="form-check-label" for="schedWd1">K</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="2" id="schedWd2"><label class="form-check-label" for="schedWd2">Sze</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="3" id="schedWd3"><label class="form-check-label" for="schedWd3">Cs</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="4" id="schedWd4"><label class="form-check-label" for="schedWd4">P</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="5" id="schedWd5"><label class="form-check-label" for="schedWd5">Szo</label></div>
+                                    <div class="form-check"><input class="form-check-input" type="checkbox" value="6" id="schedWd6"><label class="form-check-label" for="schedWd6">V</label></div>
+                                </div>
+                                <div class="text-muted small mt-1">Ha nincs kijelölve nap, a kiválasztott dátum napja lesz alapértelmezett.</div>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Repository</label>
+                                <select class="form-select" id="schedRepoSelect"></select>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">Robot (branch)</label>
+                                <select class="form-select" id="schedBranchSelect"></select>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning mt-3 mb-0 small">
+                            A scheduler a háttérben fut (15 mp-es ciklus). Kikapcsolás: indítás előtt `ENABLE_SCHEDULER=0`.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Mégse</button>
+                        <button type="button" class="btn btn-success" id="schedSaveBtn"><i class="bi bi-save"></i> Mentés</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Letölthető robotok TAB -->
         <div class="tab-pane fade" id="available-pane" role="tabpanel">
             <div class="row mb-4 align-items-center">
@@ -2044,6 +2222,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (activeId === 'help-tab') {
                 loadHelpManual(false);
             }
+            if (activeId === 'scheduled-tab') {
+                try { initScheduledCalendar(); } catch (e) { }
+            }
         });
     });
 
@@ -2052,6 +2233,435 @@ document.addEventListener('DOMContentLoaded', function () {
         helpRefreshBtn.addEventListener('click', () => loadHelpManual(true));
     }
 });
+
+function initScheduledCalendar() {
+    const calEl = document.getElementById('scheduledCalendar');
+    const labelEl = document.getElementById('schedMonthLabel');
+    const prevBtn = document.getElementById('schedPrevMonthBtn');
+    const nextBtn = document.getElementById('schedNextMonthBtn');
+    const selectedLabelEl = document.getElementById('schedSelectedDateLabel');
+    const dayListEl = document.getElementById('schedDayList');
+    const newBtn = document.getElementById('schedNewBtn');
+    if (!calEl || !labelEl || !prevBtn || !nextBtn) return;
+
+    window.__scheduledCalState = window.__scheduledCalState || (() => {
+        const now = new Date();
+        return { year: now.getFullYear(), month: now.getMonth() };
+    })();
+
+    const monthNames = ['Január', 'Február', 'Március', 'Április', 'Május', 'Június', 'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'];
+    const weekDays = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'];
+
+    window.__schedUiState = window.__schedUiState || {
+        selectedDate: '',
+        monthCounts: {},
+        runnableRepos: null,
+    };
+
+    const monthKey = (year, monthZeroBased) => `${year}-${String(monthZeroBased + 1).padStart(2, '0')}`;
+
+    const fetchMonthCounts = async (year, monthZeroBased) => {
+        const mk = monthKey(year, monthZeroBased);
+        try {
+            const resp = await fetch(`/api/schedules?${new URLSearchParams({ month: mk }).toString()}`, { cache: 'no-store' });
+            const data = await resp.json();
+            if (!resp.ok || !data?.success) return {};
+            return data.by_date || {};
+        } catch (e) {
+            return {};
+        }
+    };
+
+    const fetchSchedulesForDate = async (dateStr) => {
+        try {
+            const resp = await fetch(`/api/schedules?${new URLSearchParams({ date: dateStr }).toString()}`, { cache: 'no-store' });
+            const data = await resp.json();
+            if (!resp.ok || !data?.success) return [];
+            return Array.isArray(data.items) ? data.items : [];
+        } catch (e) {
+            return [];
+        }
+    };
+
+    const ensureRunnableReposLoaded = async () => {
+        if (window.__schedUiState.runnableRepos) return window.__schedUiState.runnableRepos;
+        try {
+            const resp = await fetch('/api/runnable_repos', { cache: 'no-store' });
+            const data = await resp.json();
+            if (!resp.ok || !Array.isArray(data)) return [];
+            window.__schedUiState.runnableRepos = data;
+            return data;
+        } catch (e) {
+            return [];
+        }
+    };
+
+    const renderDayList = async (dateStr) => {
+        if (!selectedLabelEl || !dayListEl || !newBtn) return;
+        window.__schedUiState.selectedDate = dateStr;
+        selectedLabelEl.textContent = dateStr ? `Kiválasztott nap: ${dateStr}` : 'Válassz egy napot…';
+        newBtn.disabled = !dateStr;
+
+        if (!dateStr) {
+            dayListEl.innerHTML = '<div class="text-muted small">Kattints egy napra a részletekhez.</div>';
+            return;
+        }
+
+        dayListEl.innerHTML = '<div class="text-muted small">Betöltés…</div>';
+        const items = await fetchSchedulesForDate(dateStr);
+        if (!items.length) {
+            dayListEl.innerHTML = '<div class="text-muted small">Nincs ütemezés erre a napra.</div>';
+            return;
+        }
+
+        const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        let html = '<div class="list-group">';
+        for (const it of items) {
+            const runAt = String(it.run_at || '').replace('T', ' ');
+            const status = String(it.status || 'pending');
+            const repeat = String(it.repeat || 'none');
+            const enabled = !!it.enabled;
+            const statusBadge = status === 'done'
+                ? '<span class="badge bg-success">Kész</span>'
+                : status === 'running'
+                    ? '<span class="badge bg-warning text-dark">Fut</span>'
+                    : status === 'failed'
+                        ? '<span class="badge bg-danger">Hiba</span>'
+                        : '<span class="badge bg-secondary">Vár</span>';
+
+            const weekdaysOnly = !!it.weekdays_only;
+            const rdays = Array.isArray(it.repeat_days) ? it.repeat_days : null;
+            const dayNames = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'];
+            const weeklyDaysLabel = (rdays && rdays.length)
+                ? ` (${rdays.map(x => dayNames[x] || '').filter(Boolean).join(', ')})`
+                : '';
+            const repeatLabel = repeat === 'daily' ? (`Naponta${weekdaysOnly ? ' (H–P)' : ''}`)
+                : repeat === 'weekly' ? (`Hetente${weeklyDaysLabel}`)
+                    : repeat === 'monthly' ? 'Havonta'
+                        : 'Egyszeri';
+
+            html += `
+                <div class="list-group-item d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="fw-semibold">${esc(it.repo)} / ${esc(it.branch)} ${statusBadge}</div>
+                        <div class="small text-muted">${esc(runAt)} • ${esc(repeatLabel)}</div>
+                    </div>
+                    <div class="d-flex align-items-center" style="gap: 0.5rem;">
+                        <div class="form-check form-switch mb-0" title="Aktív">
+                            <input class="form-check-input" type="checkbox" data-sched-toggle="1" data-sched-id="${esc(it.id)}" ${enabled ? 'checked' : ''}>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" data-sched-edit="1" data-sched-id="${esc(it.id)}" title="Szerkesztés">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" type="button" data-sched-id="${esc(it.id)}" title="Törlés">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        dayListEl.innerHTML = html;
+
+        dayListEl.querySelectorAll('input[data-sched-toggle][data-sched-id]').forEach(chk => {
+            chk.addEventListener('change', async () => {
+                const id = chk.getAttribute('data-sched-id');
+                if (!id) return;
+                const enabled = !!chk.checked;
+                try {
+                    const resp = await fetch(`/api/schedules/${encodeURIComponent(id)}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled }),
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok || !data?.success) {
+                        showToast('Nem sikerült módosítani az ütemezést.', 'danger');
+                        chk.checked = !enabled;
+                        return;
+                    }
+                    await refreshMonthAndRerender();
+                } catch (e) {
+                    showToast('Hiba történt módosítás közben.', 'danger');
+                    chk.checked = !enabled;
+                }
+            });
+        });
+
+        dayListEl.querySelectorAll('button[data-sched-id]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-sched-id');
+                if (!id) return;
+                if (btn.hasAttribute('data-sched-edit')) {
+                    const item = items.find(x => String(x?.id || '') === String(id));
+                    if (item) {
+                        openScheduleModal(window.__schedUiState.selectedDate, item);
+                    }
+                    return;
+                }
+                try {
+                    const resp = await fetch(`/api/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                    const data = await resp.json();
+                    if (!resp.ok || !data?.success) {
+                        showToast('Nem sikerült törölni az ütemezést.', 'danger');
+                        return;
+                    }
+                    showToast('Ütemezés törölve.', 'success');
+                    await refreshMonthAndRerender();
+                    await renderDayList(window.__schedUiState.selectedDate);
+                } catch (e) {
+                    showToast('Hiba történt törlés közben.', 'danger');
+                }
+            });
+        });
+    };
+
+    const refreshMonthAndRerender = async () => {
+        const { year, month } = window.__scheduledCalState;
+        window.__schedUiState.monthCounts = await fetchMonthCounts(year, month);
+        render();
+    };
+
+    const openScheduleModal = async (dateStr) => {
+        const modalEl = document.getElementById('scheduleModal');
+        const titleEl = document.getElementById('scheduleModalTitle');
+        const dateInput = document.getElementById('schedDateInput');
+        const timeInput = document.getElementById('schedTimeInput');
+        const enabledInput = document.getElementById('schedEnabledInput');
+        const repeatSelect = document.getElementById('schedRepeatSelect');
+        const weekdaysOnlyRow = document.getElementById('schedWeekdaysOnlyRow');
+        const weekdaysOnlyInput = document.getElementById('schedWeekdaysOnlyInput');
+        const weeklyDaysRow = document.getElementById('schedWeeklyDaysRow');
+        const repoSelect = document.getElementById('schedRepoSelect');
+        const branchSelect = document.getElementById('schedBranchSelect');
+        const saveBtn = document.getElementById('schedSaveBtn');
+        if (!modalEl || !dateInput || !timeInput || !enabledInput || !repeatSelect || !repoSelect || !branchSelect || !saveBtn) return;
+
+        const editItem = arguments.length >= 2 ? arguments[1] : null;
+        const isEdit = !!(editItem && editItem.id);
+        const editId = isEdit ? String(editItem.id) : '';
+        if (titleEl) {
+            titleEl.innerHTML = isEdit
+                ? '<i class="bi bi-pencil me-1"></i> Ütemezés szerkesztése'
+                : '<i class="bi bi-calendar-plus me-1"></i> Új ütemezés';
+        }
+
+        const repos = await ensureRunnableReposLoaded();
+        const repoNames = repos.map(r => r?.name).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)));
+        repoSelect.innerHTML = repoNames.map(n => `<option value="${String(n).replace(/"/g, '&quot;')}">${n}</option>`).join('');
+
+        const setBranchesForRepo = (repoName) => {
+            const repoObj = repos.find(r => (r?.name || '') === repoName);
+            const branches = (repoObj?.branches || []).slice().sort((a, b) => String(a).localeCompare(String(b)));
+            branchSelect.innerHTML = branches.map(b => `<option value="${String(b).replace(/"/g, '&quot;')}">${b}</option>`).join('');
+        };
+
+        repoSelect.onchange = () => setBranchesForRepo(repoSelect.value);
+        setBranchesForRepo(repoSelect.value);
+
+        // Prefill values
+        if (isEdit) {
+            try {
+                const ra = String(editItem.run_at || '');
+                const [dpart, tpart] = ra.split('T');
+                if (dpart) dateInput.value = dpart;
+                if (tpart) timeInput.value = String(tpart).slice(0, 5);
+            } catch (e) {
+                dateInput.value = dateStr || window.__schedUiState.selectedDate || '';
+            }
+            try { enabledInput.checked = !!editItem.enabled; } catch (e) {}
+            try { repeatSelect.value = String(editItem.repeat || 'none'); } catch (e) { repeatSelect.value = 'none'; }
+            try {
+                const rname = String(editItem.repo || '');
+                if (rname) repoSelect.value = rname;
+                setBranchesForRepo(repoSelect.value);
+                const bname = String(editItem.branch || '');
+                if (bname) branchSelect.value = bname;
+            } catch (e) {}
+        } else {
+            dateInput.value = dateStr || window.__schedUiState.selectedDate || '';
+            try { enabledInput.checked = true; } catch (e) {}
+            try { repeatSelect.value = 'none'; } catch (e) {}
+        }
+
+        // Reset recurrence controls
+        try { if (weekdaysOnlyInput) weekdaysOnlyInput.checked = false; } catch (e) {}
+        try {
+            modalEl.querySelectorAll('#schedWeeklyDaysRow input[type="checkbox"]').forEach(chk => chk.checked = false);
+        } catch (e) {}
+
+        const getSelectedDateWeekday = () => {
+            try {
+                const v = dateInput.value;
+                if (!v) return null;
+                const d = new Date(`${v}T00:00:00`);
+                const js = d.getDay(); // 0=Sun
+                return (js + 6) % 7; // 0=Mon
+            } catch (e) {
+                return null;
+            }
+        };
+
+        const updateRepeatUi = () => {
+            const rep = String(repeatSelect.value || 'none');
+            if (weekdaysOnlyRow) weekdaysOnlyRow.style.display = (rep === 'daily') ? '' : 'none';
+            if (weeklyDaysRow) weeklyDaysRow.style.display = (rep === 'weekly') ? '' : 'none';
+
+            if (rep === 'weekly') {
+                const anyChecked = !!modalEl.querySelector('#schedWeeklyDaysRow input[type="checkbox"]:checked');
+                if (!anyChecked) {
+                    const wd = getSelectedDateWeekday();
+                    if (wd !== null) {
+                        const chk = document.getElementById(`schedWd${wd}`);
+                        if (chk) chk.checked = true;
+                    }
+                }
+            }
+        };
+
+        repeatSelect.onchange = updateRepeatUi;
+        dateInput.onchange = updateRepeatUi;
+        updateRepeatUi();
+
+        // Prefill recurrence fields
+        if (isEdit) {
+            try { if (weekdaysOnlyInput) weekdaysOnlyInput.checked = !!editItem.weekdays_only; } catch (e) {}
+            try {
+                const rdays = Array.isArray(editItem.repeat_days) ? editItem.repeat_days : [];
+                modalEl.querySelectorAll('#schedWeeklyDaysRow input[type="checkbox"]').forEach(chk => {
+                    chk.checked = rdays.includes(parseInt(chk.value, 10));
+                });
+            } catch (e) {}
+            updateRepeatUi();
+        }
+
+        // Save handler (rebind each open)
+        saveBtn.onclick = async () => {
+            const rep = String(repeatSelect.value || 'none');
+            let weekdays_only = false;
+            let repeat_days = null;
+            if (rep === 'daily') {
+                weekdays_only = !!(weekdaysOnlyInput && weekdaysOnlyInput.checked);
+            }
+            if (rep === 'weekly') {
+                try {
+                    const arr = [];
+                    modalEl.querySelectorAll('#schedWeeklyDaysRow input[type="checkbox"]:checked').forEach(chk => {
+                        const n = parseInt(chk.value, 10);
+                        if (!Number.isNaN(n)) arr.push(n);
+                    });
+                    repeat_days = arr;
+                } catch (e) {
+                    repeat_days = null;
+                }
+            }
+
+            const payload = {
+                repo: repoSelect.value,
+                branch: branchSelect.value,
+                date: dateInput.value,
+                time: timeInput.value,
+                enabled: !!enabledInput.checked,
+                repeat: repeatSelect.value,
+                weekdays_only,
+                repeat_days,
+            };
+
+            try {
+                const url = isEdit ? `/api/schedules/${encodeURIComponent(editId)}` : '/api/schedules';
+                const method = isEdit ? 'PATCH' : 'POST';
+                const resp = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data?.success) {
+                    showToast(data?.error || 'Nem sikerült menteni az ütemezést.', 'danger');
+                    return;
+                }
+                showToast(isEdit ? 'Ütemezés frissítve.' : 'Ütemezés elmentve.', 'success');
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                await refreshMonthAndRerender();
+                await renderDayList(payload.date);
+            } catch (e) {
+                showToast('Hiba történt mentés közben.', 'danger');
+            }
+        };
+
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    };
+
+    const render = () => {
+        const { year, month } = window.__scheduledCalState;
+        labelEl.textContent = `${monthNames[month]} ${year}`;
+
+        const first = new Date(year, month, 1);
+        const last = new Date(year, month + 1, 0);
+        const daysInMonth = last.getDate();
+
+        // Monday-based index: 0..6
+        const firstDayJs = first.getDay(); // 0=Sun
+        const offset = (firstDayJs + 6) % 7;
+
+        const today = new Date();
+        const todayY = today.getFullYear();
+        const todayM = today.getMonth();
+        const todayD = today.getDate();
+
+        let html = '<div class="sched-grid">';
+        weekDays.forEach(d => {
+            html += `<div class="sched-cell sched-head">${d}</div>`;
+        });
+        for (let i = 0; i < offset; i++) {
+            html += '<div class="sched-cell sched-empty"></div>';
+        }
+        const counts = window.__schedUiState.monthCounts || {};
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const isToday = (year === todayY && month === todayM && day === todayD);
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const c = Number(counts[dateStr] || 0);
+            html += `<button type="button" class="sched-cell sched-day${isToday ? ' sched-today' : ''}" data-date="${dateStr}">
+                        <span class="sched-num">${day}</span>
+                        ${c > 0 ? '<span class="sched-mark" aria-hidden="true"></span>' : ''}
+                        ${c > 0 ? `<span class="sched-count" title="${c} ütemezés">${c}</span>` : ''}
+                    </button>`;
+        }
+        html += '</div>';
+        calEl.innerHTML = html;
+
+        // Click handler: select day + show list
+        calEl.querySelectorAll('button.sched-day').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const ds = btn.getAttribute('data-date') || '';
+                renderDayList(ds);
+            });
+        });
+    };
+
+    prevBtn.onclick = () => {
+        const st = window.__scheduledCalState;
+        let y = st.year, m = st.month - 1;
+        if (m < 0) { m = 11; y -= 1; }
+        window.__scheduledCalState = { year: y, month: m };
+        refreshMonthAndRerender();
+    };
+    nextBtn.onclick = () => {
+        const st = window.__scheduledCalState;
+        let y = st.year, m = st.month + 1;
+        if (m > 11) { m = 0; y += 1; }
+        window.__scheduledCalState = { year: y, month: m };
+        refreshMonthAndRerender();
+    };
+
+    if (newBtn) {
+        newBtn.onclick = () => openScheduleModal(window.__schedUiState.selectedDate);
+    }
+
+    // Initial load
+    refreshMonthAndRerender();
+}
 
 async function branchInfoClicked(button) {
     const repo = button?.getAttribute('data-repo') || '';

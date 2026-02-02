@@ -1,0 +1,52 @@
+[
+  {
+    "id": "6170a7e7-557e-4bae-8a2a-b296e3f1648d",
+    "repo": "CPS-Robotok",
+    "branch": "CPS01-CPS-Mezo-ellenor",
+    "run_at": "2026-02-02T13:00:00",
+    "enabled": true,
+    "repeat": "none",
+    "weekdays_only": false,
+    "repeat_days": null,
+    "status": "pending",
+    "created_at": "2026-02-02T12:09:13",
+    "last_run_at": null,
+    "finished_at": null,
+    "returncode": null,
+    "results_dir": null
+  },
+  {
+    "id": "2aa9ea92-53de-4c08-baf7-ca7931c313fe",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "run_at": "2026-02-02T13:00:00",
+    "enabled": true,
+    "repeat": "none",
+    "weekdays_only": false,
+    "repeat_days": null,
+    "status": "pending",
+    "created_at": "2026-02-02T12:09:42",
+    "last_run_at": null,
+    "finished_at": null,
+    "returncode": null,
+    "results_dir": null
+  },
+  {
+    "id": "61722e7d-675f-41ff-9c49-4de569db164c",
+    "repo": "CPS-Robotok",
+    "branch": "CPS01-CPS-Mezo-ellenor",
+    "run_at": "2026-02-03T08:00:00",
+    "enabled": true,
+    "repeat": "daily",
+    "weekdays_only": true,
+    "repeat_days": null,
+    "status": "pending",
+    "created_at": "2026-02-02T12:08:36",
+    "last_run_at": "2026-02-02T12:08:57",
+    "finished_at": "2026-02-02T12:08:57",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS01-CPS-Mezo-ellenor__20260202_120849",
+    "running_started_at": "2026-02-02T12:08:49",
+    "last_status": "success"
+  }
+]

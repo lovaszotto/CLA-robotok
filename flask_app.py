@@ -20,8 +20,9 @@ import base64
 import zipfile
 import io
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import uuid
 
 import html
 import time
@@ -72,6 +73,307 @@ def api_help_manual():
 # Key format: run:<repo>:<branch>
 RUNNING_ROBOT_PROCS_LOCK = threading.RLock()
 RUNNING_ROBOT_PROCS: dict[str, subprocess.Popen] = {}
+
+# --- Schedules (Ütemezések) ---
+SCHEDULES_LOCK = threading.RLock()
+
+
+def _get_schedules_file_path() -> str:
+    try:
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scheduled_jobs.json')
+    except Exception:
+        return os.path.join(os.getcwd(), 'scheduled_jobs.json')
+
+
+def _load_schedules() -> list[dict]:
+    path = _get_schedules_file_path()
+    try:
+        if not os.path.exists(path):
+            return []
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            return [d for d in data if isinstance(d, dict)]
+        return []
+    except Exception as e:
+        logger.warning(f"[SCHEDULES] Betöltés hiba: {e}")
+        return []
+
+
+def _save_schedules(items: list[dict]) -> None:
+    path = _get_schedules_file_path()
+    tmp_path = path + '.tmp'
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+    except Exception:
+        pass
+    with open(tmp_path, 'w', encoding='utf-8') as f:
+        json.dump(items or [], f, ensure_ascii=False, indent=2)
+    try:
+        os.replace(tmp_path, path)
+    except Exception:
+        # Best-effort fallback
+        try:
+            shutil.copyfile(tmp_path, path)
+        except Exception:
+            pass
+
+
+def _parse_local_run_at(date_str: str, time_str: str) -> datetime:
+    date_str = (date_str or '').strip()
+    time_str = (time_str or '').strip()
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date_str):
+        raise ValueError('Érvénytelen dátum (YYYY-MM-DD)')
+    if not re.fullmatch(r'\d{2}:\d{2}', time_str):
+        raise ValueError('Érvénytelen idő (HH:MM)')
+    y, m, d = [int(x) for x in date_str.split('-')]
+    hh, mm = [int(x) for x in time_str.split(':')]
+    return datetime(y, m, d, hh, mm, 0)
+
+
+def _normalize_repeat(raw: str) -> str:
+    v = (raw or '').strip().lower()
+    if v in ('', 'none', 'no', 'once', 'one-shot', 'oneshot'):
+        return 'none'
+    if v in ('daily', 'day', 'naponta'):
+        return 'daily'
+    if v in ('weekly', 'week', 'hetente'):
+        return 'weekly'
+    if v in ('monthly', 'month', 'havonta'):
+        return 'monthly'
+    raise ValueError('Érvénytelen ismétlődés (none/daily/weekly/monthly)')
+
+
+def _normalize_repeat_days(raw) -> list[int] | None:
+    """Normalizes repeat days to a sorted unique list of ints in 0..6 (Mon..Sun)."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw:
+            return None
+        # allow "0,1,2" style
+        try:
+            raw = [int(x.strip()) for x in raw.split(',') if x.strip() != '']
+        except Exception:
+            raise ValueError('Érvénytelen repeat_days')
+    if not isinstance(raw, (list, tuple)):
+        raise ValueError('Érvénytelen repeat_days')
+    out: set[int] = set()
+    for v in raw:
+        try:
+            i = int(v)
+        except Exception:
+            raise ValueError('Érvénytelen repeat_days')
+        if i < 0 or i > 6:
+            raise ValueError('repeat_days tartomány: 0..6 (H..V)')
+        out.add(i)
+    return sorted(out)
+
+
+def _add_months(dt: datetime, months: int) -> datetime:
+    # month rollover with day clamp
+    y = dt.year
+    m = dt.month + months
+    while m > 12:
+        m -= 12
+        y += 1
+    while m < 1:
+        m += 12
+        y -= 1
+    # clamp day
+    import calendar
+    last_day = calendar.monthrange(y, m)[1]
+    d = min(dt.day, last_day)
+    return dt.replace(year=y, month=m, day=d)
+
+
+def _compute_next_run_at(dt: datetime, repeat: str, repeat_days: list[int] | None = None, weekdays_only: bool = False) -> datetime | None:
+    repeat = (repeat or 'none').strip().lower()
+    if repeat == 'none':
+        return None
+
+    if repeat == 'daily':
+        if weekdays_only:
+            for i in range(1, 15):
+                cand = dt + timedelta(days=i)
+                if cand.weekday() <= 4:
+                    return cand
+            return dt + timedelta(days=1)
+        return dt + timedelta(days=1)
+
+    if repeat == 'weekly':
+        days = repeat_days or [dt.weekday()]
+        day_set = set(days)
+        # Find the next selected weekday after dt
+        for i in range(1, 15):
+            cand = dt + timedelta(days=i)
+            if cand.weekday() in day_set:
+                return cand
+        return dt + timedelta(days=7)
+
+    if repeat == 'monthly':
+        return _add_months(dt, 1)
+
+    return None
+
+
+def _schedule_month_key(dt: datetime) -> str:
+    return dt.strftime('%Y-%m')
+
+
+def _schedule_date_key(dt: datetime) -> str:
+    return dt.strftime('%Y-%m-%d')
+
+
+def _add_execution_result(repo: str, branch: str, status: str, returncode: int | None, results_dir: str | None, run_type: str = 'schedule'):
+    """Append an entry to execution_results and persist."""
+    try:
+        global execution_results
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        result_entry = {
+            'id': len(execution_results) + 1,
+            'timestamp': timestamp,
+            'repo': repo,
+            'branch': branch,
+            'status': status,
+            'returncode': returncode,
+            'results_dir': results_dir,
+            'type': run_type,
+        }
+        execution_results.append(result_entry)
+        save_execution_results()
+    except Exception as e:
+        logger.warning(f"[SCHEDULES] execution_results mentés hiba: {e}")
+
+
+def _start_schedule_worker_if_enabled():
+    """Starts a lightweight in-process scheduler thread (best-effort).
+
+    Enabled by default; disable with ENABLE_SCHEDULER=0.
+    """
+    try:
+        enabled_raw = (os.environ.get('ENABLE_SCHEDULER') or '1').strip().lower()
+        enabled = enabled_raw not in ('0', 'false', 'no', 'off')
+        if not enabled:
+            logger.info('[SCHEDULES] Scheduler thread disabled by env (ENABLE_SCHEDULER=0)')
+            return
+    except Exception:
+        enabled = True
+
+    if getattr(_start_schedule_worker_if_enabled, '_started', False):
+        return
+    _start_schedule_worker_if_enabled._started = True
+
+    def _worker_loop():
+        logger.info('[SCHEDULES] Scheduler worker started')
+        while True:
+            try:
+                now = datetime.now()
+                due: list[dict] = []
+                with SCHEDULES_LOCK:
+                    items = _load_schedules()
+                    changed = False
+                    for it in items:
+                        try:
+                            if not it.get('enabled', True):
+                                continue
+                            status = (it.get('status') or 'pending')
+                            if status == 'running':
+                                continue
+                            if status not in ('pending', 'failed', 'done'):
+                                continue
+                            run_at = (it.get('run_at') or '').strip()
+                            if not run_at:
+                                continue
+                            dt = datetime.fromisoformat(run_at)
+                            if dt <= now:
+                                it['status'] = 'running'
+                                it['running_started_at'] = now.isoformat(timespec='seconds')
+                                due.append(dict(it))
+                                changed = True
+                        except Exception:
+                            continue
+                    if changed:
+                        _save_schedules(items)
+
+                # Execute due items outside the file lock
+                for it in due:
+                    def _run_one(item: dict):
+                        sid = (item.get('id') or '').strip()
+                        repo = (item.get('repo') or '').strip()
+                        branch = (item.get('branch') or '').strip()
+                        repeat = (item.get('repeat') or 'none').strip().lower()
+                        weekdays_only = bool(item.get('weekdays_only', False))
+                        repeat_days = None
+                        try:
+                            repeat_days = _normalize_repeat_days(item.get('repeat_days', None))
+                        except Exception:
+                            repeat_days = None
+                        try:
+                            rc, results_dir, stdout, stderr = run_robot_with_params(repo, branch)
+                            status = 'success' if rc == 0 else 'failed'
+                            _add_execution_result(repo, branch, status, rc, results_dir, run_type='schedule')
+                            with SCHEDULES_LOCK:
+                                all_items = _load_schedules()
+                                for s in all_items:
+                                    if (s.get('id') or '').strip() == sid:
+                                        finished_at = datetime.now().isoformat(timespec='seconds')
+                                        s['last_run_at'] = finished_at
+                                        s['returncode'] = rc
+                                        s['results_dir'] = results_dir
+                                        s['finished_at'] = finished_at
+
+                                        # Recurrence: advance run_at and keep pending if enabled
+                                        try:
+                                            prev_dt = datetime.fromisoformat((s.get('run_at') or '').strip())
+                                        except Exception:
+                                            prev_dt = None
+                                        next_dt = None
+                                        try:
+                                            if prev_dt is not None:
+                                                # use persisted values if present
+                                                wdo = bool(s.get('weekdays_only', weekdays_only))
+                                                rdays = None
+                                                try:
+                                                    rdays = _normalize_repeat_days(s.get('repeat_days', repeat_days))
+                                                except Exception:
+                                                    rdays = repeat_days
+                                                next_dt = _compute_next_run_at(prev_dt, repeat, rdays, wdo)
+                                        except Exception:
+                                            next_dt = None
+
+                                        if (repeat or 'none') != 'none' and next_dt is not None and bool(s.get('enabled', True)):
+                                            s['run_at'] = next_dt.isoformat(timespec='seconds')
+                                            s['last_status'] = status
+                                            s['status'] = 'pending'
+                                        else:
+                                            # One-shot: mark done and disable so it doesn't keep showing on calendar
+                                            s['status'] = 'done' if rc == 0 else 'failed'
+                                            if (repeat or 'none') == 'none':
+                                                s['enabled'] = False
+                                        break
+                                _save_schedules(all_items)
+                        except Exception as e:
+                            logger.warning(f"[SCHEDULES] Futás hiba: {e}")
+                            with SCHEDULES_LOCK:
+                                all_items = _load_schedules()
+                                for s in all_items:
+                                    if (s.get('id') or '').strip() == sid:
+                                        s['status'] = 'failed'
+                                        s['error'] = str(e)
+                                        s['finished_at'] = datetime.now().isoformat(timespec='seconds')
+                                        break
+                                _save_schedules(all_items)
+
+                    threading.Thread(target=_run_one, args=(it,), daemon=True).start()
+
+            except Exception as e:
+                logger.warning(f"[SCHEDULES] Worker loop hiba: {e}")
+
+            time.sleep(15)
+
+    threading.Thread(target=_worker_loop, daemon=True).start()
 
 # Tracks user-requested cancellations by opKey so /api/execute can persist status='cancelled'
 CANCELLED_RUN_OPS_LOCK = threading.RLock()
@@ -3703,6 +4005,239 @@ def api_available_repos():
     return jsonify(result)
 
 
+# --- Ütemezések API ---
+@app.route('/api/schedules', methods=['GET'])
+def api_schedules_get():
+    """List schedules.
+
+    Query:
+      - month=YYYY-MM -> items in month
+      - date=YYYY-MM-DD -> items on date
+      - none -> all items
+    """
+    month = (request.args.get('month') or '').strip()
+    date = (request.args.get('date') or '').strip()
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+
+    out = []
+    for it in (items or []):
+        try:
+            run_at = (it.get('run_at') or '').strip()
+            if not run_at:
+                continue
+            dt = datetime.fromisoformat(run_at)
+            if month and _schedule_month_key(dt) != month:
+                continue
+            if date and _schedule_date_key(dt) != date:
+                continue
+            out.append(it)
+        except Exception:
+            continue
+
+    # useful for calendar markers
+    by_date: dict[str, int] = {}
+    try:
+        if month and not date:
+            for it in out:
+                try:
+                    if not bool(it.get('enabled', True)):
+                        continue
+                    dt = datetime.fromisoformat((it.get('run_at') or '').strip())
+                    ds = _schedule_date_key(dt)
+                    by_date[ds] = by_date.get(ds, 0) + 1
+                except Exception:
+                    continue
+    except Exception:
+        by_date = {}
+
+    return jsonify({'success': True, 'items': out, 'by_date': by_date})
+
+
+@app.route('/api/schedules', methods=['POST'])
+def api_schedules_post():
+    """Create a schedule.
+
+    JSON:
+      { repo, branch, date:YYYY-MM-DD, time:HH:MM, enabled?:bool }
+    """
+    data = request.get_json(silent=True) or {}
+    repo = (data.get('repo') or '').strip()
+    branch = (data.get('branch') or '').strip()
+    date_str = (data.get('date') or '').strip()
+    time_str = (data.get('time') or '').strip()
+    enabled = bool(data.get('enabled', True))
+    repeat_raw = (data.get('repeat') or 'none')
+    weekdays_only = bool(data.get('weekdays_only', False))
+    repeat_days_raw = data.get('repeat_days', None)
+
+    if not repo or not branch:
+        return jsonify({'success': False, 'error': 'Hiányzó repo vagy robot'}), 400
+
+    try:
+        dt = _parse_local_run_at(date_str, time_str)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    try:
+        repeat = _normalize_repeat(repeat_raw)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    try:
+        repeat_days = _normalize_repeat_days(repeat_days_raw)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+    # Defaults
+    if repeat == 'weekly' and not repeat_days:
+        repeat_days = [dt.weekday()]
+
+    item = {
+        'id': str(uuid.uuid4()),
+        'repo': repo,
+        'branch': branch,
+        'run_at': dt.isoformat(timespec='seconds'),
+        'enabled': enabled,
+        'repeat': repeat,
+        'weekdays_only': weekdays_only if repeat == 'daily' else False,
+        'repeat_days': repeat_days if repeat == 'weekly' else None,
+        'status': 'pending',
+        'created_at': datetime.now().isoformat(timespec='seconds'),
+        'last_run_at': None,
+        'finished_at': None,
+        'returncode': None,
+        'results_dir': None,
+    }
+
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+        items.append(item)
+        # keep stable order: by run_at asc
+        try:
+            items.sort(key=lambda x: (x.get('run_at') or ''))
+        except Exception:
+            pass
+        _save_schedules(items)
+
+    return jsonify({'success': True, 'item': item})
+
+
+@app.route('/api/schedules/<schedule_id>', methods=['DELETE'])
+def api_schedules_delete(schedule_id: str):
+    schedule_id = (schedule_id or '').strip()
+    if not schedule_id:
+        return jsonify({'success': False, 'error': 'Hiányzó id'}), 400
+
+    removed = False
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+        new_items = []
+        for it in (items or []):
+            if (it.get('id') or '').strip() == schedule_id:
+                removed = True
+                continue
+            new_items.append(it)
+        _save_schedules(new_items)
+
+    return jsonify({'success': True, 'removed': removed})
+
+
+@app.route('/api/schedules/<schedule_id>', methods=['PATCH'])
+def api_schedules_patch(schedule_id: str):
+    """Update a schedule (enabled/repeat/date/time)."""
+    schedule_id = (schedule_id or '').strip()
+    data = request.get_json(silent=True) or {}
+
+    enabled = data.get('enabled', None)
+    repo_new = data.get('repo', None)
+    branch_new = data.get('branch', None)
+    repeat_raw = data.get('repeat', None)
+    date_str = data.get('date', None)
+    time_str = data.get('time', None)
+    weekdays_only = data.get('weekdays_only', None)
+    repeat_days_raw = data.get('repeat_days', None)
+
+    if enabled is None and repo_new is None and branch_new is None and repeat_raw is None and date_str is None and time_str is None and weekdays_only is None and repeat_days_raw is None:
+        return jsonify({'success': False, 'error': 'Nincs módosítandó mező'}), 400
+
+    if repo_new is not None:
+        repo_new = (str(repo_new) or '').strip()
+        if not repo_new:
+            return jsonify({'success': False, 'error': 'Érvénytelen repo'}), 400
+    if branch_new is not None:
+        branch_new = (str(branch_new) or '').strip()
+        if not branch_new:
+            return jsonify({'success': False, 'error': 'Érvénytelen robot/branch'}), 400
+
+    repeat = None
+    if repeat_raw is not None:
+        try:
+            repeat = _normalize_repeat(str(repeat_raw))
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    repeat_days = None
+    if repeat_days_raw is not None:
+        try:
+            repeat_days = _normalize_repeat_days(repeat_days_raw)
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    new_dt = None
+    if date_str is not None or time_str is not None:
+        # need both to set run_at
+        try:
+            if date_str is None or time_str is None:
+                raise ValueError('Dátum+idő együtt módosítható')
+            new_dt = _parse_local_run_at(str(date_str), str(time_str))
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+    updated = False
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+        for it in (items or []):
+            if (it.get('id') or '').strip() == schedule_id:
+                if enabled is not None:
+                    it['enabled'] = bool(enabled)
+                if repo_new is not None:
+                    it['repo'] = repo_new
+                if branch_new is not None:
+                    it['branch'] = branch_new
+                if repeat is not None:
+                    it['repeat'] = repeat
+                    # If switching to weekly and no repeat_days provided, keep existing or default to run_at weekday
+                    if repeat == 'weekly' and repeat_days is None:
+                        if not it.get('repeat_days'):
+                            try:
+                                cur_dt = datetime.fromisoformat((it.get('run_at') or '').strip())
+                                it['repeat_days'] = [cur_dt.weekday()]
+                            except Exception:
+                                it['repeat_days'] = [0]
+                    if repeat != 'weekly':
+                        it['repeat_days'] = None
+                    if repeat != 'daily':
+                        it['weekdays_only'] = False
+
+                if weekdays_only is not None:
+                    it['weekdays_only'] = bool(weekdays_only)
+
+                if repeat_days is not None:
+                    it['repeat_days'] = repeat_days
+
+                if new_dt is not None:
+                    it['run_at'] = new_dt.isoformat(timespec='seconds')
+                    # reset status for re-scheduled runs
+                    if (it.get('status') or '') == 'done':
+                        it['status'] = 'pending'
+                updated = True
+                break
+        _save_schedules(items)
+
+    return jsonify({'success': True, 'updated': updated})
+
+
 # Új oldal: repositoryk, branchek és tagek megjelenítése
 @app.route('/repos_branches_tags')
 def repos_branches_tags_page():
@@ -3980,4 +4515,8 @@ def api_repos_branches_tags():
 
 if __name__ == "__main__":
     # Indítsd a Flask szervert, hogy kívülről is elérhető legyen, ne csak localhostról
+    try:
+        _start_schedule_worker_if_enabled()
+    except Exception:
+        pass
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

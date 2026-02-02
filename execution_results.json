@@ -18,5 +18,45 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260202_073647",
     "type": "bulk"
+  },
+  {
+    "id": 3,
+    "timestamp": "2026-02-02 12:00:51",
+    "repo": "CPS-Robotok",
+    "branch": "CPS01-CPS-Mezo-ellenor",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS01-CPS-Mezo-ellenor__20260202_120029",
+    "type": "schedule"
+  },
+  {
+    "id": 4,
+    "timestamp": "2026-02-02 12:04:38",
+    "repo": "CPS-Robotok",
+    "branch": "CPS01-CPS-Mezo-ellenor",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS01-CPS-Mezo-ellenor__20260202_120359",
+    "type": "schedule"
+  },
+  {
+    "id": 5,
+    "timestamp": "2026-02-02 12:07:43",
+    "repo": "CPS-Robotok",
+    "branch": "CPS01-CPS-Mezo-ellenor",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS01-CPS-Mezo-ellenor__20260202_120734",
+    "type": "schedule"
+  },
+  {
+    "id": 6,
+    "timestamp": "2026-02-02 12:08:57",
+    "repo": "CPS-Robotok",
+    "branch": "CPS01-CPS-Mezo-ellenor",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\CPS-Robotok__CPS01-CPS-Mezo-ellenor__20260202_120849",
+    "type": "schedule"
   }
 ]

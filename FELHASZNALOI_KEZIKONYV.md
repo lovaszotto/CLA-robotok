@@ -115,10 +115,51 @@ Egy robot sorában:
   - ezen a gombon nincs ikon/tooltip csere logika
 - **Verziók / release infó** gomb (i/hammer)
 
-### 6.4. Futási eredmények
+### 6.4. Ütemezett robotok
+Az Ütemezett robotok tab egy naptár nézet, ahol robot futásokat lehet időzíteni.
+
+Naptár használat:
+- a naptár napjain megjelenhet jelölés / számláló: ez az adott napra eső **aktív** ütemezések darabszáma
+- kattints egy napra → megjelenik az adott napi ütemezések listája
+
+Új ütemezés létrehozása:
+- válassz ki egy napot a naptárban
+- kattints az **Új ütemezés** gombra
+- a modalban töltsd ki:
+  - **Dátum** (YYYY-MM-DD)
+  - **Idő** (HH:MM)
+  - **Repository**
+  - **Robot (branch)**
+  - **Aktív** kapcsoló
+  - **Ismétlődés**:
+    - **Egyszeri**: csak egyszer fut le
+    - **Naponta**: minden nap lefut
+      - opcionálisan: **Csak hétköznap (H–P)**
+    - **Hetente**: a kijelölt hét napjain fut
+      - **Heti napok**: H, K, Sze, Cs, P, Szo, V
+    - **Havonta**: havonta egyszer fut (azonos nap-szám szerint, ha lehetséges)
+
+Ütemezések kezelése (kiválasztott nap listája):
+- **Aktív kapcsoló**: ki/be kapcsolja az ütemezést
+- **Szerkesztés** (ceruza): ugyanazzal a modallal módosítható dátum/idő/robot/ismétlődés
+- **Törlés** (kuka): törli az ütemezést
+
+Automatikus futtatás (scheduler):
+- az ütemezéseket a backend egy egyszerű, beépített schedulerrel futtatja (kb. 15 mp-enként ellenőriz)
+- csak addig fut, amíg a CLA-ssistant szerver fut (ha leáll a Flask app, az ütemezések sem futnak)
+- kikapcsolás: indítás előtt állítsd a környezeti változót: `ENABLE_SCHEDULER=0`
+
+Tárolás:
+- az ütemezések fájlba mentődnek: `scheduled_jobs.json` (a projekt mappában)
+- a futások eredményei bekerülnek az Eredmények tabra is (az `execution_results.json`-ba mentve)
+
+Megjegyzés:
+- a globális „Robot szűrése…” mező az Ütemezett robotok tabon nem releváns (ott nincs repo-lista szűrés)
+
+### 6.5. Futási eredmények
 A Futási eredmények tab a korábbi futások listáját/megnyitható logjait kezeli.
 
-### 6.5. Log
+### 6.6. Log
 A Log tab a szerver logját és keresési segédeket tartalmazhat.
 
 ---
@@ -174,6 +215,17 @@ Mit próbálj:
 ### 9.2. Nem jelenik meg tooltip
 - frissítés után a tooltipek csak akkor aktívak, ha a Bootstrap tooltip inicializálás lefut.
 - ha kell, frissíts rá a tabra / oldalt, vagy várj pár másodpercet.
+
+### 9.3. Nem futnak az ütemezések
+Gyakori okok:
+- a CLA-ssistant szerver nem fut (a scheduler a backend folyamat része)
+- az ütemezés inaktívra van kapcsolva
+- a scheduler ki van kapcsolva indításkor: `ENABLE_SCHEDULER=0`
+
+Mit próbálj:
+- indítsd újra a szervert a `start.bat`-tal
+- az Ütemezett robotok tabon kapcsold aktívra az ütemezést
+- nézd meg a szerver logot (`server.log`) a futási hibákhoz
 
 ---
 
