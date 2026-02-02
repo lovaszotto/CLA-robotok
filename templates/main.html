@@ -421,29 +421,26 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                    {% endif %}
                                                    <label for="runnable-{{ repo.name }}-{{ branch }}" class="mb-0 branch-name">{{ branch }}</label>
                                                    {% set lr = (last_run_by_key.get(repo.name ~ '|' ~ branch) if last_run_by_key else None) %}
-                                                   {% if is_sandbox %}
-                                                       <span class="ms-2 small installed-version-meta" data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-repo-url="{{ repo.html_url or '' }}">
-                                                           <span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span>
-                                                       </span>
-                                                   {% else %}
-                                                       <span class="ms-2 small last-run-meta">
-                                                           {% if lr %}
-                                                               {% set lr_status = (lr.get('status') or '') %}
-                                                               <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% elif lr_status == 'cancelled' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1"
-                                                                   data-bs-toggle="tooltip"
-                                                                   data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
-                                                                   {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
-                                                               </span>
-                                                               <span class="text-muted"
-                                                                   data-bs-toggle="tooltip"
-                                                                   data-bs-title="Utolsó futás ideje">{{ lr.get('timestamp') }}</span>
-                                                           {% else %}
-                                                               <span class="badge bg-secondary me-1"
-                                                                   data-bs-toggle="tooltip"
-                                                                   data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span>
-                                                           {% endif %}
-                                                       </span>
-                                                   {% endif %}
+                                                   <span class="ms-2 small installed-version-meta" data-repo="{{ repo.name }}" data-branch="{{ branch }}" data-repo-url="{{ repo.html_url or '' }}">
+                                                       <span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span>
+                                                   </span>
+                                                   <span class="ms-2 small last-run-meta">
+                                                       {% if lr %}
+                                                           {% set lr_status = (lr.get('status') or '') %}
+                                                           <span class="badge {% if lr_status == 'success' %}bg-success{% elif lr_status == 'failed' %}bg-danger{% elif lr_status == 'cancelled' %}bg-warning text-dark{% else %}bg-secondary{% endif %} me-1"
+                                                               data-bs-toggle="tooltip"
+                                                               data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
+                                                               {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
+                                                           </span>
+                                                           <span class="text-muted"
+                                                               data-bs-toggle="tooltip"
+                                                               data-bs-title="Utolsó futás ideje">{{ lr.get('timestamp') }}</span>
+                                                       {% else %}
+                                                           <span class="badge bg-secondary me-1"
+                                                               data-bs-toggle="tooltip"
+                                                               data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span>
+                                                       {% endif %}
+                                                   </span>
                                                    <span class="ms-auto">
                                                        <i class="bi bi-trash text-danger" style="cursor:pointer;" title="Eltávolítás a futtathatók közül" onclick="deleteRunnableBranch('{{ repo.name }}', '{{ branch }}', this)"></i>
                                                    </span>
@@ -679,8 +676,8 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                     </div>
 
                                     <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
-                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="saveGitHubToken()"><i class="bi bi-check2"></i> Mentés</button>
-                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearGitHubToken()"><i class="bi bi-x"></i> Törlés</button>
+                                        <button type="button" class="btn btn-outline-primary btn-sm" id="githubTokenSaveBtn" onclick="saveGitHubToken()"><i class="bi bi-check2"></i> Mentés</button>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" id="githubTokenClearBtn" onclick="clearGitHubToken()"><i class="bi bi-x"></i> Törlés</button>
                                         <span class="ms-auto small text-muted" id="githubTokenStatus"></span>
                                     </div>
                                 </div>
@@ -1399,7 +1396,8 @@ function renderRunnableRepos(repos) {
                                     data-repo-fullname="${escAttr(repo.full_name || '')}"
                                     onclick="openCreateReleaseModal(this)"><i class="bi bi-box-seam"></i></button>` : ''}
                                 <span class="branch-name">${branch}</span>
-                                ${sandboxEnabled ? `<span class="ms-2 small installed-version-meta" data-repo="${escAttr(repo.name)}" data-branch="${escAttr(branch)}" data-repo-url="${escAttr(repo.html_url || '')}"><span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span></span>` : (() => {
+                                <span class="ms-2 small installed-version-meta" data-repo="${escAttr(repo.name)}" data-branch="${escAttr(branch)}" data-repo-url="${escAttr(repo.html_url || '')}"><span class="badge installed-version-badge border" title="Részletes verzió információk" data-bs-toggle="tooltip" data-bs-title="Részletes verzió információk">...</span></span>
+                                ${(() => {
                                     try {
                                         const lr = lastRunByBranch ? lastRunByBranch[branch] : null;
                                         if (!lr) return '<span class="ms-2 small last-run-meta"><span class="badge bg-secondary me-1" data-bs-toggle="tooltip" data-bs-title="Nincs korábbi futás ehhez a robothoz">Nincs futás</span></span>';
@@ -3595,6 +3593,34 @@ function setGitHubTokenStatusText(text) {
     if (el) el.textContent = text || '';
 }
 
+function applyGitHubTokenMasking(isPresent) {
+    const input = document.getElementById('githubToken');
+    const saveBtn = document.getElementById('githubTokenSaveBtn');
+    if (!input) return;
+
+    // Keep original type so we can restore it
+    if (!input.dataset.originalType) {
+        input.dataset.originalType = input.type || 'password';
+    }
+
+    if (isPresent) {
+        // Requirement: show ***** in the field and make it non-editable
+        input.disabled = true;
+        input.type = 'text';
+        input.value = '*****';
+        input.placeholder = '*****';
+        input.setAttribute('aria-readonly', 'true');
+        if (saveBtn) saveBtn.disabled = true;
+    } else {
+        input.disabled = false;
+        input.type = input.dataset.originalType || 'password';
+        input.value = '';
+        input.placeholder = 'ghp_...';
+        input.removeAttribute('aria-readonly');
+        if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
 function refreshGitHubTokenStatus() {
     return fetch('/api/get_github_token_status')
         .then(r => r.json())
@@ -3603,16 +3629,32 @@ function refreshGitHubTokenStatus() {
                 const hint = data.hint ? ` (${data.hint})` : '';
                 const source = data.source ? `, forrás: ${data.source}` : '';
                 setGitHubTokenStatusText(`Beállítva${hint}${source}`);
+                applyGitHubTokenMasking(true);
             } else {
                 setGitHubTokenStatusText('Nincs beállítva');
+                applyGitHubTokenMasking(false);
             }
         })
-        .catch(() => setGitHubTokenStatusText('Token státusz nem elérhető'));
+        .catch(() => {
+            setGitHubTokenStatusText('Token státusz nem elérhető');
+            // Don't change input state on error
+        });
 }
 
 function saveGitHubToken() {
     const input = document.getElementById('githubToken');
     const token = (input?.value || '').trim();
+
+    // If token is already present we mask/disable the input; don't allow saving masked value.
+    if (input && input.disabled) {
+        showToast('A GitHub token már be van állítva. Törlés után tudsz újat megadni.', 'info');
+        return;
+    }
+    if (token === '*****') {
+        showToast('A GitHub token már be van állítva. Törlés után tudsz újat megadni.', 'info');
+        return;
+    }
+
     if (!token) {
         showToast('Adj meg GitHub tokent a mentéshez.', 'warning');
         return;
