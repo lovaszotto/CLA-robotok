@@ -60,6 +60,16 @@ logging.getLogger('werkzeug').setLevel(logging.WARNING)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
 
 
+@app.route('/healthz', methods=['GET'])
+def healthz():
+    """Health check endpoint for startup splash screen."""
+    resp = Response('ok', mimetype='text/plain; charset=utf-8')
+    # Allow fetch() from local file:// splash page
+    resp.headers['Access-Control-Allow-Origin'] = '*'
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
 @app.route('/api/help_manual', methods=['GET'])
 def api_help_manual():
     """Returns the FELHASZNALOI_KEZIKONYV.md content as UTF-8 plain text."""

@@ -9,6 +9,11 @@ echo.
 :: Konyvtar valtas a script helyere
 cd /d "%~dp0"
 
+:: Splash képernyő megnyitása azonnal (háttérkép látszódjon az inicializálás alatt is)
+if exist "%~dp0splash.html" (
+    start "CLA-ssistant" "%~dp0splash.html"
+)
+
 :: Inditas elott allitsuk le a korabbi peldanyokat (port 5000 felszabaditasa)
 call "%~dp0stop.bat"
 
@@ -84,17 +89,22 @@ echo Szerver cime: http://localhost:5000
 echo Leallitashoz nyomj CTRL+C-t
 echo.
 
-:: Flask szerver inditasa
-explorer http://localhost:5000
-.venv\Scripts\python.exe flask_app.py
+:: Flask szerver inditasa (kulon ablakban, hogy ne alljon le a terminal bezarasakor)
+if not exist "%~dp0splash.html" (
+    explorer http://localhost:5000
+)
+start "Robot Kezelő - Flask" /D "%~dp0" "%~dp0.venv\Scripts\python.exe" "%~dp0flask_app.py"
 if %errorlevel% neq 0 (
-    echo HIBA: flask_app.py futtatasa sikertelen!
+    echo HIBA: a Flask szerver inditasa sikertelen!
     pause
     exit /b 5
 )
 
-:: Szerver leallitasa utan
 echo.
-echo Flask szerver leállt.
+echo A szerver egy kulon ablakban fut.
+echo Leallitashoz futtasd: stop.bat
 echo.
+exit /b 0
+
+:: (A szerver most kulon ablakban fut, ide nem fog visszaterni.)
 

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>CLA-ssistant – Indulás…</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #ffffff;
+      background-image: url('https://www.clarity.hu/Digi/wp-content/uploads/2025/08/slide.jpg');
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-size: cover;
+      background-attachment: fixed;
+    }
+    .scrim {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.45) 0%, rgba(15, 23, 42, 0.20) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .panel {
+      max-width: 560px;
+      width: 100%;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(15, 23, 42, 0.35);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 14px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+      padding: 18px 18px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: rgba(255,255,255,0.95);
+      animation: spin 0.9s linear infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .title {
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      margin: 0;
+      font-size: 16px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+    }
+    .hint {
+      margin: 6px 0 0 0;
+      opacity: 0.92;
+      font-size: 13px;
+      line-height: 1.35;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+    }
+    .warn {
+      margin-top: 10px;
+      display: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      background: rgba(251, 191, 36, 0.12);
+      color: #fff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.55);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="scrim">
+    <div class="panel" role="status" aria-live="polite">
+      <div class="row">
+        <div class="spinner" aria-hidden="true"></div>
+        <div>
+          <p class="title">CLA-ssistant indul…</p>
+          <p class="hint">Az alkalmazás inicializálása folyamatban van. Amint elérhető, automatikusan megnyílik.</p>
+        </div>
+      </div>
+      <div class="warn" id="slowWarn">
+        Még nem indult el a szerver (60 mp). Valószínűleg még inicializál vagy hibával leállt.
+        Nézd meg a konzolt / <code>server.log</code> fájlt, és újraindítás után automatikusan megnyílik.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const url = 'http://localhost:5000';
+      const health = url + '/healthz';
+      const warnEl = document.getElementById('slowWarn');
+
+      const warnAfterMs = 60000;
+      const startedAt = Date.now();
+
+      async function poll() {
+        if (warnEl && (Date.now() - startedAt) >= warnAfterMs) {
+          warnEl.style.display = 'block';
+        }
+        try {
+          const r = await fetch(health + '?t=' + Date.now(), { cache: 'no-store' });
+          if (r && r.ok) {
+            location.replace(url + '/');
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+        setTimeout(poll, 500);
+      }
+
+      poll();
+    })();
+  </script>
+</body>
+</html>
