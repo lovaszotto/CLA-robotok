@@ -58,12 +58,17 @@ page-header h1 { margin: 0; font-size: 2.5rem; font-weight: 700; text-shadow: 0 
 timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .nav-tabs {
     border-bottom: 3px solid {{ primary_color }};
-    background: rgba(255, 255, 255, 0.22);
+    background: linear-gradient(
+        180deg,
+        rgba(15, 23, 42, 0.55) 0%,
+        rgba(15, 23, 42, 0.30) 100%
+    );
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    border-left: 1px solid rgba(255, 255, 255, 0.25);
-    border-right: 1px solid rgba(255, 255, 255, 0.25);
-    border-top: 1px solid rgba(255, 255, 255, 0.25);
+    border-left: 1px solid rgba(255, 255, 255, 0.22);
+    border-right: 1px solid rgba(255, 255, 255, 0.22);
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
@@ -74,10 +79,10 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 /* Üveg/átlátszó input mezők (keresők/szűrők) */
 .glass-input-group .input-group-text,
 .glass-input-group .form-control {
-    background: rgba(255, 255, 255, 0.22) !important;
+    background: rgba(15, 23, 42, 0.35) !important;
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
-    border-color: rgba(255, 255, 255, 0.35) !important;
+    border-color: rgba(255, 255, 255, 0.28) !important;
 }
 .glass-input-group .form-control {
     color: #ffffff;
@@ -122,6 +127,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     min-width: 0;
     width: auto;
     text-align: center;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 .nav-tabs .nav-link.active {
     background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%);
@@ -130,7 +136,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 }
 .nav-tabs .nav-link:hover {
     background: linear-gradient(135deg, {{ tertiary_color }} 0%, {{ light_color }} 100%);
-    color: {{ primary_color }};
+    color: #ffffff;
 }
 .tab-content {
     padding: 8px 0 0 0;

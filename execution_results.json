@@ -170,19 +170,6 @@
     "type": "schedule"
   },
   {
-    "id": 18,
-    "timestamp": "2026-02-03 06:36:26",
-    "repo": "SzotarRobi",
-    "branch": "Szó-kikérdező",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20260203_063455",
-    "type": "install",
-    "installed_version": "v3.1.17",
-    "stdout": "Install OK (release=v3.1.17)",
-    "stderr": ""
-  },
-  {
     "id": 19,
     "timestamp": "2026-02-03 06:37:59",
     "repo": "SzotarRobi",
