@@ -1825,7 +1825,7 @@ function openCreateReleaseModal(btn) {
         const repoUrl = (btn && btn.dataset) ? (btn.dataset.repoUrl || '') : '';
         const repoFullName = (btn && btn.dataset) ? (btn.dataset.repoFullname || '') : '';
 
-        // Default TagName: a jelenlegi legfrissebb verzió tag-je (ha ismert).
+        // Default TagName: a legfrissebb release tag (latestRelease), ha ismert.
         // A szomszédos "Verziók" (info) gombon ott van a data-release-tag.
         let latestTag = '';
         try {

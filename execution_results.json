@@ -148,5 +148,48 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_061821",
     "type": "bulk"
+  },
+  {
+    "id": 17,
+    "timestamp": "2026-02-03 06:26:39",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_062639",
+    "type": "bulk"
+  },
+  {
+    "id": 18,
+    "timestamp": "2026-02-03 06:27:48",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_062736",
+    "type": "schedule"
+  },
+  {
+    "id": 18,
+    "timestamp": "2026-02-03 06:36:26",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "SzotarRobi__Szó-kikérdező__20260203_063455",
+    "type": "install",
+    "installed_version": "v3.1.17",
+    "stdout": "Install OK (release=v3.1.17)",
+    "stderr": ""
+  },
+  {
+    "id": 19,
+    "timestamp": "2026-02-03 06:37:59",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_063759",
+    "type": "bulk"
   }
 ]
