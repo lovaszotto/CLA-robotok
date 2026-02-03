@@ -1347,6 +1347,39 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
     </div>
 </div>
 
+<!-- Ütemezett robot futtatás engedélykérő MODAL -->
+<div class="modal fade" id="permissionModal" tabindex="-1" aria-labelledby="permissionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="background:#fff; color:#111; opacity:1;">
+            <div class="modal-header">
+                <h5 class="modal-title" id="permissionModalLabel">Engedélykérés</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Bezárás"></button>
+            </div>
+            <div class="modal-body">
+                <div id="permissionModalBody" style="white-space:pre-wrap;"></div>
+                <div class="mt-3">
+                    <label for="permissionLaterMinutes" class="form-label mb-1">Később (perc)</label>
+                    <input type="number" class="form-control" id="permissionLaterMinutes" min="1" max="240" value="5">
+                    <div class="form-text">A "Később" választásnál ennyi perc múlva újra rákérdezünk.</div>
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn btn-danger" id="permissionDenyBtn"><i class="bi bi-x-circle me-1"></i> Nem</button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-warning text-dark" id="permissionLaterBtn"><i class="bi bi-clock-history me-1"></i> Később</button>
+                    <button type="button" class="btn btn-success" id="permissionAllowBtn"><i class="bi bi-check-circle me-1"></i> Igen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Késleltetett engedélykérés visszaszámláló -->
+<div id="permissionDelayTimer" class="alert alert-warning d-none position-fixed bottom-0 end-0 m-3" style="z-index: 9999; min-width: 320px; max-width: 520px;">
+    <div class="fw-semibold">Engedélykérés késleltetve</div>
+    <div id="permissionDelayTimerText" class="small mt-1"></div>
+</div>
+
 <!-- Ötletek / Hibajegyek MODAL (GitHub Issue létrehozás tokennel) -->
 <div class="modal fade" id="ideasModal" tabindex="-1" aria-labelledby="ideasModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -2458,8 +2491,12 @@ function initScheduledCalendar() {
                 ? '<span class="badge bg-success">Kész</span>'
                 : status === 'running'
                     ? '<span class="badge bg-warning text-dark">Fut</span>'
+                    : status === 'awaiting_permission'
+                        ? '<span class="badge bg-info text-dark">Engedélyre vár</span>'
                     : status === 'failed'
                         ? '<span class="badge bg-danger">Hiba</span>'
+                        : status === 'skipped'
+                            ? '<span class="badge bg-secondary">Kihagyva</span>'
                         : '<span class="badge bg-secondary">Vár</span>';
 
             const weekdaysOnly = !!it.weekdays_only;
@@ -4568,6 +4605,210 @@ function showSureBox({
         }
     });
 }
+
+// --- Ütemezett futtatás engedélykérő (Igen/Nem/Később N perc) ---
+function showPermissionBox({
+    scheduleId = '',
+    repo = '',
+    branch = '',
+    runAt = '',
+    defaultMinutes = 5
+} = {}) {
+    return new Promise((resolve) => {
+        const settle = (value) => {
+            try { resolve(value); } catch (e) { /* ignore */ }
+        };
+
+        try {
+            const modalEl = document.getElementById('permissionModal');
+            const titleEl = document.getElementById('permissionModalLabel');
+            const bodyEl = document.getElementById('permissionModalBody');
+            const allowBtn = document.getElementById('permissionAllowBtn');
+            const denyBtn = document.getElementById('permissionDenyBtn');
+            const laterBtn = document.getElementById('permissionLaterBtn');
+            const minutesEl = document.getElementById('permissionLaterMinutes');
+
+            if (!modalEl || !titleEl || !bodyEl || !allowBtn || !denyBtn || !laterBtn || !minutesEl || !window.bootstrap) {
+                // Fallback: ne indítsuk el automatikusan a robotot engedély nélkül
+                try { if (typeof showToast === 'function') showToast('Engedélykérés: a modal nem elérhető.', 'warning'); } catch (e) {}
+                return settle(null);
+            }
+
+            titleEl.textContent = 'Engedélykérés';
+            const runAtStr = String(runAt || '').replace('T', ' ');
+            bodyEl.textContent =
+                'Szeretném átvenni a gép irányítását a robot futáshoz.\n' +
+                'Engedélyezed?\n\n' +
+                `Repository: ${repo}\n` +
+                `Robot: ${branch}\n` +
+                (runAtStr ? `Ütemezett idő: ${runAtStr}\n` : '');
+
+            minutesEl.value = String(defaultMinutes || 5);
+
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            let settled = false;
+            const done = (v) => {
+                if (settled) return;
+                settled = true;
+                settle(v);
+            };
+
+            allowBtn.onclick = () => { done({ decision: 'allow', scheduleId }); try { modal.hide(); } catch (e) {} };
+            denyBtn.onclick = () => { done({ decision: 'deny', scheduleId }); try { modal.hide(); } catch (e) {} };
+            laterBtn.onclick = () => {
+                let m = 5;
+                try {
+                    const raw = parseInt(String(minutesEl.value || '5'), 10);
+                    if (!Number.isNaN(raw)) m = raw;
+                } catch (e) {}
+                m = Math.max(1, Math.min(m, 240));
+                done({ decision: 'later', minutes: m, scheduleId });
+                try { modal.hide(); } catch (e) {}
+            };
+            modalEl.addEventListener('hidden.bs.modal', () => done(null), { once: true });
+
+            modal.show();
+        } catch (e) {
+            try { if (typeof showToast === 'function') showToast('Engedélykérés hiba: ' + e, 'danger'); } catch (e2) {}
+            return settle(null);
+        }
+    });
+}
+
+function _renderPermissionCountdown(state) {
+    const wrap = document.getElementById('permissionDelayTimer');
+    const text = document.getElementById('permissionDelayTimerText');
+    if (!wrap || !text) return;
+    if (!state || !state.untilMs) {
+        wrap.classList.add('d-none');
+        text.textContent = '';
+        return;
+    }
+    const msLeft = Math.max(0, state.untilMs - Date.now());
+    const sec = Math.ceil(msLeft / 1000);
+    const mm = Math.floor(sec / 60);
+    const ss = sec % 60;
+    const left = `${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+    const repo = state.repo || '';
+    const branch = state.branch || '';
+    text.textContent = `${repo} / ${branch} • Újrakérdezés: ${left}`;
+    wrap.classList.remove('d-none');
+}
+
+function _startPermissionCountdown({ id, repo, branch, permission_postpone_until }) {
+    if (!permission_postpone_until) return;
+    let untilMs = null;
+    try {
+        const dt = new Date(String(permission_postpone_until).replace(' ', 'T'));
+        const t = dt.getTime();
+        if (!Number.isNaN(t)) untilMs = t;
+    } catch (e) { /* ignore */ }
+    if (!untilMs) return;
+
+    window.__permissionCountdown = window.__permissionCountdown || {};
+    window.__permissionCountdown.state = { id, repo, branch, untilMs };
+    try {
+        if (window.__permissionCountdown.timer) clearInterval(window.__permissionCountdown.timer);
+    } catch (e) { /* ignore */ }
+    _renderPermissionCountdown(window.__permissionCountdown.state);
+    window.__permissionCountdown.timer = setInterval(() => {
+        const st = window.__permissionCountdown?.state;
+        if (!st) return;
+        if (Date.now() >= st.untilMs) {
+            try { clearInterval(window.__permissionCountdown.timer); } catch (e) {}
+            window.__permissionCountdown.timer = null;
+            window.__permissionCountdown.state = null;
+            _renderPermissionCountdown(null);
+            return;
+        }
+        _renderPermissionCountdown(st);
+    }, 1000);
+}
+
+async function _pollSchedulePermissionRequests() {
+    window.__permissionPollState = window.__permissionPollState || { modalOpen: false };
+    if (window.__permissionPollState.modalOpen) return;
+
+    try {
+        const resp = await fetch('/api/schedules/permission_requests', { cache: 'no-store' });
+        if (!resp.ok && (resp.status === 404 || resp.status === 405)) {
+            // Likely an old server instance is running (or the app wasn't restarted).
+            if (!window.__permissionPollState.warnedMissingEndpoint) {
+                window.__permissionPollState.warnedMissingEndpoint = true;
+                try {
+                    showToast('Az engedélykérés API nem elérhető (404/405). Indítsd újra a CLA-ssistant szervert a frissített verzióval.', 'warning');
+                } catch (e) { /* ignore */ }
+            }
+            return;
+        }
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !(data && data.success)) return;
+
+        const postponed = Array.isArray(data.postponed) ? data.postponed : [];
+        if (postponed.length) {
+            // show countdown for the soonest postponed request
+            _startPermissionCountdown(postponed[0]);
+        }
+
+        const pending = Array.isArray(data.pending) ? data.pending : [];
+        if (!pending.length) return;
+
+        const req = pending[0];
+        window.__permissionPollState.modalOpen = true;
+        const choice = await showPermissionBox({
+            scheduleId: req.id,
+            repo: req.repo,
+            branch: req.branch,
+            runAt: req.run_at,
+            defaultMinutes: 5
+        });
+        window.__permissionPollState.modalOpen = false;
+        if (!choice || !choice.decision || !req.id) return;
+
+        const payload = { decision: choice.decision };
+        if (choice.decision === 'later') payload.minutes = choice.minutes || 5;
+
+        const r = await fetch(`/api/schedules/${encodeURIComponent(req.id)}/permission`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !(j && j.success)) {
+            showToast('Engedélykérés válasz mentése sikertelen.', 'danger');
+            return;
+        }
+
+        if (choice.decision === 'allow') {
+            showToast('Engedélyezve: a robot indítható.', 'success');
+        } else if (choice.decision === 'deny') {
+            showToast('Nem engedélyezted a robot futását.', 'warning');
+        } else {
+            const pu = j.permission_postpone_until || null;
+            if (pu) {
+                _startPermissionCountdown({ id: req.id, repo: req.repo, branch: req.branch, permission_postpone_until: pu });
+            }
+            showToast('Késleltetve: később újra rákérdezünk.', 'info');
+        }
+
+        // Refresh calendar markers if present
+        try {
+            if (typeof window.__refreshScheduledCalendar === 'function') window.__refreshScheduledCalendar();
+        } catch (e) { /* ignore */ }
+    } catch (e) {
+        // ignore polling errors
+    } finally {
+        try { window.__permissionPollState.modalOpen = false; } catch (e) { /* ignore */ }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    // Start polling for permission requests (scheduled runs)
+    try {
+        _pollSchedulePermissionRequests();
+        setInterval(_pollSchedulePermissionRequests, 3000);
+    } catch (e) { /* ignore */ }
+});
 
 function showInfoBox(message, title = 'Információ', okText = 'OK', messageHtml = null) {
     const msg = String(message ?? '');

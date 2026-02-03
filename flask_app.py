@@ -328,15 +328,48 @@ def _start_schedule_worker_if_enabled():
                             status = (it.get('status') or 'pending')
                             if status == 'running':
                                 continue
-                            if status not in ('pending', 'failed', 'done'):
+                            if status not in ('pending', 'failed', 'done', 'awaiting_permission'):
                                 continue
                             run_at = (it.get('run_at') or '').strip()
                             if not run_at:
                                 continue
                             dt = datetime.fromisoformat(run_at)
                             if dt <= now:
+                                permission_required = bool(it.get('permission_required', True))
+                                permission_granted = bool(it.get('permission_granted', False))
+
+                                # Postpone window for permission requests
+                                postpone_until_raw = (it.get('permission_postpone_until') or '').strip()
+                                postpone_until = None
+                                if postpone_until_raw:
+                                    try:
+                                        postpone_until = datetime.fromisoformat(postpone_until_raw)
+                                    except Exception:
+                                        postpone_until = None
+
+                                if permission_required and not permission_granted:
+                                    # Don't start the robot yet; wait for explicit user permission.
+                                    # If a postpone window is active, keep waiting silently.
+                                    if postpone_until is not None and now < postpone_until:
+                                        if status != 'awaiting_permission':
+                                            it['status'] = 'awaiting_permission'
+                                            changed = True
+                                        continue
+
+                                    if status != 'awaiting_permission':
+                                        it['status'] = 'awaiting_permission'
+                                        it['permission_requested_at'] = now.isoformat(timespec='seconds')
+                                        changed = True
+                                    continue
+
+                                # Permission granted (or not required) -> run now
                                 it['status'] = 'running'
                                 it['running_started_at'] = now.isoformat(timespec='seconds')
+                                # reset permission flag so each scheduled start asks again by default
+                                it['permission_granted'] = False
+                                it['permission_requested_at'] = None
+                                it['permission_postpone_until'] = None
+                                it['permission_decided_at'] = None
                                 due.append(dict(it))
                                 changed = True
                         except Exception:
@@ -370,6 +403,11 @@ def _start_schedule_worker_if_enabled():
                                         s['returncode'] = rc
                                         s['results_dir'] = results_dir
                                         s['finished_at'] = finished_at
+                                        # Clear permission bookkeeping after an execution.
+                                        s['permission_granted'] = False
+                                        s['permission_requested_at'] = None
+                                        s['permission_postpone_until'] = None
+                                        s['permission_decided_at'] = None
 
                                         # Recurrence: advance run_at and keep pending if enabled
                                         try:
@@ -410,6 +448,10 @@ def _start_schedule_worker_if_enabled():
                                         s['status'] = 'failed'
                                         s['error'] = str(e)
                                         s['finished_at'] = datetime.now().isoformat(timespec='seconds')
+                                        s['permission_granted'] = False
+                                        s['permission_requested_at'] = None
+                                        s['permission_postpone_until'] = None
+                                        s['permission_decided_at'] = None
                                         break
                                 _save_schedules(all_items)
 
@@ -4235,6 +4277,12 @@ def api_schedules_post():
         'finished_at': None,
         'returncode': None,
         'results_dir': None,
+        # Scheduled runs take over local machine control; require explicit user permission by default.
+        'permission_required': True,
+        'permission_granted': False,
+        'permission_requested_at': None,
+        'permission_postpone_until': None,
+        'permission_decided_at': None,
     }
 
     with SCHEDULES_LOCK:
@@ -4248,6 +4296,175 @@ def api_schedules_post():
         _save_schedules(items)
 
     return jsonify({'success': True, 'item': item})
+
+
+@app.route('/api/schedules/permission_requests', methods=['GET'])
+def api_schedules_permission_requests():
+    """Return schedules awaiting user permission.
+
+    Output:
+      { success: bool, pending: [...], postponed: [...] }
+
+    - pending: status=='awaiting_permission' and (postpone_until is empty or already passed)
+    - postponed: status=='awaiting_permission' and postpone_until is in the future
+    """
+    now = datetime.now()
+    pending: list[dict] = []
+    postponed: list[dict] = []
+
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+
+    for it in (items or []):
+        try:
+            if not bool(it.get('enabled', True)):
+                continue
+            if (it.get('status') or '') != 'awaiting_permission':
+                continue
+            sid = (it.get('id') or '').strip()
+            if not sid:
+                continue
+
+            pu_raw = (it.get('permission_postpone_until') or '').strip()
+            pu = None
+            if pu_raw:
+                try:
+                    pu = datetime.fromisoformat(pu_raw)
+                except Exception:
+                    pu = None
+
+            out_item = {
+                'id': sid,
+                'repo': (it.get('repo') or ''),
+                'branch': (it.get('branch') or ''),
+                'run_at': (it.get('run_at') or ''),
+                'permission_requested_at': (it.get('permission_requested_at') or ''),
+                'permission_postpone_until': pu_raw or None,
+            }
+            if pu is not None and now < pu:
+                postponed.append(out_item)
+            else:
+                pending.append(out_item)
+        except Exception:
+            continue
+
+    # Prefer the earliest run_at first
+    try:
+        pending.sort(key=lambda x: (x.get('run_at') or ''))
+        postponed.sort(key=lambda x: (x.get('permission_postpone_until') or ''))
+    except Exception:
+        pass
+
+    return jsonify({'success': True, 'pending': pending, 'postponed': postponed})
+
+
+@app.route('/api/schedules/<schedule_id>/permission', methods=['POST'])
+def api_schedules_permission_decide(schedule_id: str):
+    """Handle a permission decision for an awaiting schedule.
+
+    JSON:
+      { decision: 'allow'|'deny'|'later', minutes?: int }
+    """
+    schedule_id = (schedule_id or '').strip()
+    if not schedule_id:
+        return jsonify({'success': False, 'error': 'Hiányzó id'}), 400
+
+    data = request.get_json(silent=True) or {}
+    decision = (data.get('decision') or '').strip().lower()
+    minutes_raw = data.get('minutes', None)
+    minutes = None
+    if minutes_raw is not None:
+        try:
+            minutes = int(minutes_raw)
+        except Exception:
+            minutes = None
+
+    if decision not in ('allow', 'deny', 'later'):
+        return jsonify({'success': False, 'error': 'Érvénytelen decision'}), 400
+
+    now = datetime.now()
+    updated = False
+    new_postpone_until = None
+
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+        for it in (items or []):
+            if (it.get('id') or '').strip() != schedule_id:
+                continue
+
+            # Only meaningful when awaiting permission
+            if (it.get('status') or '') != 'awaiting_permission':
+                # Still allow idempotent allow if user clicked fast and worker already picked it up.
+                if decision == 'allow':
+                    it['permission_granted'] = True
+                    it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                    it['permission_postpone_until'] = None
+                    updated = True
+                break
+
+            if decision == 'allow':
+                it['permission_granted'] = True
+                it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                it['permission_postpone_until'] = None
+                # set status back so worker can pick it up immediately
+                it['status'] = 'pending'
+                updated = True
+                break
+
+            if decision == 'deny':
+                it['permission_granted'] = False
+                it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                it['permission_postpone_until'] = None
+                # For recurring schedules: advance to next; for one-shot: disable.
+                repeat = (it.get('repeat') or 'none').strip().lower()
+                weekdays_only = bool(it.get('weekdays_only', False))
+                try:
+                    repeat_days = _normalize_repeat_days(it.get('repeat_days', None))
+                except Exception:
+                    repeat_days = None
+
+                try:
+                    prev_dt = datetime.fromisoformat((it.get('run_at') or '').strip())
+                except Exception:
+                    prev_dt = None
+
+                next_dt = None
+                if prev_dt is not None:
+                    try:
+                        next_dt = _compute_next_run_at(prev_dt, repeat, repeat_days, weekdays_only)
+                    except Exception:
+                        next_dt = None
+
+                if repeat != 'none' and next_dt is not None and bool(it.get('enabled', True)):
+                    it['run_at'] = next_dt.isoformat(timespec='seconds')
+                    it['last_status'] = 'denied'
+                    it['status'] = 'pending'
+                else:
+                    it['status'] = 'skipped'
+                    if repeat == 'none':
+                        it['enabled'] = False
+                        it['finished_at'] = now.isoformat(timespec='seconds')
+                updated = True
+                break
+
+            # later
+            if decision == 'later':
+                if minutes is None:
+                    minutes = 5
+                minutes = max(1, min(minutes, 240))
+                postpone_until = now + timedelta(minutes=minutes)
+                new_postpone_until = postpone_until.isoformat(timespec='seconds')
+                it['permission_granted'] = False
+                it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                it['permission_postpone_until'] = new_postpone_until
+                it['status'] = 'awaiting_permission'
+                updated = True
+                break
+
+        if updated:
+            _save_schedules(items)
+
+    return jsonify({'success': True, 'updated': updated, 'permission_postpone_until': new_postpone_until})
 
 
 @app.route('/api/schedules/<schedule_id>', methods=['DELETE'])

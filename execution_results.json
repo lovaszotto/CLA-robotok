@@ -70,19 +70,6 @@
     "type": "schedule"
   },
   {
-    "id": 8,
-    "timestamp": "2026-02-02 14:57:01",
-    "repo": "SzotarRobi",
-    "branch": "Szó-kikérdező",
-    "status": "success",
-    "returncode": 0,
-    "results_dir": "SzotarRobi__Szó-kikérdező__20260202_145658",
-    "type": "install",
-    "installed_version": "v3.1.16",
-    "stdout": "Install OK (release=v3.1.16)",
-    "stderr": ""
-  },
-  {
     "id": 9,
     "timestamp": "2026-02-02 14:57:26",
     "repo": "SzotarRobi",
@@ -91,5 +78,55 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260202_145726",
     "type": "bulk"
+  },
+  {
+    "id": 9,
+    "timestamp": "2026-02-03 03:46:11",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_034601",
+    "type": "schedule"
+  },
+  {
+    "id": 10,
+    "timestamp": "2026-02-03 03:49:06",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_034901",
+    "type": "schedule"
+  },
+  {
+    "id": 11,
+    "timestamp": "2026-02-03 03:55:06",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_035501",
+    "type": "schedule"
+  },
+  {
+    "id": 12,
+    "timestamp": "2026-02-03 03:58:03",
+    "repo": "PERMISSION-TEST",
+    "branch": "PERMISSION-TEST",
+    "status": "failed",
+    "returncode": 9,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\PERMISSION-TEST__PERMISSION-TEST__20260203_035801",
+    "type": "schedule"
+  },
+  {
+    "id": 13,
+    "timestamp": "2026-02-03 04:09:15",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_040910",
+    "type": "schedule"
   }
 ]

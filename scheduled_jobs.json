@@ -17,19 +17,25 @@
     "running_started_at": "2026-02-02T13:00:04"
   },
   {
-    "id": "0c95a2e5-b8ab-406f-8ca1-b9179a9e2ae3",
+    "id": "22da9f62-8833-4fba-9da0-b4d51e4345a7",
     "repo": "SzotarRobi",
     "branch": "Szó-kikérdező",
-    "run_at": "2026-02-03T08:00:00",
-    "enabled": true,
-    "repeat": "daily",
+    "run_at": "2026-02-03T04:07:00",
+    "enabled": false,
+    "repeat": "none",
     "weekdays_only": false,
     "repeat_days": null,
-    "status": "pending",
-    "created_at": "2026-02-02T14:55:52",
-    "last_run_at": null,
-    "finished_at": null,
-    "returncode": null,
-    "results_dir": null
+    "status": "done",
+    "created_at": "2026-02-03T04:06:42",
+    "last_run_at": "2026-02-03T04:09:15",
+    "finished_at": "2026-02-03T04:09:15",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_040910",
+    "permission_required": true,
+    "permission_granted": false,
+    "permission_requested_at": null,
+    "permission_postpone_until": null,
+    "permission_decided_at": null,
+    "running_started_at": "2026-02-03T04:09:10"
   }
 ]
