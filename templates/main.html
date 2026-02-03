@@ -163,7 +163,18 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
 .btn-custom:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); background: linear-gradient(135deg, {{ hover_color }} 0%, {{ primary_color }} 50%, {{ tertiary_color }} 100%); }
 .repo-card { transition: all 0.3s ease; }
 .repo-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(220,53,69,0.25) !important; border-color: {{ primary_color }}; }
-.repo-card .card-header { background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ dark_color }} 100%) !important; color: white !important; }
+.repo-card .card-header {
+    background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%) !important;
+    color: #ffffff !important;
+    border-bottom: 3px solid {{ primary_color }};
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.card-header.active-tab-header {
+    background: linear-gradient(135deg, {{ primary_color }} 0%, {{ secondary_color }} 50%, {{ tertiary_color }} 100%) !important;
+    color: #ffffff !important;
+    border-bottom: 3px solid {{ primary_color }};
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
 .repo-card .card-title a:hover { text-decoration: underline !important; }
 .branches-container { max-height: 300px; overflow-y: auto; }
 .branch-checkbox { padding: 8px 12px; margin: 2px 0; border-radius: 6px; transition: background-color 0.2s; }
@@ -674,7 +685,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <!-- Ütemezett robotok TAB -->
         <div class="tab-pane fade" id="scheduled-pane" role="tabpanel" aria-labelledby="scheduled-tab">
             <div class="card">
-                <div class="card-header bg-success text-white">
+                <div class="card-header active-tab-header text-white">
                     <h5 class="mb-0"><i class="bi bi-calendar3 me-1"></i> Ütemezett robotok</h5>
                 </div>
                 <div class="card-body">
@@ -826,7 +837,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         </div>
            <div class="tab-pane fade" id="results" role="tabpanel" aria-labelledby="results-tab">
                <div class="card">
-                   <div class="card-header text-white" style="background: linear-gradient(135deg, {{ primary_color }}, {{ dark_color }});">
+                   <div class="card-header active-tab-header text-white">
                        <h5 class="mb-0"><i class="bi bi-list-task"></i> Futási Eredmények</h5>
                    </div>
                    <!-- Modal for showing resultsDir -->
