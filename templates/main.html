@@ -2492,7 +2492,11 @@ function initScheduledCalendar() {
     const ensureRunnableReposLoaded = async () => {
         if (window.__schedUiState.runnableRepos) return window.__schedUiState.runnableRepos;
         try {
-            const resp = await fetch('/api/runnable_repos', { cache: 'no-store' });
+            const controller = new AbortController();
+            const timeoutMs = 15000;
+            const t = setTimeout(() => controller.abort(), timeoutMs);
+            const resp = await fetch('/api/runnable_repos', { cache: 'no-store', signal: controller.signal });
+            clearTimeout(t);
             const data = await resp.json();
             if (!resp.ok || !Array.isArray(data)) return [];
             window.__schedUiState.runnableRepos = data;
@@ -2649,29 +2653,36 @@ function initScheduledCalendar() {
         const saveBtn = document.getElementById('schedSaveBtn');
         if (!modalEl || !dateInput || !timeInput || !enabledInput || !repeatSelect || !repoSelect || !branchSelect || !saveBtn) return;
 
+        // Show modal immediately so the UI never feels frozen.
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+        const setLoadingState = (isLoading, message) => {
+            try {
+                repoSelect.disabled = !!isLoading;
+                branchSelect.disabled = !!isLoading;
+                saveBtn.disabled = !!isLoading;
+
+                if (isLoading) {
+                    const msg = message || 'Betöltés…';
+                    repoSelect.innerHTML = `<option value="">${msg}</option>`;
+                    branchSelect.innerHTML = `<option value="">${msg}</option>`;
+                }
+            } catch (e) {}
+        };
+        setLoadingState(true, 'Robot lista betöltése…');
+
         const editItem = arguments.length >= 2 ? arguments[1] : null;
         const isEdit = !!(editItem && editItem.id);
         const editId = isEdit ? String(editItem.id) : '';
+        const desiredRepo = isEdit ? String(editItem.repo || '') : '';
+        const desiredBranch = isEdit ? String(editItem.branch || '') : '';
         if (titleEl) {
             titleEl.innerHTML = isEdit
                 ? '<i class="bi bi-pencil me-1"></i> Ütemezés szerkesztése'
                 : '<i class="bi bi-calendar-plus me-1"></i> Új ütemezés';
         }
 
-        const repos = await ensureRunnableReposLoaded();
-        const repoNames = repos.map(r => r?.name).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)));
-        repoSelect.innerHTML = repoNames.map(n => `<option value="${String(n).replace(/"/g, '&quot;')}">${n}</option>`).join('');
-
-        const setBranchesForRepo = (repoName) => {
-            const repoObj = repos.find(r => (r?.name || '') === repoName);
-            const branches = (repoObj?.branches || []).slice().sort((a, b) => String(a).localeCompare(String(b)));
-            branchSelect.innerHTML = branches.map(b => `<option value="${String(b).replace(/"/g, '&quot;')}">${b}</option>`).join('');
-        };
-
-        repoSelect.onchange = () => setBranchesForRepo(repoSelect.value);
-        setBranchesForRepo(repoSelect.value);
-
-        // Prefill values
+        // Prefill values that don't require any network.
         if (isEdit) {
             try {
                 const ra = String(editItem.run_at || '');
@@ -2683,18 +2694,73 @@ function initScheduledCalendar() {
             }
             try { enabledInput.checked = !!editItem.enabled; } catch (e) {}
             try { repeatSelect.value = String(editItem.repeat || 'none'); } catch (e) { repeatSelect.value = 'none'; }
-            try {
-                const rname = String(editItem.repo || '');
-                if (rname) repoSelect.value = rname;
-                setBranchesForRepo(repoSelect.value);
-                const bname = String(editItem.branch || '');
-                if (bname) branchSelect.value = bname;
-            } catch (e) {}
         } else {
             dateInput.value = dateStr || window.__schedUiState.selectedDate || '';
             try { enabledInput.checked = true; } catch (e) {}
             try { repeatSelect.value = 'none'; } catch (e) {}
         }
+
+        let slowToastTimer = null;
+        try {
+            slowToastTimer = setTimeout(() => {
+                try { showToast('Robot lista betöltése folyamatban…', 'info'); } catch (e) {}
+            }, 900);
+        } catch (e) {}
+
+        const repos = await ensureRunnableReposLoaded();
+        try { if (slowToastTimer) clearTimeout(slowToastTimer); } catch (e) {}
+
+        if (!repos || repos.length === 0) {
+            setLoadingState(false);
+            try {
+                repoSelect.innerHTML = '<option value="">Nincs telepített robot</option>';
+                branchSelect.innerHTML = '<option value="">-</option>';
+                repoSelect.disabled = true;
+                branchSelect.disabled = true;
+                saveBtn.disabled = true;
+            } catch (e) {}
+            showToast('Nem sikerült betölteni a telepített robotokat (üres lista).', 'danger');
+            return;
+        }
+
+        setLoadingState(false);
+        const repoNames = repos.map(r => r?.name).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)));
+        repoSelect.innerHTML = repoNames.map(n => `<option value="${String(n).replace(/"/g, '&quot;')}">${n}</option>`).join('');
+
+        const setBranchesForRepo = (repoName) => {
+            const repoObj = repos.find(r => (r?.name || '') === repoName);
+            const branches = (repoObj?.branches || []).slice().sort((a, b) => String(a).localeCompare(String(b)));
+            branchSelect.innerHTML = branches.map(b => `<option value="${String(b).replace(/"/g, '&quot;')}">${b}</option>`).join('');
+
+            if (!branches.length) {
+                branchSelect.innerHTML = '<option value="">Nincs telepített robot ebben a repóban</option>';
+                branchSelect.disabled = true;
+                saveBtn.disabled = true;
+            } else {
+                branchSelect.disabled = false;
+                saveBtn.disabled = false;
+            }
+        };
+
+        repoSelect.onchange = () => setBranchesForRepo(repoSelect.value);
+
+        // Apply desired repo/branch (edit mode) if possible.
+        try {
+            if (desiredRepo && repoNames.includes(desiredRepo)) {
+                repoSelect.value = desiredRepo;
+            }
+        } catch (e) {}
+
+        setBranchesForRepo(repoSelect.value);
+        try {
+            if (desiredBranch) branchSelect.value = desiredBranch;
+        } catch (e) {}
+
+        try {
+            repoSelect.disabled = false;
+            branchSelect.disabled = false;
+            saveBtn.disabled = false;
+        } catch (e) {}
 
         // Reset recurrence controls
         try { if (weekdaysOnlyInput) weekdaysOnlyInput.checked = false; } catch (e) {}
@@ -2800,7 +2866,7 @@ function initScheduledCalendar() {
             }
         };
 
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        // Modal is already shown at the start.
     };
 
     const render = () => {
