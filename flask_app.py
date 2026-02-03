@@ -24,6 +24,12 @@ from datetime import datetime, timedelta
 import logging
 import uuid
 
+# Windows native UI (best-effort): allow permission prompt to appear above other apps
+try:
+    import ctypes  # type: ignore
+except Exception:
+    ctypes = None
+
 import html
 import time
 import threading
@@ -76,6 +82,219 @@ RUNNING_ROBOT_PROCS: dict[str, subprocess.Popen] = {}
 
 # --- Schedules (Ütemezések) ---
 SCHEDULES_LOCK = threading.RLock()
+
+
+def _is_native_permission_prompt_enabled() -> bool:
+    """When True on Windows, show a native topmost prompt for scheduled runs.
+
+    This is useful because browser modals cannot reliably appear above other applications.
+    Disable with ENABLE_NATIVE_PERMISSION_PROMPT=0.
+    """
+    if os.name != 'nt':
+        return False
+    try:
+        raw = (os.environ.get('ENABLE_NATIVE_PERMISSION_PROMPT') or '1').strip().lower()
+        return raw not in ('0', 'false', 'no', 'off')
+    except Exception:
+        return True
+
+
+def _default_later_minutes() -> int:
+    try:
+        raw = (os.environ.get('PERMISSION_LATER_MINUTES') or '5').strip()
+        v = int(raw)
+        return max(1, min(v, 240))
+    except Exception:
+        return 5
+
+
+def _apply_permission_decision(schedule_id: str, decision: str, minutes: int | None = None) -> tuple[bool, str | None, str | None]:
+    """Apply a permission decision to a schedule.
+
+    Returns: (updated, postpone_until_iso_or_none, error_or_none)
+    """
+    schedule_id = (schedule_id or '').strip()
+    decision = (decision or '').strip().lower()
+    if not schedule_id:
+        return False, None, 'Hiányzó id'
+    if decision not in ('allow', 'deny', 'later'):
+        return False, None, 'Érvénytelen decision'
+
+    now = datetime.now()
+    updated = False
+    new_postpone_until = None
+
+    with SCHEDULES_LOCK:
+        items = _load_schedules()
+        for it in (items or []):
+            if (it.get('id') or '').strip() != schedule_id:
+                continue
+
+            # Any explicit decision clears any inflight prompt marker.
+            it['permission_prompt_inflight'] = False
+
+            # Only meaningful when awaiting permission
+            if (it.get('status') or '') != 'awaiting_permission':
+                # Idempotent allow if user clicked while worker already picked it up
+                if decision == 'allow':
+                    it['permission_granted'] = True
+                    it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                    it['permission_postpone_until'] = None
+                    updated = True
+                break
+
+            if decision == 'allow':
+                it['permission_granted'] = True
+                it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                it['permission_postpone_until'] = None
+                it['status'] = 'pending'
+                updated = True
+                break
+
+            if decision == 'deny':
+                it['permission_granted'] = False
+                it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                it['permission_postpone_until'] = None
+
+                repeat = (it.get('repeat') or 'none').strip().lower()
+                weekdays_only = bool(it.get('weekdays_only', False))
+                try:
+                    repeat_days = _normalize_repeat_days(it.get('repeat_days', None))
+                except Exception:
+                    repeat_days = None
+
+                try:
+                    prev_dt = datetime.fromisoformat((it.get('run_at') or '').strip())
+                except Exception:
+                    prev_dt = None
+
+                next_dt = None
+                if prev_dt is not None:
+                    try:
+                        next_dt = _compute_next_run_at(prev_dt, repeat, repeat_days, weekdays_only)
+                    except Exception:
+                        next_dt = None
+
+                if repeat != 'none' and next_dt is not None and bool(it.get('enabled', True)):
+                    it['run_at'] = next_dt.isoformat(timespec='seconds')
+                    it['last_status'] = 'denied'
+                    it['status'] = 'pending'
+                else:
+                    it['status'] = 'skipped'
+                    if repeat == 'none':
+                        it['enabled'] = False
+                        it['finished_at'] = now.isoformat(timespec='seconds')
+                updated = True
+                break
+
+            # later
+            if decision == 'later':
+                if minutes is None:
+                    minutes = _default_later_minutes()
+                try:
+                    minutes = int(minutes)
+                except Exception:
+                    minutes = _default_later_minutes()
+                minutes = max(1, min(minutes, 240))
+                postpone_until = now + timedelta(minutes=minutes)
+                new_postpone_until = postpone_until.isoformat(timespec='seconds')
+                it['permission_granted'] = False
+                it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                it['permission_postpone_until'] = new_postpone_until
+                it['status'] = 'awaiting_permission'
+                it['permission_prompt_inflight'] = False
+                updated = True
+                break
+
+        if updated:
+            _save_schedules(items)
+
+    return updated, new_postpone_until, None
+
+
+def _show_native_permission_prompt(schedule_id: str, repo: str, branch: str, run_at: str):
+    """Best-effort Windows topmost prompt (Yes/No/Cancel=LATER).
+
+    Browser modals cannot reliably steal focus when another application is active.
+    """
+    if not _is_native_permission_prompt_enabled():
+        return
+    if os.name != 'nt' or ctypes is None:
+        return
+
+    try:
+        try:
+            logger.info(f"[SCHEDULES] Native permission prompt showing id={schedule_id} repo={repo} branch={branch}")
+        except Exception:
+            pass
+        title = 'CLA-ssistant – Engedélykérés'
+        run_at_str = (run_at or '').replace('T', ' ')
+        later_m = _default_later_minutes()
+        msg = (
+            'Szeretném átvenni a gép irányítását a robot futáshoz.\n'
+            'Engedélyezed?\n\n'
+            f'Repository: {repo}\n'
+            f'Robot: {branch}\n'
+            + (f'Ütemezett idő: {run_at_str}\n\n' if run_at_str else '\n')
+            + f'Igen = Engedélyezem\nNem = Nem engedélyezem\nMégse = Később ({later_m} perc)'
+        )
+
+        MB_YESNOCANCEL = 0x00000003
+        MB_ICONQUESTION = 0x00000020
+        MB_TOPMOST = 0x00040000
+        MB_SETFOREGROUND = 0x00010000
+        flags = MB_YESNOCANCEL | MB_ICONQUESTION | MB_TOPMOST | MB_SETFOREGROUND
+
+        res = int(ctypes.windll.user32.MessageBoxW(None, msg, title, flags))
+        # 6=Yes, 7=No, 2=Cancel
+        if res == 6:
+            _apply_permission_decision(schedule_id, 'allow', None)
+            try:
+                logger.info(f"[SCHEDULES] Native permission decided=allow id={schedule_id}")
+            except Exception:
+                pass
+        elif res == 7:
+            _apply_permission_decision(schedule_id, 'deny', None)
+            try:
+                logger.info(f"[SCHEDULES] Native permission decided=deny id={schedule_id}")
+            except Exception:
+                pass
+        elif res == 2:
+            _apply_permission_decision(schedule_id, 'later', later_m)
+            try:
+                logger.info(f"[SCHEDULES] Native permission decided=later({later_m}) id={schedule_id}")
+            except Exception:
+                pass
+    except Exception:
+        # Don't crash scheduler thread
+        return
+    finally:
+        # Make sure we don't keep spawning prompts if the MessageBox closes without a decision (best-effort).
+        try:
+            with SCHEDULES_LOCK:
+                items = _load_schedules()
+                dirty = False
+                for it in (items or []):
+                    if (it.get('id') or '').strip() != (schedule_id or '').strip():
+                        continue
+                    if bool(it.get('permission_prompt_inflight', False)):
+                        it['permission_prompt_inflight'] = False
+                        dirty = True
+                    break
+                if dirty:
+                    _save_schedules(items)
+        except Exception:
+            pass
+
+
+def _parse_iso_dt(raw: str) -> datetime | None:
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except Exception:
+        return None
 
 
 def _get_schedules_file_path() -> str:
@@ -318,6 +537,7 @@ def _start_schedule_worker_if_enabled():
             try:
                 now = datetime.now()
                 due: list[dict] = []
+                prompts: list[dict] = []
                 with SCHEDULES_LOCK:
                     items = _load_schedules()
                     changed = False
@@ -339,13 +559,33 @@ def _start_schedule_worker_if_enabled():
                                 permission_granted = bool(it.get('permission_granted', False))
 
                                 # Postpone window for permission requests
-                                postpone_until_raw = (it.get('permission_postpone_until') or '').strip()
-                                postpone_until = None
-                                if postpone_until_raw:
+                                postpone_until = _parse_iso_dt(it.get('permission_postpone_until') or '')
+                                inflight = bool(it.get('permission_prompt_inflight', False))
+
+                                # If a native permission prompt got stuck/invisible, auto-approve after 10 minutes.
+                                # This treats the timeout as an implicit "Yes".
+                                if permission_required and (not permission_granted) and inflight:
+                                    last_native = _parse_iso_dt(it.get('permission_native_prompted_at') or '')
                                     try:
-                                        postpone_until = datetime.fromisoformat(postpone_until_raw)
+                                        if last_native is not None and (now - last_native).total_seconds() > 600:
+                                            it['permission_granted'] = True
+                                            it['permission_decided_at'] = now.isoformat(timespec='seconds')
+                                            it['permission_postpone_until'] = None
+                                            it['permission_prompt_inflight'] = False
+                                            permission_granted = True
+                                            inflight = False
+                                            changed = True
+                                            try:
+                                                logger.info(
+                                                    "[SCHEDULES] Native permission auto-approved after timeout id=%s repo=%s branch=%s",
+                                                    (it.get('id') or '').strip(),
+                                                    (it.get('repo') or '').strip(),
+                                                    (it.get('branch') or '').strip(),
+                                                )
+                                            except Exception:
+                                                pass
                                     except Exception:
-                                        postpone_until = None
+                                        pass
 
                                 if permission_required and not permission_granted:
                                     # Don't start the robot yet; wait for explicit user permission.
@@ -356,10 +596,62 @@ def _start_schedule_worker_if_enabled():
                                             changed = True
                                         continue
 
-                                    if status != 'awaiting_permission':
+                                    # If postpone expired, clear it and re-request.
+                                    if postpone_until is not None and now >= postpone_until:
+                                        it['permission_postpone_until'] = None
+                                        postpone_until = None
+                                        # allow re-prompt
+                                        it['permission_native_prompted_at'] = None
+                                        it['permission_prompt_inflight'] = False
+                                        changed = True
+
+                                    # Transition to awaiting_permission (or re-prompt after postpone expiry)
+                                    if status != 'awaiting_permission' or not (it.get('permission_requested_at') or '').strip():
                                         it['status'] = 'awaiting_permission'
                                         it['permission_requested_at'] = now.isoformat(timespec='seconds')
+                                        it['permission_native_prompted_at'] = None
+                                        it['permission_prompt_inflight'] = False
                                         changed = True
+
+                                    # If native prompt is enabled, show it (throttled)
+                                    if _is_native_permission_prompt_enabled():
+                                        # If a previous prompt is still open/pending, do not spawn another.
+                                        # (Stuck prompt auto-approval is handled above.)
+                                        if inflight:
+                                            continue
+
+                                        last_native = _parse_iso_dt(it.get('permission_native_prompted_at') or '')
+                                        should_prompt = False
+                                        if last_native is None:
+                                            should_prompt = True
+                                        else:
+                                            try:
+                                                if (now - last_native).total_seconds() >= 30:
+                                                    should_prompt = True
+                                            except Exception:
+                                                should_prompt = True
+
+                                        if should_prompt:
+                                            it['permission_native_prompted_at'] = now.isoformat(timespec='seconds')
+                                            it['permission_prompt_inflight'] = True
+                                            if not (it.get('permission_requested_at') or '').strip():
+                                                it['permission_requested_at'] = now.isoformat(timespec='seconds')
+                                            changed = True
+                                            try:
+                                                logger.info(
+                                                    "[SCHEDULES] Native permission prompt queued id=%s repo=%s branch=%s",
+                                                    (it.get('id') or '').strip(),
+                                                    (it.get('repo') or '').strip(),
+                                                    (it.get('branch') or '').strip(),
+                                                )
+                                            except Exception:
+                                                pass
+                                            prompts.append({
+                                                'id': (it.get('id') or '').strip(),
+                                                'repo': (it.get('repo') or '').strip(),
+                                                'branch': (it.get('branch') or '').strip(),
+                                                'run_at': (it.get('run_at') or '').strip(),
+                                            })
                                     continue
 
                                 # Permission granted (or not required) -> run now
@@ -370,12 +662,29 @@ def _start_schedule_worker_if_enabled():
                                 it['permission_requested_at'] = None
                                 it['permission_postpone_until'] = None
                                 it['permission_decided_at'] = None
+                                it['permission_native_prompted_at'] = None
+                                it['permission_prompt_inflight'] = False
                                 due.append(dict(it))
                                 changed = True
                         except Exception:
                             continue
                     if changed:
                         _save_schedules(items)
+
+                # Show native permission prompts outside the file lock
+                if prompts and _is_native_permission_prompt_enabled():
+                    for p in prompts:
+                        try:
+                            sid = (p.get('id') or '').strip()
+                            if not sid:
+                                continue
+                            threading.Thread(
+                                target=_show_native_permission_prompt,
+                                args=(sid, p.get('repo') or '', p.get('branch') or '', p.get('run_at') or ''),
+                                daemon=True,
+                            ).start()
+                        except Exception:
+                            continue
 
                 # Execute due items outside the file lock
                 for it in due:
@@ -408,6 +717,7 @@ def _start_schedule_worker_if_enabled():
                                         s['permission_requested_at'] = None
                                         s['permission_postpone_until'] = None
                                         s['permission_decided_at'] = None
+                                        s['permission_prompt_inflight'] = False
 
                                         # Recurrence: advance run_at and keep pending if enabled
                                         try:
@@ -452,6 +762,7 @@ def _start_schedule_worker_if_enabled():
                                         s['permission_requested_at'] = None
                                         s['permission_postpone_until'] = None
                                         s['permission_decided_at'] = None
+                                        s['permission_prompt_inflight'] = False
                                         break
                                 _save_schedules(all_items)
 
@@ -4283,6 +4594,7 @@ def api_schedules_post():
         'permission_requested_at': None,
         'permission_postpone_until': None,
         'permission_decided_at': None,
+        'permission_prompt_inflight': False,
     }
 
     with SCHEDULES_LOCK:
@@ -4382,88 +4694,9 @@ def api_schedules_permission_decide(schedule_id: str):
     if decision not in ('allow', 'deny', 'later'):
         return jsonify({'success': False, 'error': 'Érvénytelen decision'}), 400
 
-    now = datetime.now()
-    updated = False
-    new_postpone_until = None
-
-    with SCHEDULES_LOCK:
-        items = _load_schedules()
-        for it in (items or []):
-            if (it.get('id') or '').strip() != schedule_id:
-                continue
-
-            # Only meaningful when awaiting permission
-            if (it.get('status') or '') != 'awaiting_permission':
-                # Still allow idempotent allow if user clicked fast and worker already picked it up.
-                if decision == 'allow':
-                    it['permission_granted'] = True
-                    it['permission_decided_at'] = now.isoformat(timespec='seconds')
-                    it['permission_postpone_until'] = None
-                    updated = True
-                break
-
-            if decision == 'allow':
-                it['permission_granted'] = True
-                it['permission_decided_at'] = now.isoformat(timespec='seconds')
-                it['permission_postpone_until'] = None
-                # set status back so worker can pick it up immediately
-                it['status'] = 'pending'
-                updated = True
-                break
-
-            if decision == 'deny':
-                it['permission_granted'] = False
-                it['permission_decided_at'] = now.isoformat(timespec='seconds')
-                it['permission_postpone_until'] = None
-                # For recurring schedules: advance to next; for one-shot: disable.
-                repeat = (it.get('repeat') or 'none').strip().lower()
-                weekdays_only = bool(it.get('weekdays_only', False))
-                try:
-                    repeat_days = _normalize_repeat_days(it.get('repeat_days', None))
-                except Exception:
-                    repeat_days = None
-
-                try:
-                    prev_dt = datetime.fromisoformat((it.get('run_at') or '').strip())
-                except Exception:
-                    prev_dt = None
-
-                next_dt = None
-                if prev_dt is not None:
-                    try:
-                        next_dt = _compute_next_run_at(prev_dt, repeat, repeat_days, weekdays_only)
-                    except Exception:
-                        next_dt = None
-
-                if repeat != 'none' and next_dt is not None and bool(it.get('enabled', True)):
-                    it['run_at'] = next_dt.isoformat(timespec='seconds')
-                    it['last_status'] = 'denied'
-                    it['status'] = 'pending'
-                else:
-                    it['status'] = 'skipped'
-                    if repeat == 'none':
-                        it['enabled'] = False
-                        it['finished_at'] = now.isoformat(timespec='seconds')
-                updated = True
-                break
-
-            # later
-            if decision == 'later':
-                if minutes is None:
-                    minutes = 5
-                minutes = max(1, min(minutes, 240))
-                postpone_until = now + timedelta(minutes=minutes)
-                new_postpone_until = postpone_until.isoformat(timespec='seconds')
-                it['permission_granted'] = False
-                it['permission_decided_at'] = now.isoformat(timespec='seconds')
-                it['permission_postpone_until'] = new_postpone_until
-                it['status'] = 'awaiting_permission'
-                updated = True
-                break
-
-        if updated:
-            _save_schedules(items)
-
+    updated, new_postpone_until, err = _apply_permission_decision(schedule_id, decision, minutes)
+    if err:
+        return jsonify({'success': False, 'error': err}), 400
     return jsonify({'success': True, 'updated': updated, 'permission_postpone_until': new_postpone_until})
 
 

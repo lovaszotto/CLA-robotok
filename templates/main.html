@@ -4751,50 +4751,18 @@ async function _pollSchedulePermissionRequests() {
         }
 
         const pending = Array.isArray(data.pending) ? data.pending : [];
-        if (!pending.length) return;
-
-        const req = pending[0];
-        window.__permissionPollState.modalOpen = true;
-        const choice = await showPermissionBox({
-            scheduleId: req.id,
-            repo: req.repo,
-            branch: req.branch,
-            runAt: req.run_at,
-            defaultMinutes: 5
-        });
-        window.__permissionPollState.modalOpen = false;
-        if (!choice || !choice.decision || !req.id) return;
-
-        const payload = { decision: choice.decision };
-        if (choice.decision === 'later') payload.minutes = choice.minutes || 5;
-
-        const r = await fetch(`/api/schedules/${encodeURIComponent(req.id)}/permission`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !(j && j.success)) {
-            showToast('Engedélykérés válasz mentése sikertelen.', 'danger');
-            return;
-        }
-
-        if (choice.decision === 'allow') {
-            showToast('Engedélyezve: a robot indítható.', 'success');
-        } else if (choice.decision === 'deny') {
-            showToast('Nem engedélyezted a robot futását.', 'warning');
-        } else {
-            const pu = j.permission_postpone_until || null;
-            if (pu) {
-                _startPermissionCountdown({ id: req.id, repo: req.repo, branch: req.branch, permission_postpone_until: pu });
+        if (pending.length) {
+            // We intentionally do NOT show a browser modal here.
+            // Permission is requested via a Windows topmost prompt (native) so it shows even when another app is active.
+            if (!window.__permissionPollState.warnedNative) {
+                window.__permissionPollState.warnedNative = true;
+                try {
+                    showToast('Ütemezett futás engedélyt kér. Nézd a Windows engedélykérő ablakot (felül fog megjelenni).', 'warning');
+                } catch (e) { /* ignore */ }
             }
-            showToast('Késleltetve: később újra rákérdezünk.', 'info');
+        } else {
+            window.__permissionPollState.warnedNative = false;
         }
-
-        // Refresh calendar markers if present
-        try {
-            if (typeof window.__refreshScheduledCalendar === 'function') window.__refreshScheduledCalendar();
-        } catch (e) { /* ignore */ }
     } catch (e) {
         // ignore polling errors
     } finally {

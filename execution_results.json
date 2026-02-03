@@ -128,5 +128,25 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_040910",
     "type": "schedule"
+  },
+  {
+    "id": 14,
+    "timestamp": "2026-02-03 06:17:25",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_061716",
+    "type": "schedule"
+  },
+  {
+    "id": 15,
+    "timestamp": "2026-02-03 06:18:21",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_061821",
+    "type": "bulk"
   }
 ]

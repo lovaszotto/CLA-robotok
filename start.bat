@@ -9,6 +9,9 @@ echo.
 :: Konyvtar valtas a script helyere
 cd /d "%~dp0"
 
+:: Inditas elott allitsuk le a korabbi peldanyokat (port 5000 felszabaditasa)
+call "%~dp0stop.bat"
+
 :: Aktualis konyvtar kiirasa
 echo Aktualis munkakonyvtar: %CD%
 echo.
