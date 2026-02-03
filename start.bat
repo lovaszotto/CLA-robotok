@@ -93,7 +93,7 @@ echo.
 if not exist "%~dp0splash.html" (
     explorer http://localhost:5000
 )
-start "Robot Kezelő - Flask" /D "%~dp0" "%~dp0.venv\Scripts\python.exe" "%~dp0flask_app.py"
+start "Robot Kezelő - Flask" /MIN /D "%~dp0" "%~dp0.venv\Scripts\python.exe" "%~dp0flask_app.py"
 if %errorlevel% neq 0 (
     echo HIBA: a Flask szerver inditasa sikertelen!
     pause

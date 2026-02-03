@@ -638,8 +638,10 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
             </div>
             <div class="row" id="repoContainerAvailable">
+            {% set available_cards = [] %}
             {% for repo in repos %}
                 {% if repo.available_branches|length > 0 %}
+                {% set _ = available_cards.append(repo.name) %}
                 <div class="col-12 col-md-6 mb-4 repo-item-available" data-repo-name="{{ repo.name }}">
                     <div class="card repo-card h-100">
                         <div class="card-header bg-success text-white">
@@ -698,6 +700,15 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 </div>
                 {% endif %}
             {% endfor %}
+            {% if available_cards|length == 0 %}
+                {% if not has_github_token %}
+                    <div class="col-12 text-center">
+                        <h1 class="mt-5" style="color:#fd7e14;">Nincs Git kulcs beállítva!</h1>
+                    </div>
+                {% else %}
+                    <div class="col-12 text-center"><h2 class="text-muted mt-5">Nincs letölthető robot.</h2></div>
+                {% endif %}
+            {% endif %}
             </div>
         </div>
 
@@ -737,7 +748,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                     <div class="d-flex align-items-center justify-content-between mt-3">
                         <div class="fw-semibold" id="schedSelectedDateLabel">Válassz egy napot…</div>
                         <button class="btn btn-success btn-sm" type="button" id="schedNewBtn" disabled>
-                            <i class="bi bi-plus-lg"></i> Új ütemezés
+                            <i class="bi bi-plus-lg"></i> Új robotfutás ütemezés
                         </button>
                     </div>
 
@@ -1116,7 +1127,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                 <label class="form-check-label" for="serverLogAutoScroll">Auto-scroll</label>
                             </div>
                             <div class="form-check form-switch form-check-inline mb-0">
-                                <input class="form-check-input" type="checkbox" id="serverLogWrap" checked>
+                                <input class="form-check-input" type="checkbox" id="serverLogWrap">
                                 <label class="form-check-label" for="serverLogWrap">Tördelés</label>
                             </div>
                             <div class="form-check form-switch form-check-inline mb-0">
@@ -1144,7 +1155,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                     </div>
                 </div>
 
-                <pre id="serverLogPre" class="server-log log-wrap"></pre>
+                <pre id="serverLogPre" class="server-log"></pre>
             </div>
         </div>
 
@@ -2110,18 +2121,28 @@ function openEnvironmentSettings(btn) {
 }
 
 // Letölthető robotok tab frissítése AJAX-szal
-function refreshAvailableRobots() {
-    fetch('/api/available_repos')
-        .then(r => r.json())
-        .then(repos => {
-            const container = document.getElementById('repoContainerAvailable');
-            if (container) container.innerHTML = renderAvailableRepos(repos);
-            if (typeof filterReposAvailable === 'function') filterReposAvailable();
-            setTimeout(initTooltips, 10);
-        })
-        .catch(err => {
-            showToast('Hiba a letölthető robotok frissítésekor: ' + err, 'danger');
-        });
+function renderMissingGithubToken() {
+    return '<div class="col-12 text-center"><h1 class="mt-5" style="color:#fd7e14;">Nincs Git kulcs beállítva!</h1></div>';
+}
+
+async function refreshAvailableRobots() {
+    try {
+        const container = document.getElementById('repoContainerAvailable');
+        if (!container) return;
+
+        const tokenStatus = await fetch('/api/get_github_token_status').then(r => r.json()).catch(() => ({ present: false }));
+        if (!tokenStatus || !tokenStatus.present) {
+            container.innerHTML = renderMissingGithubToken();
+            return;
+        }
+
+        const repos = await fetch('/api/available_repos').then(r => r.json());
+        container.innerHTML = renderAvailableRepos(repos);
+        if (typeof filterReposAvailable === 'function') filterReposAvailable();
+        setTimeout(initTooltips, 10);
+    } catch (err) {
+        showToast('Hiba a letölthető robotok frissítésekor: ' + err, 'danger');
+    }
 }
 
 function initTooltips() {
@@ -2679,7 +2700,7 @@ function initScheduledCalendar() {
         if (titleEl) {
             titleEl.innerHTML = isEdit
                 ? '<i class="bi bi-pencil me-1"></i> Ütemezés szerkesztése'
-                : '<i class="bi bi-calendar-plus me-1"></i> Új ütemezés';
+                : '<i class="bi bi-calendar-plus me-1"></i> Új robotfutás ütemezés';
         }
 
         // Prefill values that don't require any network.

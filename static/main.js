@@ -166,7 +166,7 @@ if (typeof showPage !== 'function') {
 // Log UI állapot
 window.__logUiState = window.__logUiState || {
     autoScroll: true,
-    wrap: true,
+    wrap: false,
     paused: false,
     lastTextLength: 0,
     rawText: '',

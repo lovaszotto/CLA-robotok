@@ -3168,6 +3168,7 @@ def index():
             build_date=build_date,
             page_title=page_title,
             is_sandbox=is_sandbox,
+            has_github_token=bool(_get_github_token()),
             **color_scheme
         ),
         mimetype='text/html'

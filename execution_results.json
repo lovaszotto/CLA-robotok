@@ -178,5 +178,15 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_063759",
     "type": "bulk"
+  },
+  {
+    "id": 20,
+    "timestamp": "2026-02-03 10:36:28",
+    "repo": "IKK-Robotok",
+    "branch": "IKK04-Dokumentum-WEB-Ellenőrzés",
+    "status": "failed",
+    "returncode": 9,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20260203_103628",
+    "type": "bulk"
   }
 ]

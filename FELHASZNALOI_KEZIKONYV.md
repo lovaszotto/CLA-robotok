@@ -4,6 +4,7 @@
 A CLA-ssistant egy Flask alapú webes felület Robot Framework robotok kezeléséhez:
 - robotok letöltése / telepítése
 - robotok futtatása
+- ütemezett futtatások kezelése (naptár nézet)
 - futások megszakítása (STOP)
 - futási eredmények, logok megnyitása
 - (fejlesztői módban) GitHub kiadás (Release) készítése
