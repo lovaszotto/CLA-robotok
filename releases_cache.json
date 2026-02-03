@@ -1,10 +1,10 @@
 {
   "lovaszotto/CLA-robotok": {
-    "fetched_at": "2026-02-02T11:38:28",
+    "fetched_at": "2026-02-03T13:54:30",
     "releases": {}
   },
   "lovaszotto/CPS-Robotok": {
-    "fetched_at": "2026-02-02T11:38:31",
+    "fetched_at": "2026-02-03T13:54:33",
     "releases": {
       "CPS01-V1.0.0": {
         "name": "CPS01-Mező ellenőr - Alap kiadás",
@@ -13,7 +13,7 @@
     }
   },
   "lovaszotto/IKK-Robotok": {
-    "fetched_at": "2026-02-02T11:38:33",
+    "fetched_at": "2026-02-03T13:54:36",
     "releases": {
       "V1.3.0": {
         "name": "IKK04-Dokumentum-WEB-Ellenőrzés - Februári verzió",
@@ -42,7 +42,7 @@
     }
   },
   "lovaszotto/KBSZ-robotok": {
-    "fetched_at": "2026-02-02T11:38:36",
+    "fetched_at": "2026-02-03T13:54:39",
     "releases": {
       "KB01_V1.0.0": {
         "name": "KB01-Közbeszerzési értesító - Alap kiadás",
@@ -51,8 +51,20 @@
     }
   },
   "lovaszotto/SzotarRobi": {
-    "fetched_at": "2026-02-02T11:38:38",
+    "fetched_at": "2026-02-03T13:54:41",
     "releases": {
+      "v3.1.17": {
+        "name": "Release Szó-kikérdező",
+        "date": "2026-02-03T05:32:26Z"
+      },
+      "v3.1.16": {
+        "name": "Release Szó-kikérdező",
+        "date": "2026-02-02T13:55:02Z"
+      },
+      "v3.1.15": {
+        "name": "Release Szó-kikérdező 3.1.15",
+        "date": "2026-02-02T13:36:25Z"
+      },
       "v3.1.14": {
         "name": "Release Szó-kikérdező",
         "date": "2026-02-02T09:13:18Z"
