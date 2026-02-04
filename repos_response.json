@@ -67,14 +67,14 @@
     "releases_url": "https://api.github.com/repos/lovaszotto/CLA-robotok/releases{/id}",
     "deployments_url": "https://api.github.com/repos/lovaszotto/CLA-robotok/deployments",
     "created_at": "2025-09-10T20:14:55Z",
-    "updated_at": "2026-02-03T09:35:15Z",
-    "pushed_at": "2026-02-03T09:35:13Z",
+    "updated_at": "2026-02-04T01:23:14Z",
+    "pushed_at": "2026-02-04T01:23:11Z",
     "git_url": "git://github.com/lovaszotto/CLA-robotok.git",
     "ssh_url": "git@github.com:lovaszotto/CLA-robotok.git",
     "clone_url": "https://github.com/lovaszotto/CLA-robotok.git",
     "svn_url": "https://github.com/lovaszotto/CLA-robotok",
     "homepage": "",
-    "size": 1627,
+    "size": 1784,
     "stargazers_count": 0,
     "watchers_count": 0,
     "language": "HTML",
@@ -88,7 +88,7 @@
     "mirror_url": null,
     "archived": false,
     "disabled": false,
-    "open_issues_count": 30,
+    "open_issues_count": 28,
     "license": null,
     "allow_forking": true,
     "is_template": false,
@@ -96,9 +96,16 @@
     "topics": [],
     "visibility": "public",
     "forks": 0,
-    "open_issues": 30,
+    "open_issues": 28,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1057782162,
@@ -199,7 +206,14 @@
     "forks": 0,
     "open_issues": 0,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1057648914,
@@ -300,7 +314,14 @@
     "forks": 0,
     "open_issues": 3,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1090750125,
@@ -371,13 +392,13 @@
     "deployments_url": "https://api.github.com/repos/lovaszotto/KBSZ-robotok/deployments",
     "created_at": "2025-11-06T04:53:52Z",
     "updated_at": "2025-11-06T05:00:19Z",
-    "pushed_at": "2026-01-29T07:20:30Z",
+    "pushed_at": "2026-02-04T04:52:48Z",
     "git_url": "git://github.com/lovaszotto/KBSZ-robotok.git",
     "ssh_url": "git@github.com:lovaszotto/KBSZ-robotok.git",
     "clone_url": "https://github.com/lovaszotto/KBSZ-robotok.git",
     "svn_url": "https://github.com/lovaszotto/KBSZ-robotok",
     "homepage": null,
-    "size": 151,
+    "size": 153,
     "stargazers_count": 0,
     "watchers_count": 0,
     "language": "RobotFramework",
@@ -401,7 +422,14 @@
     "forks": 0,
     "open_issues": 0,
     "watchers": 0,
-    "default_branch": "master"
+    "default_branch": "master",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   },
   {
     "id": 1050810416,
@@ -502,6 +530,13 @@
     "forks": 0,
     "open_issues": 15,
     "watchers": 0,
-    "default_branch": "main"
+    "default_branch": "main",
+    "permissions": {
+      "admin": true,
+      "maintain": true,
+      "push": true,
+      "triage": true,
+      "pull": true
+    }
   }
 ]

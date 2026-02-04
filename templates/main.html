@@ -5450,14 +5450,16 @@ function displayResults(results) {
                 : '<span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sikertelen</span>');
         // Letöltés/Futtatás badge logika
         let typeBadge = '';
-        if (result.type === 'bulk') {
-            typeBadge = '<span class="badge bg-info ms-1">Futtatás</span>';
+        if (result.type === 'schedule' || result.type === 'scheduled' || result.type === 'auto') {
+            typeBadge = '<span class="badge bg-primary ms-1"><i class="bi bi-clock-history me-1"></i>Időzített</span>';
+        } else if (result.type === 'bulk') {
+            typeBadge = '<span class="badge bg-info ms-1"><i class="bi bi-play-fill me-1"></i>Futtatás</span>';
         } else if (result.type === 'single') {
-            typeBadge = '<span class="badge bg-secondary ms-1">Futtatás</span>';
+            typeBadge = '<span class="badge bg-secondary ms-1"><i class="bi bi-play-fill me-1"></i>Futtatás</span>';
         } else if (result.type === 'install' || result.type === 'download') {
-            typeBadge = '<span class="badge bg-warning text-dark ms-1">Letöltés</span>';
+            typeBadge = '<span class="badge bg-warning text-dark ms-1"><i class="bi bi-download me-1"></i>Letöltés</span>';
         } else {
-            typeBadge = '<span class="badge bg-light text-dark ms-1">Ismeretlen</span>';
+            typeBadge = '<span class="badge bg-light text-dark ms-1"><i class="bi bi-question-circle me-1"></i>Ismeretlen</span>';
         }
         const resultsDisplay = result.results_dir 
             ? '<small class="text-muted">' + (result.results_dir.split(/[\\\/]/).filter(Boolean).pop() || result.results_dir) + '</small>' 

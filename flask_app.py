@@ -1175,8 +1175,9 @@ def get_installed_keys():
                     if not os.path.isdir(branch_path):
                         continue
                     if is_sandbox:
-                        # Sandbox módban csak klónozás történik (nincs telepito.bat, nincs .venv).
-                        # Ilyenkor minden repo/branch mappa „telepítettként” jelenjen meg a Telepített tabon.
+                        # Sandbox (fejlesztői) módban a forrás jellemzően git klón/pull.
+                        # A telepito.bat futtatása előfordulhat, de a listázásnál továbbra is minden repo/branch
+                        # mappát „telepítettként” kezelünk a fejlesztői workflow miatt.
                         keys.add(f"{repo_name}|{branch_name}")
                     else:
                         # Normál módban csak akkor tekintjük futtathatónak, ha van .venv mappa (ready to run)
@@ -2642,6 +2643,58 @@ def _zip_file_to_bytes(src_path: str) -> bytes:
     return buf.getvalue()
 
 
+def _zip_paths_to_bytes(items: list[tuple[str, str]]) -> bytes:
+    """Create a zip (in-memory) from multiple files.
+
+    items: [(src_path, arcname)]
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for src_path, arcname in (items or []):
+            if not src_path:
+                continue
+            zf.write(src_path, arcname=(arcname or os.path.basename(src_path)))
+    return buf.getvalue()
+
+
+def _prepare_zip_payloads(file_items: list[tuple[str, str]], zip_name: str, max_bytes: int) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """Zip multiple files into one attachment and enforce max_bytes via splitting.
+
+    file_items: [(upload_name_inside_zip, file_path)]
+    """
+    notes: list[str] = []
+    zip_name = (zip_name or 'artifacts.zip').strip() or 'artifacts.zip'
+    if not zip_name.lower().endswith('.zip'):
+        zip_name += '.zip'
+
+    zip_inputs: list[tuple[str, str]] = []
+    for arcname, p in (file_items or []):
+        if not p:
+            continue
+        if not os.path.exists(p):
+            continue
+        arc = (arcname or os.path.basename(p) or 'file')
+        zip_inputs.append((p, arc))
+
+    zipped = _zip_paths_to_bytes(zip_inputs)
+    if not zipped:
+        return [(zip_name, b'')], notes
+
+    if len(zipped) <= max_bytes:
+        notes.append(f"Zip csatolva: {zip_name} (zip={len(zipped)} byte)")
+        return [(zip_name, zipped)], notes
+
+    parts = _split_bytes(zipped, max_bytes)
+    notes.append(f"Zip túl nagy, darabolva {len(parts)} részre (max {max_bytes} byte/rész)")
+    payloads: list[tuple[str, bytes]] = []
+    for idx, part in enumerate(parts, start=1):
+        payloads.append((f"{zip_name}.part{idx:02d}", part))
+    notes.append(
+        "Összefűzés Windows alatt: `copy /b file.zip.part01+file.zip.part02+... file.zip` majd kibontás."
+    )
+    return payloads, notes
+
+
 def _split_bytes(content: bytes, chunk_size: int) -> list[bytes]:
     if not content:
         return [b'']
@@ -3311,102 +3364,72 @@ def api_execute():
                 issue_number = int(issue_obj.get('number'))
                 issue_url = issue_obj.get('html_url')
 
+                # A csatolmányokat NEM issue-attachmentként töltjük fel.
+                # A jelenlegi, stabil megoldás: feltöltés a repóba (Contents API) + link komment az issue-ban.
                 uploads: list[dict] = []
                 upload_errors: list[str] = []
                 upload_notes: list[str] = []
-                # A GitHub issue-attachment méretlimitje gyakorlatban nagyon alacsony lehet,
-                # ezért extra konzervatív limitet használunk, és szükség esetén darabolunk.
-                max_attachment_bytes = 100 * 1024
-                for key, file_path in (
+                fallback_links: list[dict] = []
+
+                zip_items: list[tuple[str, str]] = [
                     ('r_log.html', artifacts.get('r_log_path')),
                     ('r_riport.html', artifacts.get('r_riport_path') or artifacts.get('r_report_path')),
-                ):
-                    if not file_path or not os.path.exists(file_path):
+                ]
+                for key, p in zip_items:
+                    if not p or not os.path.exists(p):
                         upload_errors.append(f"Missing artifact: {key}")
-                        continue
-                    try:
-                        payloads, notes = _prepare_attachment_payloads(file_path, key, max_attachment_bytes)
-                        upload_notes.extend(notes)
-                        for upload_name, content in payloads:
-                            if not content:
-                                upload_notes.append(f"Üres csatolmány kihagyva: {upload_name}")
-                                continue
-                            try:
-                                up = _github_upload_issue_attachment(owner, repo_name, issue_number, upload_name, content)
-                                uploads.append(up)
-                            except Exception as e:
-                                upload_errors.append(f"{upload_name} upload failed: {e}")
-                    except Exception as e:
-                        upload_errors.append(f"{key} upload failed: {e}")
 
-                # Kommentben belinkeljük az attachmenteket (ha GitHub adott URL-t)
+                default_branch = _github_get_default_branch(owner, repo_name)
+                run_folder = _safe_repo_path_component(title)
+                base_path = f"run_artifacts/{run_folder}"
+
+                safe_title = _safe_repo_path_component(title)
+                zip_name = f"run_artifacts_{safe_title}.zip"
+
+                # Contents API-nál konzervatív limit (base64 + API overhead miatt)
+                max_repo_bytes = 700 * 1024
                 try:
-                    if uploads:
-                        link_lines = ["Futtási csatolmányok:"]
-                        for up in uploads:
-                            name = up.get('name') or up.get('filename') or 'attachment'
-                            link = up.get('browser_download_url') or up.get('html_url') or up.get('url')
-                            if link:
-                                link_lines.append(f"- [{name}]({link})")
-                            else:
-                                link_lines.append(f"- {name}")
-                        _github_create_issue_comment(owner, repo_name, issue_number, '\n'.join(link_lines))
-                except Exception as e:
-                    # Ne szemeteljük tele az issue-t hibával; elég a server.log.
-                    logger.info(f"[EXECUTE][ISSUE] Csatolmány-link komment hiba: {e}")
-
-                # Fallback: ha a GitHub issue-attachment API hibázik (pl. 422 Bad Size),
-                # akkor tegyük be a fájlokat a repóba a Contents API-val és linkeljük.
-                fallback_links: list[dict] = []
-                fallback_errors: list[str] = []
-                if upload_errors:
-                    try:
-                        default_branch = _github_get_default_branch(owner, repo_name)
-                        run_folder = _safe_repo_path_component(title)
-                        base_path = f"run_artifacts/{run_folder}"
-
-                        for key, file_path in (
-                            ('r_log.html', artifacts.get('r_log_path')),
-                            ('r_riport.html', artifacts.get('r_riport_path') or artifacts.get('r_report_path')),
-                        ):
-                            if not file_path or not os.path.exists(file_path):
-                                continue
+                    payloads, notes = _prepare_zip_payloads(zip_items, zip_name, max_repo_bytes)
+                    upload_notes.extend(notes)
+                    for upload_name, content in payloads:
+                        if not content:
+                            upload_notes.append(f"Üres csatolmány kihagyva: {upload_name}")
+                            continue
+                        try:
+                            path_in_repo = f"{base_path}/{_safe_repo_path_component(upload_name)}"
+                            respj = _github_put_repo_file(
+                                owner,
+                                repo_name,
+                                default_branch,
+                                path_in_repo,
+                                content,
+                                message=f"Add run artifact {run_folder}: {upload_name}",
+                            )
+                            html_url = None
                             try:
-                                payloads, notes = _prepare_attachment_payloads(file_path, key, 700 * 1024)
-                                upload_notes.extend([f"[Repo fallback] {n}" for n in notes])
-                                for upload_name, content in payloads:
-                                    if not content:
-                                        continue
-                                    path_in_repo = f"{base_path}/{_safe_repo_path_component(upload_name)}"
-                                    respj = _github_put_repo_file(
-                                        owner,
-                                        repo_name,
-                                        default_branch,
-                                        path_in_repo,
-                                        content,
-                                        message=f"Add run artifact {run_folder}: {upload_name}",
-                                    )
-                                    html_url = None
-                                    try:
-                                        html_url = (respj.get('content') or {}).get('html_url')
-                                    except Exception:
-                                        html_url = None
-                                    fallback_links.append({'name': upload_name, 'path': path_in_repo, 'html_url': html_url, 'branch': default_branch})
-                            except Exception as e:
-                                fallback_errors.append(f"{key} repo fallback failed: {e}")
+                                html_url = (respj.get('content') or {}).get('html_url')
+                            except Exception:
+                                html_url = None
+                            fallback_links.append({'name': upload_name, 'path': path_in_repo, 'html_url': html_url, 'branch': default_branch})
+                        except Exception as e:
+                            upload_errors.append(f"{upload_name} repo upload failed: {e}")
+                except Exception as e:
+                    upload_errors.append(f"zip repo upload failed: {e}")
 
-                        if fallback_links:
-                            lines = ["Repo fallback csatolmányok (issue-attachment helyett):"]
-                            for item in fallback_links:
-                                nm = item.get('name')
-                                url = item.get('html_url')
-                                if url:
-                                    lines.append(f"- [{nm}]({url})")
-                                else:
-                                    lines.append(f"- {nm}: {item.get('path')}")
-                            _github_create_issue_comment(owner, repo_name, issue_number, '\n'.join(lines))
-                    except Exception as e:
-                        fallback_errors.append(str(e))
+                # Kommentben belinkeljük a repóba feltöltött zip(eket)
+                try:
+                    if fallback_links:
+                        lines = ["Futtási csatolmányok (repóba feltöltve, ZIP-ben):"]
+                        for item in fallback_links:
+                            nm = item.get('name')
+                            url = item.get('html_url')
+                            if url:
+                                lines.append(f"- [{nm}]({url})")
+                            else:
+                                lines.append(f"- {nm}: {item.get('path')}")
+                        _github_create_issue_comment(owner, repo_name, issue_number, '\n'.join(lines))
+                except Exception as e:
+                    logger.info(f"[EXECUTE][ISSUE] Repo-link komment hiba: {e}")
 
                 closed = False
                 close_error = None
@@ -3430,9 +3453,9 @@ def api_execute():
                         }
                         for u in uploads
                     ],
-                    'upload_ok': (len(upload_errors) == 0),
+                    'upload_ok': (len(upload_errors) == 0 and bool(fallback_links)),
                     'repo_fallback': {
-                        'used': bool(upload_errors),
+                        'used': True,
                         'links': fallback_links,
                     },
                     'close_error': close_error,
@@ -4239,12 +4262,10 @@ def install_robot_with_params(repo: str, branch: str):
             logger.error(f"[INSTALL][ERROR] Git klónozás/pull hiba: {e}")
             return 1, '', '', f'Git klónozás/pull hiba: {e}'
 
-        logger.info(f"[INSTALL] SANDBOX_MODE: csak klónozás történt, nincs telepito.bat, nincs .venv ellenőrzés")
-        return 0, branch_dir, 'Sandbox clone OK', ''
+        logger.info("[INSTALL] SANDBOX_MODE: klónozás/pull OK, telepítő ellenőrzés következik")
     # 4. telepito.bat futtatása CSAK ha nincs .venv mappa a letöltött branch könyvtárban
-    installed_dir = get_installed_robots_dir()
-    venv_dir = os.path.join(installed_dir, safe_repo, safe_branch, '.venv')
-    logger.info(f"[INSTALL] venv_dir ellenőrzés: {venv_dir}")
+    venv_dir = os.path.join(branch_dir, '.venv')
+    logger.info(f"[INSTALL] venv_dir ellenőrzés (branch_dir alapján): {venv_dir}")
     if not os.path.isdir(venv_dir):
         telepito_path = os.path.join(branch_dir, 'telepito.bat')
         logger.info(f"[INSTALL] telepito.bat path: {telepito_path}")

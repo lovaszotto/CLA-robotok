@@ -188,5 +188,48 @@
     "returncode": 9,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20260203_103628",
     "type": "bulk"
+  },
+  {
+    "id": 20,
+    "timestamp": "2026-02-03 14:03:43",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_140319",
+    "type": "schedule"
+  },
+  {
+    "id": 21,
+    "timestamp": "2026-02-03 14:11:59",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260203_141143",
+    "type": "schedule"
+  },
+  {
+    "id": 22,
+    "timestamp": "2026-02-04 02:23:30",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260204_022330",
+    "type": "bulk"
+  },
+  {
+    "id": 23,
+    "timestamp": "2026-02-04 06:02:00",
+    "repo": "KBSZ-robotok",
+    "branch": "KB01-Közbeszerzési-Értesítő",
+    "status": "success",
+    "returncode": 0,
+    "results_dir": "KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260204_060052",
+    "type": "install",
+    "installed_version": "KB01_V1.0.0",
+    "stdout": "Install OK (release=KB01_V1.0.0)",
+    "stderr": ""
   }
 ]
