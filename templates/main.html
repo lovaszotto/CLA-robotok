@@ -561,6 +561,13 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                                            data-bs-title="Utolsó futás státusza: {{ lr_status }}{% if lr.get('returncode') is not none %} (rc={{ lr.get('returncode') }}){% endif %}">
                                                                            {% if lr_status == 'success' %}Siker{% elif lr_status == 'failed' %}Hiba{% elif lr_status == 'cancelled' %}Megszakítva{% else %}Futás{% endif %}
                                                                        </span>
+                                                                       {% if lr.get('passed') is not none and lr.get('failed') is not none %}
+                                                                           <span class="badge ms-1 {% if (lr.get('failed')|int) == 0 %}bg-success{% else %}bg-warning text-dark{% endif %}"
+                                                                               data-bs-toggle="tooltip"
+                                                                               data-bs-title="passed / failed">
+                                                                               {{ lr.get('passed') }} / {{ lr.get('failed') }}
+                                                                           </span>
+                                                                       {% endif %}
                                                                        <span class="text-muted ms-1"
                                                                            data-bs-toggle="tooltip"
                                                                            data-bs-title="Utolsó futás ideje">{{ lr.get('timestamp') }}</span>
@@ -935,13 +942,14 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                            <i class="bi bi-check-circle"></i> Státusz
                                            <span class="sort-indicator" id="sort-status"></span>
                                        </th>
+                                       <th style="white-space:nowrap;min-width:110px;"><i class="bi bi-bar-chart"></i> Siker</th>
                                        <th><i class="bi bi-folder"></i> Eredmények</th>
-                                       <th><i class="bi bi-gear"></i> Műveletek</th>
+                                       <th><i class="bi bi-eye"></i></th>
                                    </tr>
                                </thead>
                                <tbody id="resultsTableBody">
                                    <tr>
-                                       <td colspan="6" class="text-center text-muted py-4">
+                                       <td colspan="7" class="text-center text-muted py-4">
                                            <i class="bi bi-hourglass-split"></i> Eredmények betöltése...
                                        </td>
                                    </tr>
@@ -5424,7 +5432,7 @@ function loadResults(page = 1, search = '', statusFilter = '', dateFilter = '') 
     .catch(err => {
         console.error('Eredmények betöltése sikertelen:', err);
         document.getElementById('resultsTableBody').innerHTML = `
-            <tr><td colspan="6" class="text-center text-danger py-4">
+            <tr><td colspan="7" class="text-center text-danger py-4">
                 <i class="bi bi-exclamation-triangle"></i> Hiba az eredmények betöltése során
             </td></tr>
         `;
@@ -5435,7 +5443,7 @@ function displayResults(results) {
     const tbody = document.getElementById('resultsTableBody');
     if (results.length === 0) {
         tbody.innerHTML = `
-            <tr><td colspan="6" class="text-center text-muted py-4">
+            <tr><td colspan="7" class="text-center text-muted py-4">
                 <i class="bi bi-inbox"></i> Nincs megjeleníthető eredmény
             </td></tr>
         `;
@@ -5464,6 +5472,20 @@ function displayResults(results) {
         const resultsDisplay = result.results_dir 
             ? '<small class="text-muted">' + (result.results_dir.split(/[\\\/]/).filter(Boolean).pop() || result.results_dir) + '</small>' 
             : '-';
+        const sikeressegDisplayRaw = (result && (result.sikeresseg || result['Sikeresség'])) || '';
+        let sikeressegDisplay = '-';
+        try {
+            const m = String(sikeressegDisplayRaw).match(/\b(\d+)\s+(?:tasks|tests),\s+(\d+)\s+passed,\s+(\d+)\s+failed\b/i);
+            if (m) {
+                const passed = parseInt(m[2], 10);
+                const failed = parseInt(m[3], 10);
+                const ok = Number.isFinite(failed) && failed === 0;
+                const cls = ok ? 'bg-success' : 'bg-warning text-dark';
+                sikeressegDisplay = `<span class="badge ${cls}" title="passed/failed">${passed} / ${failed}</span>`;
+            }
+        } catch (e) {
+            sikeressegDisplay = '-';
+        }
         const encDir = encodeURIComponent(result.results_dir || '');
         const actionButton = result.results_dir
             ? '<button class="btn btn-sm btn-success" data-results-enc="' + encDir + '" onclick="openResults(decodeURIComponent(this.dataset.resultsEnc))" title="Megnyitás új ablakban"><i class="bi bi-eye"></i></button>'
@@ -5473,6 +5495,7 @@ function displayResults(results) {
             '<td><i class="bi bi-github"></i> ' + result.repo + '</td>' +
             '<td><i class="bi bi-git"></i> ' + result.branch + '</td>' +
             '<td>' + statusBadge + '</td>' +
+                '<td>' + sikeressegDisplay + '</td>' +
             '<td>' + resultsDisplay + '</td>' +
             '<td>' + actionButton + '</td>' +
             '</tr>';

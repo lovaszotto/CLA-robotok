@@ -39,7 +39,7 @@ Log fájlok összefűzése
         Log    [HIBÁZOTT] A log könyvtár neve hiányzik vagy hibás (CURRENT_LOG_DIR = ${CURRENT_LOG_DIR}), log merge kihagyva!
         RETURN
     END
-
+    # A 
 
     ${LOG_OUTPUT_XML}=    Evaluate    __import__('os').path.normpath(r'''${LOG_OUTPUT_DIR}/output.xml''')    modules=os
     ${LOG_OUTPUT_LOG}=    Evaluate    __import__('os').path.normpath(r'''${LOG_OUTPUT_DIR}/log.html''')    modules=os

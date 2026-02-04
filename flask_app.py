@@ -46,6 +46,43 @@ def _get_backend_log_path():
     # Mindig a futtató könyvtár/server.log fájlt használjuk
     return os.path.join(os.getcwd(), 'server.log')
 
+
+_TASKS_SUMMARY_RE = re.compile(r"\b\d+\s+(?:tasks|tests),\s+\d+\s+passed,\s+\d+\s+failed\b", re.IGNORECASE)
+_TASKS_SUMMARY_PARSE_RE = re.compile(r"\b(\d+)\s+(?:tasks|tests),\s+(\d+)\s+passed,\s+(\d+)\s+failed\b", re.IGNORECASE)
+
+
+def _flush_all_log_handlers_best_effort() -> None:
+    try:
+        root = logging.getLogger()
+        for h in (root.handlers or []):
+            try:
+                h.flush()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _compute_sikeresseg_from_server_log() -> str:
+    """Returns the summary like '6 tasks, 6 passed, 0 failed' or 'Hibás futás'.
+
+    Rule (per request): search for pattern '\d+ (tasks|tests), \d+ passed, \d+ failed'.
+    If fewer than 2 occurrences exist -> 'Hibás futás', else the first match.
+    """
+    try:
+        _flush_all_log_handlers_best_effort()
+        log_path = _get_backend_log_path()
+        if not os.path.exists(log_path):
+            return 'Hibás futás'
+        with open(log_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        matches = [m.group(0) for m in _TASKS_SUMMARY_RE.finditer(content or '')]
+        if len(matches) < 2:
+            return 'Hibás futás'
+        return matches[0]
+    except Exception:
+        return 'Hibás futás'
+
 # Töröljük a server.log tartalmát a futás elején (új helyen)
 try:
     backend_log_path = _get_backend_log_path()
@@ -507,12 +544,14 @@ def _add_execution_result(repo: str, branch: str, status: str, returncode: int |
     try:
         global execution_results
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        sikeresseg = _compute_sikeresseg_from_server_log()
         result_entry = {
             'id': len(execution_results) + 1,
             'timestamp': timestamp,
             'repo': repo,
             'branch': branch,
             'status': status,
+            'sikeresseg': sikeresseg,
             'returncode': returncode,
             'results_dir': results_dir,
             'type': run_type,
@@ -3333,6 +3372,8 @@ def api_execute():
         status = "cancelled" if was_cancelled else ("success" if rc == 0 else "failed")
         logger.info(f"[EXECUTE] Robot futtatás befejezve: rc={rc}, status={status}, dir={out_dir}")
 
+        sikeresseg = _compute_sikeresseg_from_server_log()
+
         # --- GitHub Issue automatikus létrehozás + csatolmányok ---
         issue_info: dict | None = None
         try:
@@ -3481,6 +3522,7 @@ def api_execute():
             'repo': repo,
             'branch': branch,
             'status': status,
+            'sikeresseg': sikeresseg,
             'returncode': rc,
             'results_dir': out_dir,
             'type': 'bulk'
@@ -3496,6 +3538,7 @@ def api_execute():
             'results_dir': out_dir,
             'status': api_status,
             'run_status': status,
+            'sikeresseg': sikeresseg,
             'issue': issue_info,
         }
         save_execution_results()
@@ -3664,7 +3707,9 @@ def _build_last_run_by_key() -> dict[str, dict]:
 
     Visszatérési forma: {"repo|branch": {"status": "success|failed|...", "timestamp": "YYYY-MM-DD HH:MM:SS", "returncode": int|None}}
     """
-    last: dict[str, dict] = {}
+    last_any: dict[str, dict] = {}
+    last_run: dict[str, dict] = {}
+    run_types = {'bulk', 'single', 'schedule', 'scheduled', 'auto'}
     try:
         for r in (execution_results or []):
             repo = (r.get('repo') or '').strip()
@@ -3673,17 +3718,52 @@ def _build_last_run_by_key() -> dict[str, dict]:
             if not repo or not branch or not ts:
                 continue
             key = f"{repo}|{branch}"
-            prev = last.get(key)
+            typ = (r.get('type') or '').strip().lower()
+            target = last_run if typ in run_types else last_any
+            prev = target.get(key)
+
+            # Parse passed/failed from persisted success summary (if present)
+            sikeresseg = (r.get('sikeresseg') or '').strip()
+            passed = None
+            failed = None
+            try:
+                m = _TASKS_SUMMARY_PARSE_RE.search(sikeresseg or '')
+                if m:
+                    passed = int(m.group(2))
+                    failed = int(m.group(3))
+            except Exception:
+                passed = None
+                failed = None
+
+            entry = {
+                'status': (r.get('status') or '').strip(),
+                'timestamp': ts,
+                'returncode': r.get('returncode'),
+            }
+            if passed is not None and failed is not None:
+                entry['passed'] = passed
+                entry['failed'] = failed
+
             # A timestamp formátum fix: YYYY-MM-DD HH:MM:SS -> lexikografikusan összehasonlítható
             if prev is None or str(ts) > str(prev.get('timestamp') or ''):
-                last[key] = {
-                    'status': (r.get('status') or '').strip(),
-                    'timestamp': ts,
-                    'returncode': r.get('returncode'),
-                }
+                target[key] = entry
     except Exception:
-        return last
-    return last
+        # Best-effort: return whatever we managed to build
+        out: dict[str, dict] = {}
+        try:
+            for k in set(list(last_any.keys()) + list(last_run.keys())):
+                out[k] = last_run.get(k) or last_any.get(k) or {}
+        except Exception:
+            return last_run or last_any
+        return out
+
+    out: dict[str, dict] = {}
+    try:
+        for k in set(list(last_any.keys()) + list(last_run.keys())):
+            out[k] = last_run.get(k) or last_any.get(k) or {}
+    except Exception:
+        return last_run or last_any
+    return out
 
 
 def _build_last_run_by_branch(repo_name: str, branches: list[str]) -> dict[str, dict]:
@@ -4063,6 +4143,7 @@ def api_install_selected():
                         'repo': repo,
                         'branch': branch,
                         'status': 'success',
+                        'sikeresseg': '',
                         'returncode': rc,
                         'results_dir': results_dir_rel,
                         'type': 'install',
