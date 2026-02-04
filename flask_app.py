@@ -107,6 +107,52 @@ def healthz():
     return resp
 
 
+@app.route('/api/busy', methods=['GET'])
+def api_busy():
+    """Reports whether the backend is busy running or installing robots.
+
+    This is intended for UI hints (e.g. scheduled runs deferred).
+    Query: debug=1 to include running op keys.
+    """
+    try:
+        snap = _active_ops_snapshot()
+        busy_ops = False
+        try:
+            busy_ops = _is_system_busy_for_schedules()
+        except Exception:
+            busy_ops = False
+
+        running_count = 0
+        running_keys: list[str] = []
+        try:
+            with RUNNING_ROBOT_PROCS_LOCK:
+                for k, p in list((RUNNING_ROBOT_PROCS or {}).items()):
+                    try:
+                        if p is not None and p.poll() is None:
+                            running_count += 1
+                            running_keys.append(str(k))
+                    except Exception:
+                        continue
+        except Exception:
+            running_count = 0
+            running_keys = []
+
+        debug = (request.args.get('debug') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+        payload = {
+            'success': True,
+            'busy': bool(busy_ops or (running_count > 0)),
+            'active_ops': snap,
+            'running': {
+                'count': int(running_count),
+            },
+        }
+        if debug:
+            payload['running']['keys'] = running_keys
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/help_manual', methods=['GET'])
 def api_help_manual():
     """Returns the FELHASZNALOI_KEZIKONYV.md content as UTF-8 plain text."""
@@ -126,6 +172,49 @@ def api_help_manual():
 # Key format: run:<repo>:<branch>
 RUNNING_ROBOT_PROCS_LOCK = threading.RLock()
 RUNNING_ROBOT_PROCS: dict[str, subprocess.Popen] = {}
+
+# --- Global active operations (run/install) ---
+# Used to prevent scheduled starts while other actions are in progress.
+ACTIVE_OPS_LOCK = threading.RLock()
+ACTIVE_OPS: dict[str, int] = {'run': 0, 'install': 0}
+
+
+def _op_begin(kind: str):
+    try:
+        k = (kind or '').strip().lower() or 'unknown'
+        with ACTIVE_OPS_LOCK:
+            ACTIVE_OPS[k] = int(ACTIVE_OPS.get(k, 0)) + 1
+    except Exception:
+        pass
+
+
+def _op_end(kind: str):
+    try:
+        k = (kind or '').strip().lower() or 'unknown'
+        with ACTIVE_OPS_LOCK:
+            cur = int(ACTIVE_OPS.get(k, 0))
+            if cur <= 1:
+                ACTIVE_OPS[k] = 0
+            else:
+                ACTIVE_OPS[k] = cur - 1
+    except Exception:
+        pass
+
+
+def _active_ops_snapshot() -> dict[str, int]:
+    try:
+        with ACTIVE_OPS_LOCK:
+            return dict(ACTIVE_OPS)
+    except Exception:
+        return {'run': 0, 'install': 0}
+
+
+def _is_system_busy_for_schedules() -> bool:
+    try:
+        snap = _active_ops_snapshot()
+        return any(int(v) > 0 for v in (snap or {}).values())
+    except Exception:
+        return False
 
 # --- Schedules (Ütemezések) ---
 SCHEDULES_LOCK = threading.RLock()
@@ -582,9 +671,28 @@ def _start_schedule_worker_if_enabled():
 
     def _worker_loop():
         logger.info('[SCHEDULES] Scheduler worker started')
+        last_busy_log_ts = 0.0
         while True:
             try:
                 now = datetime.now()
+                busy = False
+                try:
+                    busy = _is_system_busy_for_schedules()
+                except Exception:
+                    busy = False
+
+                try:
+                    if busy:
+                        ts = time.time()
+                        if ts - last_busy_log_ts >= 60:
+                            last_busy_log_ts = ts
+                            try:
+                                snap = _active_ops_snapshot()
+                                logger.debug(f"[SCHEDULES] Busy; scheduled runs deferred. active_ops={snap}")
+                            except Exception:
+                                logger.debug("[SCHEDULES] Busy; scheduled runs deferred")
+                except Exception:
+                    pass
                 due: list[dict] = []
                 prompts: list[dict] = []
                 with SCHEDULES_LOCK:
@@ -664,6 +772,9 @@ def _start_schedule_worker_if_enabled():
 
                                     # If native prompt is enabled, show it (throttled)
                                     if _is_native_permission_prompt_enabled():
+                                        # If the system is busy (run/install), do not raise prompts now.
+                                        if busy:
+                                            continue
                                         # If a previous prompt is still open/pending, do not spawn another.
                                         # (Stuck prompt auto-approval is handled above.)
                                         if inflight:
@@ -704,6 +815,12 @@ def _start_schedule_worker_if_enabled():
                                     continue
 
                                 # Permission granted (or not required) -> run now
+                                # If another operation is in progress, defer starting.
+                                if busy:
+                                    continue
+                                # Only start one scheduled run per worker tick.
+                                if due:
+                                    continue
                                 it['status'] = 'running'
                                 it['running_started_at'] = now.isoformat(timespec='seconds')
                                 # reset permission flag so each scheduled start asks again by default
@@ -741,6 +858,21 @@ def _start_schedule_worker_if_enabled():
                         sid = (item.get('id') or '').strip()
                         repo = (item.get('repo') or '').strip()
                         branch = (item.get('branch') or '').strip()
+                        # Last-second gate: if something started since scheduling this run, revert to pending.
+                        try:
+                            if _is_system_busy_for_schedules():
+                                with SCHEDULES_LOCK:
+                                    all_items = _load_schedules()
+                                    for s in all_items:
+                                        if (s.get('id') or '').strip() == sid:
+                                            if (s.get('status') or '').strip().lower() == 'running':
+                                                s['status'] = 'pending'
+                                                s['running_started_at'] = None
+                                            break
+                                    _save_schedules(all_items)
+                                return
+                        except Exception:
+                            pass
                         repeat = (item.get('repeat') or 'none').strip().lower()
                         weekdays_only = bool(item.get('weekdays_only', False))
                         repeat_days = None
@@ -2983,16 +3115,24 @@ def run_robot_with_params(repo: str, branch: str, timeout_seconds: int | None = 
         except Exception:
             pass
 
-        result = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            encoding="utf-8",
-            errors="ignore",
-            creationflags=creationflags,
-        )
+        op_started = False
+        try:
+            _op_begin('run')
+            op_started = True
+            result = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                errors="ignore",
+                creationflags=creationflags,
+            )
+        except Exception:
+            if op_started:
+                _op_end('run')
+            raise
 
         # Opcionális futási timeout kezelése (backend oldalon enforce-olva)
         timeout_s: int | None = None
@@ -3046,42 +3186,47 @@ def run_robot_with_params(repo: str, branch: str, timeout_seconds: int | None = 
         except Exception:
             pass
 
-        output_lines = []
-        try:
-            for line in result.stdout:
+            output_lines = []
+            try:
+                for line in result.stdout:
+                    try:
+                        safe_line = line.strip()
+                        if isinstance(safe_line, bytes):
+                            safe_line = safe_line.decode('utf-8', errors='replace')
+                        else:
+                            safe_line = str(safe_line)
+                        logger.info(f": {safe_line}")
+                        output_lines.append(safe_line)
+                    except Exception as e:
+                        logger.warning(f"[RUN][LOGGING ERROR]: {e}")
+            finally:
                 try:
-                    safe_line = line.strip()
-                    if isinstance(safe_line, bytes):
-                        safe_line = safe_line.decode('utf-8', errors='replace')
-                    else:
-                        safe_line = str(safe_line)
-                    logger.info(f": {safe_line}")
-                    output_lines.append(safe_line)
-                except Exception as e:
-                    logger.warning(f"[RUN][LOGGING ERROR]: {e}")
-        finally:
-            try:
-                if watchdog_stop is not None:
-                    watchdog_stop.set()
-            except Exception:
-                pass
-            try:
-                result.wait()
-            except Exception:
-                pass
+                    if watchdog_stop is not None:
+                        watchdog_stop.set()
+                except Exception:
+                    pass
+                try:
+                    result.wait()
+                except Exception:
+                    pass
 
-            try:
-                with RUNNING_ROBOT_PROCS_LOCK:
-                    if RUNNING_ROBOT_PROCS.get(op_key) is result:
-                        del RUNNING_ROBOT_PROCS[op_key]
-            except Exception:
-                pass
+                try:
+                    with RUNNING_ROBOT_PROCS_LOCK:
+                        if RUNNING_ROBOT_PROCS.get(op_key) is result:
+                            del RUNNING_ROBOT_PROCS[op_key]
+                except Exception:
+                    pass
+                try:
+                    if op_started:
+                        _op_end('run')
+                except Exception:
+                    pass
 
-        if timed_out:
-            output_lines.append(f"[TIMEOUT] A futás túllépte a beállított {timeout_s}s időt, a folyamat megszakítva.")
-        logger.info(f"[RUN] Return code: {result.returncode}")
-        logger.info(f"[RUN] Robot output (first 500 chars): {''.join(output_lines)[:500]}")
-        return result.returncode, results_dir_abs, '\n'.join(output_lines), ''
+            if timed_out:
+                output_lines.append(f"[TIMEOUT] A futás túllépte a beállított {timeout_s}s időt, a folyamat megszakítva.")
+            logger.info(f"[RUN] Return code: {result.returncode}")
+            logger.info(f"[RUN] Robot output (first 500 chars): {''.join(output_lines)[:500]}")
+            return result.returncode, results_dir_abs, '\n'.join(output_lines), ''
     except FileNotFoundError as e:
         logger.error(f"[RUN][ERROR] FileNotFoundError: {e}")
         logger.info(f"[RUN] Robot visszatérés: returncode=1")
@@ -4173,96 +4318,200 @@ def install_robot_with_params(repo: str, branch: str):
     """Letölti és telepíti a robotot a megadott repo/branch alapján, de nem futtatja.
     Visszatér: (returncode, results_dir_rel, stdout, stderr)
     """
-    import json
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_repo = (repo or 'unknown').replace('/', '_')
-    safe_branch = (branch or 'unknown').replace('/', '_')
-    logger.info(f"[INSTALL] install_robot_with_params indult: repo='{repo}', branch='{branch}', safe_repo='{safe_repo}', safe_branch='{safe_branch}', timestamp='{timestamp}'")
-    # 1. Könyvtárak létrehozása (repo és branch szint)
-    is_sandbox = bool(get_sandbox_mode())
-    if is_sandbox:
-        base_dir = _normalize_dir_from_vars('SANDBOX_ROBOTS')
-        if not base_dir:
-            base_dir = os.path.join(os.getcwd(), 'SandboxRobots')
-        logger.info(f"[INSTALL] SANDBOX_MODE aktív, base_dir: {base_dir}")
-        logger.info(f"[ROBOT ELLENŐRZÉS] Telepítés SANDBOX könyvtárban: {base_dir}, repo: {repo}, branch: {branch}")
-    else:
-        base_dir = _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
-        if not base_dir:
-            base_dir = os.path.join(os.getcwd(), 'DownloadedRobots')
-        logger.info(f"[INSTALL] NEM sandbox mód, base_dir: {base_dir}")
-        logger.info(f"[ROBOT ELLENŐRZÉS] Telepítés DOWNLOADED könyvtárban: {base_dir}, repo: {repo}, branch: {branch}")
-    repo_dir = os.path.join(base_dir, safe_repo)
-    branch_dir = os.path.join(repo_dir, safe_branch)
-    logger.info(f"[INSTALL] repo_dir: {repo_dir}, branch_dir: {branch_dir}")
-    os.makedirs(repo_dir, exist_ok=True)
-    os.makedirs(branch_dir, exist_ok=True)
-
-    # 2. Git repo URL kinyerése a repos_response.json-ból
-    repo_url = None
+    _op_begin('install')
     try:
-        with open('repos_response.json', 'r', encoding='utf-8') as f:
-            repos = json.load(f)
-            for r in repos:
-                if r.get('name', '').lower() == repo.lower():
-                    repo_url = r.get('clone_url')
-                    logger.info(f"[INSTALL] repo_url megtalálva: {repo_url}")
-                    break
-    except Exception as e:
-        logger.error(f"[INSTALL][ERROR] Hiba a repos_response.json olvasásakor: {e}")
-        return 1, '', '', f'Hiba a repos_response.json olvasásakor: {e}'
-    if not repo_url:
-        logger.error(f"[INSTALL][ERROR] Nem található repo URL: {repo}")
-        return 1, '', '', f'Nem található repo URL: {repo}'
+        import json
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_repo = (repo or 'unknown').replace('/', '_')
+        safe_branch = (branch or 'unknown').replace('/', '_')
+        logger.info(f"[INSTALL] install_robot_with_params indult: repo='{repo}', branch='{branch}', safe_repo='{safe_repo}', safe_branch='{safe_branch}', timestamp='{timestamp}'")
+        # 1. Könyvtárak létrehozása (repo és branch szint)
+        is_sandbox = bool(get_sandbox_mode())
+        if is_sandbox:
+            base_dir = _normalize_dir_from_vars('SANDBOX_ROBOTS')
+            if not base_dir:
+                base_dir = os.path.join(os.getcwd(), 'SandboxRobots')
+            logger.info(f"[INSTALL] SANDBOX_MODE aktív, base_dir: {base_dir}")
+            logger.info(f"[ROBOT ELLENŐRZÉS] Telepítés SANDBOX könyvtárban: {base_dir}, repo: {repo}, branch: {branch}")
+        else:
+            base_dir = _normalize_dir_from_vars('DOWNLOADED_ROBOTS')
+            if not base_dir:
+                base_dir = os.path.join(os.getcwd(), 'DownloadedRobots')
+            logger.info(f"[INSTALL] NEM sandbox mód, base_dir: {base_dir}")
+            logger.info(f"[ROBOT ELLENŐRZÉS] Telepítés DOWNLOADED könyvtárban: {base_dir}, repo: {repo}, branch: {branch}")
+        repo_dir = os.path.join(base_dir, safe_repo)
+        branch_dir = os.path.join(repo_dir, safe_branch)
+        logger.info(f"[INSTALL] repo_dir: {repo_dir}, branch_dir: {branch_dir}")
+        os.makedirs(repo_dir, exist_ok=True)
+        os.makedirs(branch_dir, exist_ok=True)
 
-    installed_version: str | None = None
-
-    # 3. Forrás beszerzése
-    if not is_sandbox:
-        # Normál mód: ne klónozzunk; a latest release zipball-t töltsük le és csomagoljuk ki.
+        # 2. Git repo URL kinyerése a repos_response.json-ból
+        repo_url = None
         try:
-            owner, repo_name = _parse_owner_repo_from_github_url(repo_url)
-
-            # Preferáljuk a branch-hez tartozó legfrissebb release tag-et (ha elérhető)
-            tag = None
-            try:
-                tag = _try_get_latest_release_tag_for_branch(repo, branch)
-            except Exception:
-                tag = None
-            tag = (tag or '').strip()
-            if not tag or tag.upper() == 'NONE':
-                tag = _github_get_latest_release_tag(owner, repo_name)
-
-            if not tag:
-                msg = f"Nem található latest release tag: {owner}/{repo_name}"
-                logger.error(f"[INSTALL][ERROR] {msg}")
-                return 1, '', '', msg
-
-            logger.info(f"[INSTALL] Normál mód: latest release letöltés: {owner}/{repo_name} tag={tag}")
-            zip_bytes = _github_download_zipball_bytes(owner, repo_name, tag)
-            _extract_github_zipball_to_dir(zip_bytes, branch_dir, preserve_names={'.venv'})
-            installed_version = tag
-            logger.info(f"[INSTALL] Release kicsomagolva ide: {branch_dir}")
+            with open('repos_response.json', 'r', encoding='utf-8') as f:
+                repos = json.load(f)
+                for r in repos:
+                    if r.get('name', '').lower() == repo.lower():
+                        repo_url = r.get('clone_url')
+                        logger.info(f"[INSTALL] repo_url megtalálva: {repo_url}")
+                        break
         except Exception as e:
-            logger.error(f"[INSTALL][ERROR] Release letöltés/kicsomagolás hiba: {e}")
-            return 1, '', '', f'Release letöltés/kicsomagolás hiba: {e}'
-    else:
-        # Fejlesztői mód: marad a git klónozás/pull
-        try:
-            git_dir = os.path.join(branch_dir, '.git')
-            if not os.path.exists(git_dir):
-                clone_cmd = [
-                    'git', 'clone', '--branch', branch, '--single-branch', repo_url, branch_dir
-                ]
-                logger.info(f"[INSTALL] Klónozás indítása: {' '.join(clone_cmd)}")
+            logger.error(f"[INSTALL][ERROR] Hiba a repos_response.json olvasásakor: {e}")
+            return 1, '', '', f'Hiba a repos_response.json olvasásakor: {e}'
+        if not repo_url:
+            logger.error(f"[INSTALL][ERROR] Nem található repo URL: {repo}")
+            return 1, '', '', f'Nem található repo URL: {repo}'
+
+        installed_version: str | None = None
+
+        # 3. Forrás beszerzése
+        if not is_sandbox:
+            # Normál mód: ne klónozzunk; a latest release zipball-t töltsük le és csomagoljuk ki.
+            try:
+                owner, repo_name = _parse_owner_repo_from_github_url(repo_url)
+
+                # Preferáljuk a branch-hez tartozó legfrissebb release tag-et (ha elérhető)
+                tag = None
+                try:
+                    tag = _try_get_latest_release_tag_for_branch(repo, branch)
+                except Exception:
+                    tag = None
+                tag = (tag or '').strip()
+                if not tag or tag.upper() == 'NONE':
+                    tag = _github_get_latest_release_tag(owner, repo_name)
+
+                if not tag:
+                    msg = f"Nem található latest release tag: {owner}/{repo_name}"
+                    logger.error(f"[INSTALL][ERROR] {msg}")
+                    return 1, '', '', msg
+
+                logger.info(f"[INSTALL] Normál mód: latest release letöltés: {owner}/{repo_name} tag={tag}")
+                zip_bytes = _github_download_zipball_bytes(owner, repo_name, tag)
+                _extract_github_zipball_to_dir(zip_bytes, branch_dir, preserve_names={'.venv'})
+                installed_version = tag
+                logger.info(f"[INSTALL] Release kicsomagolva ide: {branch_dir}")
+            except Exception as e:
+                logger.error(f"[INSTALL][ERROR] Release letöltés/kicsomagolás hiba: {e}")
+                return 1, '', '', f'Release letöltés/kicsomagolás hiba: {e}'
+        else:
+            # Fejlesztői mód: marad a git klónozás/pull
+            try:
+                git_dir = os.path.join(branch_dir, '.git')
+                if not os.path.exists(git_dir):
+                    clone_cmd = [
+                        'git', 'clone', '--branch', branch, '--single-branch', repo_url, branch_dir
+                    ]
+                    logger.info(f"[INSTALL] Klónozás indítása: {' '.join(clone_cmd)}")
+                    result = subprocess.Popen(
+                        clone_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        encoding="utf-8",
+                        errors="ignore"
+                    )
+                    output_lines = []
+                    for line in result.stdout:
+                        try:
+                            safe_line = line.strip()
+                            if isinstance(safe_line, bytes):
+                                safe_line = safe_line.decode('utf-8', errors='replace')
+                            else:
+                                safe_line = str(safe_line)
+                            logger.info(f"[INSTALL][CLONE]: {safe_line}")
+                            output_lines.append(safe_line)
+                        except Exception as e:
+                            logger.warning(f"[INSTALL][CLONE][LOGGING ERROR]: {e}")
+                    result.wait()
+                    logger.info(f"[INSTALL] Klónozás befejezve: rc={result.returncode}, output={output_lines[:10]}")
+                    if result.returncode != 0:
+                        logger.error(f"[INSTALL][ERROR] Klónozás sikertelen: rc={result.returncode}, output={output_lines[:10]}")
+                        return 1, '', '\n'.join(output_lines), ''
+                else:
+                    # Force pull: fetch + reset --hard
+                    fetch_cmd = ['git', '-C', branch_dir, 'fetch', 'origin']
+                    logger.info(f"[INSTALL] Fetch indítása: {' '.join(fetch_cmd)}")
+                    fetch_result = subprocess.Popen(
+                        fetch_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        encoding="utf-8",
+                        errors="ignore"
+                    )
+                    fetch_lines = []
+                    for line in fetch_result.stdout:
+                        try:
+                            safe_line = line.strip()
+                            if isinstance(safe_line, bytes):
+                                safe_line = safe_line.decode('utf-8', errors='replace')
+                            else:
+                                safe_line = str(safe_line)
+                            logger.info(f"[INSTALL][FETCH]: {safe_line}")
+                            fetch_lines.append(safe_line)
+                        except Exception as e:
+                            logger.warning(f"[INSTALL][FETCH][LOGGING ERROR]: {e}")
+                    fetch_result.wait()
+                    logger.info(f"[INSTALL] Fetch befejezve: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
+                    if fetch_result.returncode != 0:
+                        logger.error(f"[INSTALL][ERROR] Fetch sikertelen: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
+                        return 1, '', '\n'.join(fetch_lines), ''
+                    reset_cmd = ['git', '-C', branch_dir, 'reset', '--hard', f'origin/{branch}']
+                    logger.info(f"[INSTALL] Reset --hard indítása: {' '.join(reset_cmd)}")
+                    reset_result = subprocess.Popen(
+                        reset_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        encoding="utf-8",
+                        errors="ignore"
+                    )
+                    reset_lines = []
+                    for line in reset_result.stdout:
+                        try:
+                            safe_line = line.strip()
+                            if isinstance(safe_line, bytes):
+                                safe_line = safe_line.decode('utf-8', errors='replace')
+                            else:
+                                safe_line = str(safe_line)
+                            logger.info(f"[INSTALL][RESET]: {safe_line}")
+                            reset_lines.append(safe_line)
+                        except Exception as e:
+                            logger.warning(f"[INSTALL][RESET][LOGGING ERROR]: {e}")
+                    reset_result.wait()
+                    logger.info(f"[INSTALL] Reset --hard befejezve: rc={reset_result.returncode}, output={reset_lines[:10]}")
+                    if reset_result.returncode != 0:
+                        logger.error(f"[INSTALL][ERROR] Reset --hard sikertelen: rc={reset_result.returncode}, output={reset_lines[:10]}")
+                        return 1, '', '\n'.join(reset_lines), ''
+            except Exception as e:
+                logger.error(f"[INSTALL][ERROR] Git klónozás/pull hiba: {e}")
+                return 1, '', '', f'Git klónozás/pull hiba: {e}'
+
+            logger.info("[INSTALL] SANDBOX_MODE: klónozás/pull OK, telepítő ellenőrzés következik")
+        # 4. telepito.bat futtatása CSAK ha nincs .venv mappa a letöltött branch könyvtárban
+        venv_dir = os.path.join(branch_dir, '.venv')
+        logger.info(f"[INSTALL] venv_dir ellenőrzés (branch_dir alapján): {venv_dir}")
+        if not os.path.isdir(venv_dir):
+            telepito_path = os.path.join(branch_dir, 'telepito.bat')
+            logger.info(f"[INSTALL] telepito.bat path: {telepito_path}")
+            if not os.path.exists(telepito_path):
+                logger.error(f"[INSTALL][ERROR] telepito.bat nem található: {telepito_path}")
+                return 1, '', '', f'telepito.bat nem található: {telepito_path}'
+            try:
+                logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir} (szinkron, várakozás)")
                 result = subprocess.Popen(
-                    clone_cmd,
+                    ['telepito.bat'],
+                    cwd=branch_dir,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
                     bufsize=1,
                     encoding="utf-8",
-                    errors="ignore"
+                    errors="ignore",
+                    shell=True
                 )
                 output_lines = []
                 for line in result.stdout:
@@ -4272,165 +4521,65 @@ def install_robot_with_params(repo: str, branch: str):
                             safe_line = safe_line.decode('utf-8', errors='replace')
                         else:
                             safe_line = str(safe_line)
-                        logger.info(f"[INSTALL][CLONE]: {safe_line}")
+                        logger.info(f"[INSTALL][TELEPITO]: {safe_line}")
                         output_lines.append(safe_line)
                     except Exception as e:
-                        logger.warning(f"[INSTALL][CLONE][LOGGING ERROR]: {e}")
+                        logger.warning(f"[INSTALL][TELEPITO][LOGGING ERROR]: {e}")
                 result.wait()
-                logger.info(f"[INSTALL] Klónozás befejezve: rc={result.returncode}, output={output_lines[:10]}")
-                if result.returncode != 0:
-                    logger.error(f"[INSTALL][ERROR] Klónozás sikertelen: rc={result.returncode}, output={output_lines[:10]}")
-                    return 1, '', '\n'.join(output_lines), ''
-            else:
-                # Force pull: fetch + reset --hard
-                fetch_cmd = ['git', '-C', branch_dir, 'fetch', 'origin']
-                logger.info(f"[INSTALL] Fetch indítása: {' '.join(fetch_cmd)}")
-                fetch_result = subprocess.Popen(
-                    fetch_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                    encoding="utf-8",
-                    errors="ignore"
-                )
-                fetch_lines = []
-                for line in fetch_result.stdout:
-                    try:
-                        safe_line = line.strip()
-                        if isinstance(safe_line, bytes):
-                            safe_line = safe_line.decode('utf-8', errors='replace')
-                        else:
-                            safe_line = str(safe_line)
-                        logger.info(f"[INSTALL][FETCH]: {safe_line}")
-                        fetch_lines.append(safe_line)
-                    except Exception as e:
-                        logger.warning(f"[INSTALL][FETCH][LOGGING ERROR]: {e}")
-                fetch_result.wait()
-                logger.info(f"[INSTALL] Fetch befejezve: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
-                if fetch_result.returncode != 0:
-                    logger.error(f"[INSTALL][ERROR] Fetch sikertelen: rc={fetch_result.returncode}, output={fetch_lines[:10]}")
-                    return 1, '', '\n'.join(fetch_lines), ''
-                reset_cmd = ['git', '-C', branch_dir, 'reset', '--hard', f'origin/{branch}']
-                logger.info(f"[INSTALL] Reset --hard indítása: {' '.join(reset_cmd)}")
-                reset_result = subprocess.Popen(
-                    reset_cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    bufsize=1,
-                    encoding="utf-8",
-                    errors="ignore"
-                )
-                reset_lines = []
-                for line in reset_result.stdout:
-                    try:
-                        safe_line = line.strip()
-                        if isinstance(safe_line, bytes):
-                            safe_line = safe_line.decode('utf-8', errors='replace')
-                        else:
-                            safe_line = str(safe_line)
-                        logger.info(f"[INSTALL][RESET]: {safe_line}")
-                        reset_lines.append(safe_line)
-                    except Exception as e:
-                        logger.warning(f"[INSTALL][RESET][LOGGING ERROR]: {e}")
-                reset_result.wait()
-                logger.info(f"[INSTALL] Reset --hard befejezve: rc={reset_result.returncode}, output={reset_lines[:10]}")
-                if reset_result.returncode != 0:
-                    logger.error(f"[INSTALL][ERROR] Reset --hard sikertelen: rc={reset_result.returncode}, output={reset_lines[:10]}")
-                    return 1, '', '\n'.join(reset_lines), ''
-        except Exception as e:
-            logger.error(f"[INSTALL][ERROR] Git klónozás/pull hiba: {e}")
-            return 1, '', '', f'Git klónozás/pull hiba: {e}'
+                logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={result.returncode}, output={output_lines[:10]}")
+            except Exception as e:
+                logger.error(f"[INSTALL][ERROR] telepito.bat futtatási hiba: {e}")
+                return 1, '', '', f'telepito.bat futtatási hiba: {e}'
+            # telepito.bat után újra ellenőrizzük a .venv mappát
+            if not os.path.isdir(venv_dir):
+                logger.error(f"[INSTALL][ERROR] .venv mappa nem található a telepítés után: {venv_dir}")
+                return 1, '', '', f'.venv mappa nem található a telepítés után: {venv_dir}'
+            logger.info(f"[INSTALL] .venv mappa sikeresen létrejött: {venv_dir}")
+        else:
+            logger.info(f"[INSTALL] .venv mappa már létezik: {venv_dir}")
+        logger.info(f"[INSTALL] install_robot_with_params sikeresen lefutott: repo='{repo}', branch='{branch}', branch_dir='{branch_dir}'")
 
-        logger.info("[INSTALL] SANDBOX_MODE: klónozás/pull OK, telepítő ellenőrzés következik")
-    # 4. telepito.bat futtatása CSAK ha nincs .venv mappa a letöltött branch könyvtárban
-    venv_dir = os.path.join(branch_dir, '.venv')
-    logger.info(f"[INSTALL] venv_dir ellenőrzés (branch_dir alapján): {venv_dir}")
-    if not os.path.isdir(venv_dir):
-        telepito_path = os.path.join(branch_dir, 'telepito.bat')
-        logger.info(f"[INSTALL] telepito.bat path: {telepito_path}")
-        if not os.path.exists(telepito_path):
-            logger.error(f"[INSTALL][ERROR] telepito.bat nem található: {telepito_path}")
-            return 1, '', '', f'telepito.bat nem található: {telepito_path}'
+        # --- Telepített verzió rögzítése (installed_versions/<branch>.txt) ---
         try:
-            logger.info(f"[INSTALL] telepito.bat futtatása indítás: cwd={branch_dir} (szinkron, várakozás)")
-            result = subprocess.Popen(
-                ['telepito.bat'],
-                cwd=branch_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                encoding="utf-8",
-                errors="ignore",
-                shell=True
-            )
-            output_lines = []
-            for line in result.stdout:
-                try:
-                    safe_line = line.strip()
-                    if isinstance(safe_line, bytes):
-                        safe_line = safe_line.decode('utf-8', errors='replace')
-                    else:
-                        safe_line = str(safe_line)
-                    logger.info(f"[INSTALL][TELEPITO]: {safe_line}")
-                    output_lines.append(safe_line)
-                except Exception as e:
-                    logger.warning(f"[INSTALL][TELEPITO][LOGGING ERROR]: {e}")
-            result.wait()
-            logger.info(f"[INSTALL] telepito.bat futtatás befejezve: rc={result.returncode}, output={output_lines[:10]}")
+            if not installed_version:
+                installed_version = _try_get_latest_release_tag_for_branch(repo, branch)
+            _write_installed_version(branch, installed_version)
+            logger.info(f"[INSTALL] Telepített verzió rögzítve: branch='{branch}', version='{installed_version}'")
         except Exception as e:
-            logger.error(f"[INSTALL][ERROR] telepito.bat futtatási hiba: {e}")
-            return 1, '', '', f'telepito.bat futtatási hiba: {e}'
-        # telepito.bat után újra ellenőrizzük a .venv mappát
-        if not os.path.isdir(venv_dir):
-            logger.error(f"[INSTALL][ERROR] .venv mappa nem található a telepítés után: {venv_dir}")
-            return 1, '', '', f'.venv mappa nem található a telepítés után: {venv_dir}'
-        logger.info(f"[INSTALL] .venv mappa sikeresen létrejött: {venv_dir}")
-    else:
-        logger.info(f"[INSTALL] .venv mappa már létezik: {venv_dir}")
-    logger.info(f"[INSTALL] install_robot_with_params sikeresen lefutott: repo='{repo}', branch='{branch}', branch_dir='{branch_dir}'")
+            logger.warning(f"[INSTALL] Telepített verzió rögzítése sikertelen: branch='{branch}', err={e}")
 
-    # --- Telepített verzió rögzítése (installed_versions/<branch>.txt) ---
-    try:
-        if not installed_version:
-            installed_version = _try_get_latest_release_tag_for_branch(repo, branch)
-        _write_installed_version(branch, installed_version)
-        logger.info(f"[INSTALL] Telepített verzió rögzítve: branch='{branch}', version='{installed_version}'")
-    except Exception as e:
-        logger.warning(f"[INSTALL] Telepített verzió rögzítése sikertelen: branch='{branch}', err={e}")
-
-    # --- Eredmény log generálása a results mappába ---
-    try:
-        results_dir_name = f"{safe_repo}__{safe_branch}__{timestamp}"
-        results_dir_abs = os.path.abspath(os.path.join('results', results_dir_name))
-        os.makedirs(results_dir_abs, exist_ok=True)
-        log_path = os.path.join(results_dir_abs, 'log.html')
-        with open(log_path, 'w', encoding='utf-8') as f:
-            f.write(f"""
-                <html><head><meta charset='utf-8'><title>Letöltési log</title></head><body>
-                <h2>Robot letöltés sikeres</h2>
-                <ul>
-                    <li>Repo: {repo}</li>
-                    <li>Robot: {branch}</li>
-                    <li>Telepített: {installed_version}</li>
-                    <li>Időpont: {timestamp}</li>
-                    <li>Könyvtár: {branch_dir}</li>
-                </ul>
-                <p style='color:green;'>A robot sikeresen le lett töltve és telepítve.</p>
-                </body></html>
-            """)
-        logger.info(f"[INSTALL] Letöltési log.html létrehozva: {log_path}")
-    except Exception as e:
-        logger.error(f"[INSTALL][ERROR] Nem sikerült letöltési logot írni: {e}")
-    stdout_msg = 'Install OK'
-    try:
-        if installed_version:
-            stdout_msg = f"Install OK (release={installed_version})"
-    except Exception:
-        pass
-    return 0, results_dir_name, stdout_msg, ''
+        # --- Eredmény log generálása a results mappába ---
+        try:
+            results_dir_name = f"{safe_repo}__{safe_branch}__{timestamp}"
+            results_dir_abs = os.path.abspath(os.path.join('results', results_dir_name))
+            os.makedirs(results_dir_abs, exist_ok=True)
+            log_path = os.path.join(results_dir_abs, 'log.html')
+            with open(log_path, 'w', encoding='utf-8') as f:
+                f.write(f"""
+                    <html><head><meta charset='utf-8'><title>Letöltési log</title></head><body>
+                    <h2>Robot letöltés sikeres</h2>
+                    <ul>
+                        <li>Repo: {repo}</li>
+                        <li>Robot: {branch}</li>
+                        <li>Telepített: {installed_version}</li>
+                        <li>Időpont: {timestamp}</li>
+                        <li>Könyvtár: {branch_dir}</li>
+                    </ul>
+                    <p style='color:green;'>A robot sikeresen le lett töltve és telepítve.</p>
+                    </body></html>
+                """)
+            logger.info(f"[INSTALL] Letöltési log.html létrehozva: {log_path}")
+        except Exception as e:
+            logger.error(f"[INSTALL][ERROR] Nem sikerült letöltési logot írni: {e}")
+        stdout_msg = 'Install OK'
+        try:
+            if installed_version:
+                stdout_msg = f"Install OK (release={installed_version})"
+        except Exception:
+            pass
+        return 0, results_dir_name, stdout_msg, ''
+    finally:
+        _op_end('install')
 # --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---
 
 # --- ÚJ ENDPOINTOK: Futtatható és letölthető robotok listája külön ---

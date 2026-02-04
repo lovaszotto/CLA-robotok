@@ -723,7 +723,12 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
         <div class="tab-pane fade" id="scheduled-pane" role="tabpanel" aria-labelledby="scheduled-tab">
             <div class="card">
                 <div class="card-header active-tab-header text-white">
-                    <h5 class="mb-0"><i class="bi bi-calendar3 me-1"></i> Ütemezett robotok</h5>
+                    <div class="d-flex align-items-center justify-content-between gap-2">
+                        <h5 class="mb-0"><i class="bi bi-calendar3 me-1"></i> Ütemezett robotok</h5>
+                        <span id="schedBusyBadge" class="badge bg-light text-dark" style="display:none;">
+                            <i class="bi bi-hourglass-split me-1"></i> Foglalt
+                        </span>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
@@ -2470,7 +2475,42 @@ function initScheduledCalendar() {
     const selectedLabelEl = document.getElementById('schedSelectedDateLabel');
     const dayListEl = document.getElementById('schedDayList');
     const newBtn = document.getElementById('schedNewBtn');
+    const busyBadgeEl = document.getElementById('schedBusyBadge');
     if (!calEl || !labelEl || !prevBtn || !nextBtn) return;
+
+    const refreshBusy = async () => {
+        if (!busyBadgeEl) return;
+        try {
+            const r = await fetch('/api/busy', { cache: 'no-store' });
+            const data = await r.json().catch(() => ({}));
+            const busy = !!(data && data.success && data.busy);
+            const ops = (data && data.active_ops) ? data.active_ops : {};
+            const runN = Number(ops.run || 0);
+            const instN = Number(ops.install || 0);
+
+            if (!busy) {
+                busyBadgeEl.style.display = 'none';
+                return;
+            }
+
+            let parts = [];
+            if (runN > 0) parts.push(`futás: ${runN}`);
+            if (instN > 0) parts.push(`telepítés: ${instN}`);
+            const details = parts.length ? ` (${parts.join(', ')})` : '';
+            busyBadgeEl.innerHTML = `<i class="bi bi-hourglass-split me-1"></i> Foglalt${details}`;
+            busyBadgeEl.style.display = '';
+        } catch (e) {
+            // silent
+        }
+    };
+
+    // Start/refresh busy polling (guarded so multiple inits don't create multiple timers)
+    try {
+        if (!window.__schedBusyTimer) {
+            window.__schedBusyTimer = setInterval(() => { try { refreshBusy(); } catch (e) {} }, 3000);
+        }
+        setTimeout(() => { try { refreshBusy(); } catch (e) {} }, 50);
+    } catch (e) { }
 
     window.__scheduledCalState = window.__scheduledCalState || (() => {
         const now = new Date();
@@ -2581,6 +2621,17 @@ function initScheduledCalendar() {
                             ? '<span class="badge bg-secondary">Kihagyva</span>'
                         : '<span class="badge bg-secondary">Vár</span>';
 
+            const permControls = status === 'awaiting_permission'
+                ? `
+                    <button class="btn btn-success btn-sm" type="button" data-sched-perm="allow" data-sched-perm-id="${esc(it.id)}" title="Engedélyez">
+                        <i class="bi bi-check-lg"></i> Engedélyez
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" type="button" data-sched-perm="deny" data-sched-perm-id="${esc(it.id)}" title="Elutasít">
+                        <i class="bi bi-x-lg"></i> Elutasít
+                    </button>
+                `
+                : '';
+
             const weekdaysOnly = !!it.weekdays_only;
             const rdays = Array.isArray(it.repeat_days) ? it.repeat_days : null;
             const dayNames = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'];
@@ -2599,6 +2650,7 @@ function initScheduledCalendar() {
                         <div class="small text-muted">${esc(runAt)} • ${esc(repeatLabel)}</div>
                     </div>
                     <div class="d-flex align-items-center" style="gap: 0.5rem;">
+                        ${permControls}
                         <div class="form-check form-switch mb-0" title="Aktív">
                             <input class="form-check-input" type="checkbox" data-sched-toggle="1" data-sched-id="${esc(it.id)}" ${enabled ? 'checked' : ''}>
                         </div>
@@ -2636,6 +2688,43 @@ function initScheduledCalendar() {
                 } catch (e) {
                     showToast('Hiba történt módosítás közben.', 'danger');
                     chk.checked = !enabled;
+                }
+            });
+        });
+
+        dayListEl.querySelectorAll('button[data-sched-perm][data-sched-perm-id]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-sched-perm-id');
+                const decision = String(btn.getAttribute('data-sched-perm') || '').toLowerCase();
+                if (!id || !decision) return;
+                if (decision === 'deny') {
+                    const ok = confirm('Biztosan elutasítod az ütemezett futást?');
+                    if (!ok) return;
+                }
+                const prevHtml = btn.innerHTML;
+                try {
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+                    const resp = await fetch(`/api/schedules/${encodeURIComponent(id)}/permission`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ decision }),
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok || !data?.success) {
+                        showToast(data?.error || 'Nem sikerült a döntést rögzíteni.', 'danger');
+                        return;
+                    }
+                    await refreshMonthAndRerender();
+                    await renderDayList(window.__schedUiState.selectedDate);
+                } catch (e) {
+                    showToast('Hiba történt engedélyezés/elutasítás közben.', 'danger');
+                } finally {
+                    try {
+                        btn.disabled = false;
+                        btn.innerHTML = prevHtml;
+                    } catch (e) {}
                 }
             });
         });

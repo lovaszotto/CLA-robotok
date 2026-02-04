@@ -147,6 +147,18 @@ Naptár használat:
 - **Szerkesztés** (ceruza): ugyanazzal a modallal módosítható dátum/idő/robot/ismétlődés
 - **Törlés** (kuka): törli az ütemezést
 
+Engedélykérés ("Engedélyre vár" státusz):
+- Alapértelmezés szerint az ütemezett futások **felhasználói engedélyt kérnek** a futtatás előtt.
+- Ha egy ütemezés elérte az időpontját, de még nincs engedély, a státusz: **Engedélyre vár**.
+- Ilyenkor a kiválasztott nap listájában megjelenik két gomb:
+  - **Engedélyez**: rögzíti az engedélyt és a futás a következő scheduler körben elindul.
+  - **Elutasít**: nem indít futást; ismétlődő ütemezésnél a következő alkalomra ugrik, egyszerinél "Kihagyva" lehet.
+
+"Foglalt" állapot (párhuzamos műveletek tiltása):
+- Ha épp fut egy robot vagy telepítés/letöltés zajlik, az Ütemezett robotok fejlécében megjelenhet egy **Foglalt** jelzés.
+- Ilyenkor az ütemezett indítások **nem indulnak el párhuzamosan**, és az engedélykérések is késleltetve lehetnek.
+- Amint a foglalt állapot megszűnik, az ütemezések a következő körben folytatódnak.
+
 Robot szűrése:
 - a felső **„Robot szűrése…”** mező csak a **Telepített robotok** és a **Letölthető robotok** tabon jelenik meg
 - a beírt szöveg alapján repo névre és robot (branch) névre is szűr
@@ -231,10 +243,14 @@ Gyakori okok:
 - a CLA-ssistant szerver nem fut (a scheduler a backend folyamat része)
 - az ütemezés inaktívra van kapcsolva
 - a scheduler ki van kapcsolva indításkor: `ENABLE_SCHEDULER=0`
+- az ütemezés **"Engedélyre vár"** állapotban van (nincs megadva engedély)
+- a rendszer **"Foglalt"** (robot fut / telepítés zajlik), ezért az ütemezett indítások várakoznak
 
 Mit próbálj:
 - indítsd újra a szervert a `start.bat`-tal
 - az Ütemezett robotok tabon kapcsold aktívra az ütemezést
+- ha a státusz **Engedélyre vár**, kattints az **Engedélyez** gombra a napi listában
+- ha a fejlécben **Foglalt** jelzés látszik, várd meg, míg eltűnik (vagy fejezd be a futó/telepítő műveletet)
 - nézd meg a szerver logot (`server.log`) a futási hibákhoz
 
 ---
