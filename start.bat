@@ -9,13 +9,30 @@ echo.
 :: Konyvtar valtas a script helyere
 cd /d "%~dp0"
 
-:: Splash képernyő megnyitása azonnal (háttérkép látszódjon az inicializálás alatt is)
+:: Inditas elott allitsuk le a korabbi peldanyokat (port 5000 felszabaditasa)
+call "%~dp0stop.bat"
+
+:: Splash képernyő megnyitása (háttérkép látszódjon az inicializálás alatt is)
 if exist "%~dp0splash.html" (
     start "CLA-ssistant" "%~dp0splash.html"
 )
 
-:: Inditas elott allitsuk le a korabbi peldanyokat (port 5000 felszabaditasa)
-call "%~dp0stop.bat"
+:: Biztosítsuk, hogy a 5000-es port már tényleg szabad (különben a Flask azonnal elhasal)
+setlocal EnableDelayedExpansion
+set /a tries=0
+:WAIT_PORT_FREE
+set "HAS_LISTENER="
+for /f "tokens=1" %%L in ('netstat -aon ^| findstr /R /C:":5000 .*LISTENING"') do (
+    set "HAS_LISTENER=1"
+)
+if defined HAS_LISTENER (
+    set /a tries+=1
+    if !tries! GEQ 15 goto PORT_WAIT_DONE
+    timeout /t 1 /nobreak >nul
+    goto WAIT_PORT_FREE
+)
+:PORT_WAIT_DONE
+endlocal
 
 :: Aktualis konyvtar kiirasa
 echo Aktualis munkakonyvtar: %CD%

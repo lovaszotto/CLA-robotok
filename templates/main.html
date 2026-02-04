@@ -1826,8 +1826,17 @@ function renderRunnableRepos(repos) {
                                     const badgeText = (st === 'success') ? 'Siker' : (st === 'failed') ? 'Hiba' : (st === 'cancelled') ? 'Megszakítva' : 'Futás';
                                     const rc = (lr.returncode !== undefined && lr.returncode !== null) ? String(lr.returncode) : '';
                                     const statusTip = `Utolsó futás státusza: ${st}${rc ? ` (rc=${rc})` : ''}`;
+                                    const hasPf = (lr.passed !== undefined && lr.passed !== null && lr.failed !== undefined && lr.failed !== null);
+                                    const pfBadge = hasPf ? (() => {
+                                        const passed = parseInt(String(lr.passed), 10);
+                                        const failed = parseInt(String(lr.failed), 10);
+                                        if (!Number.isFinite(passed) || !Number.isFinite(failed)) return '';
+                                        const cls = (failed === 0) ? 'bg-success' : 'bg-warning text-dark';
+                                        return `<span class="badge ms-1 ${cls}" data-bs-toggle="tooltip" data-bs-title="passed / failed">${passed} / ${failed}</span>`;
+                                    })() : '';
                                     return `<span class="small last-run-meta">` +
                                         `<span class="badge ${badgeClass}" data-bs-toggle="tooltip" data-bs-title="${escAttr(statusTip)}">${badgeText}</span>` +
+                                        pfBadge +
                                         (ts ? `<span class="text-muted ms-1" data-bs-toggle="tooltip" data-bs-title="Utolsó futás ideje">${escAttr(ts)}</span>` : '') +
                                     `</span>`;
                                 } catch (e) {

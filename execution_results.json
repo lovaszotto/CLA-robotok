@@ -284,5 +284,16 @@
     "returncode": 0,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\KBSZ-robotok__KB01-Közbeszerzési-Értesítő__20260204_100542",
     "type": "bulk"
+  },
+  {
+    "id": 29,
+    "timestamp": "2026-02-04 10:13:42",
+    "repo": "IKK-Robotok",
+    "branch": "IKK04-Dokumentum-WEB-Ellenőrzés",
+    "status": "failed",
+    "sikeresseg": "Hibás futás",
+    "returncode": 9,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20260204_101342",
+    "type": "bulk"
   }
 ]
