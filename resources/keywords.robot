@@ -1,5 +1,5 @@
 *** Settings ***
-Documentation    Egyedi kulcsszavak a CLA-ssistant robotokhoz
+Documentation    Egyedi kulcsszavak a CLAssistant robotokhoz
 
 *** Keywords ***
 

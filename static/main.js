@@ -133,7 +133,38 @@ function setRunButtonsLocked(locked, opKey) {
         if (locked) window.__runUiLocks.add(key);
         else window.__runUiLocks.delete(key);
 
-        const hasLocks = window.__runUiLocks.size > 0;
+        const runLocks = window.__runUiLocks;
+        const installLocks = window.__installUiLocks || new Set();
+        const hasLocks = runLocks.size > 0 || installLocks.size > 0;
+        const runButtons = Array.from(document.querySelectorAll('button[onclick*="executeSingleRobot("]'));
+        const downloadButtons = Array.from(document.querySelectorAll('button[onclick*="installRobot("], button[onclick*="installSelectedRobots("]'));
+        runButtons.forEach((buttonEl) => {
+            try {
+                buttonEl.disabled = !!hasLocks;
+                if (hasLocks) buttonEl.classList.add('disabled');
+                else buttonEl.classList.remove('disabled');
+            } catch (e) {}
+        });
+        downloadButtons.forEach((buttonEl) => {
+            try {
+                buttonEl.disabled = !!hasLocks;
+                if (hasLocks) buttonEl.classList.add('disabled');
+                else buttonEl.classList.remove('disabled');
+            } catch (e) {}
+        });
+    } catch (e) {}
+}
+
+function setInstallButtonsLocked(locked, opKey) {
+    try {
+        window.__installUiLocks = window.__installUiLocks || new Set();
+        const key = String(opKey || 'install');
+        if (locked) window.__installUiLocks.add(key);
+        else window.__installUiLocks.delete(key);
+
+        const runLocks = window.__runUiLocks || new Set();
+        const installLocks = window.__installUiLocks;
+        const hasLocks = runLocks.size > 0 || installLocks.size > 0;
         const runButtons = Array.from(document.querySelectorAll('button[onclick*="executeSingleRobot("]'));
         const downloadButtons = Array.from(document.querySelectorAll('button[onclick*="installRobot("], button[onclick*="installSelectedRobots("]'));
         runButtons.forEach((buttonEl) => {
@@ -188,6 +219,7 @@ if (typeof window.installRobot !== 'function') {
         });
         if (!ok) return;
         IS_INSTALL_BUSY = true;
+        setInstallButtonsLocked(true, opKey);
         try {
             if (btn) btn.dataset.waitKind = 'download';
             miniWaitStart(opKey, 'Letöltés folyamatban...', 'download');
@@ -225,6 +257,9 @@ if (typeof window.installRobot !== 'function') {
             IS_INSTALL_BUSY = false;
             try {
                 stopWaitWhenBackendIdle(opKey);
+            } catch (e) {}
+            try {
+                setInstallButtonsLocked(false, opKey);
             } catch (e) {}
             if (btn) {
                 btn.disabled = false;

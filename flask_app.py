@@ -94,7 +94,7 @@ except Exception:
 app = Flask(__name__)
 # Csak WARNING szinttől logoljon a werkzeug (HTTP kérések ne menjenek a server.log-ba)
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'cla-ssistant-secret')
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'classistant-secret')
 
 
 @app.route('/healthz', methods=['GET'])
@@ -363,7 +363,7 @@ def _show_native_permission_prompt(schedule_id: str, repo: str, branch: str, run
             logger.info(f"[SCHEDULES] Native permission prompt showing id={schedule_id} repo={repo} branch={branch}")
         except Exception:
             pass
-        title = 'CLA-ssistant – Engedélykérés'
+        title = 'CLAssistant – Engedélykérés'
         run_at_str = (run_at or '').replace('T', ' ')
         later_m = _default_later_minutes()
         msg = (
@@ -1181,7 +1181,7 @@ if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
     root_logger.addHandler(console_handler)
 
 # Saját logger, propagate nélkül
-logger = logging.getLogger("cla-ssistant")
+logger = logging.getLogger("classistant")
 logger.propagate = False
 logger.setLevel(logging.INFO)
 if not any(isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == file_handler.baseFilename for h in logger.handlers):
@@ -1428,7 +1428,7 @@ def _get_github_token() -> str | None:
 
 
 def _github_headers() -> dict:
-    headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'CLA-ssistant'}
+    headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'CLAssistant'}
     token = _get_github_token()
     if token:
         headers['Authorization'] = f'token {token}'
@@ -5223,7 +5223,7 @@ def api_repos_branches_tags():
         return None
 
     def _github_headers() -> dict:
-        headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'CLA-ssistant'}
+        headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'CLAssistant'}
         token = _get_github_token()
         if token:
             # GitHub REST v3: klasszikus PAT-hoz 'token', fine-grained-hez is működik.

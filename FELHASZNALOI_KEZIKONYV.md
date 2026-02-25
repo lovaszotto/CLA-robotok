@@ -1,7 +1,7 @@
-# CLA-ssistant – Felhasználói kézikönyv
+# CLAssistant – Felhasználói kézikönyv
 
 ## 1. Mi ez?
-A CLA-ssistant egy Flask alapú webes felület Robot Framework robotok kezeléséhez:
+A CLAssistant egy Flask alapú webes felület Robot Framework robotok kezeléséhez:
 - robotok letöltése / telepítése
 - robotok futtatása
 - ütemezett futtatások kezelése (naptár nézet)
@@ -38,7 +38,7 @@ Két tipikus indítási mód:
 
 ### A) Telepített indítás
 - `Run-CLAssistant.bat`
-  - megkeresi a telepített CLA-ssistant mappát a `DownloadedRobots` alatt,
+  - megkeresi a telepített CLAssistant mappát a `DownloadedRobots` alatt,
   - majd meghívja a `start.bat`-ot.
 
 ### B) Közvetlen indítás a projekt mappájából
@@ -240,7 +240,7 @@ Mit próbálj:
 
 ### 9.3. Nem futnak az ütemezések
 Gyakori okok:
-- a CLA-ssistant szerver nem fut (a scheduler a backend folyamat része)
+- a CLAssistant szerver nem fut (a scheduler a backend folyamat része)
 - az ütemezés inaktívra van kapcsolva
 - a scheduler ki van kapcsolva indításkor: `ENABLE_SCHEDULER=0`
 - az ütemezés **"Engedélyre vár"** állapotban van (nincs megadva engedély)

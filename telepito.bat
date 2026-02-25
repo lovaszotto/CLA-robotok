@@ -2,7 +2,7 @@
 chcp 65001 >nul
 set PYTHONIOENCODING=utf-8
 REM =====================================================
-REM  CLA-SSISTANT TELEPITO v3.0
+REM  CLASSISTANT TELEPITO v3.0
 REM  GitHub Repository kezelő Robot Framework rendszer
 REM  Automatizált Git műveletek és repository kezelés
 REM =====================================================
@@ -56,7 +56,7 @@ if not exist ".venv" (
 echo.
 
 REM Virtualis kornyezet aktivalasa es csomagok telepitese
-echo CLA-ssistant csomagok telepitese...
+echo CLAssistant csomagok telepitese...
 .venv\Scripts\pip.exe install -r requirements.txt
 
 if errorlevel 1 (
@@ -67,7 +67,7 @@ if errorlevel 1 (
 
 echo.
 echo =========================================
-echo CLA-SSISTANT v3.1 TELEPITES SIKERES!
+echo CLASSISTANT v3.1 TELEPITES SIKERES!
 echo Telepitesi hely: %CURDIR%
 exit 0
 

@@ -452,7 +452,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                 <h1 class="mb-0 bi bi-robot"> {{ page_title }}</h1>
                 <div class="timestamp">
                     <div>
-                        CLA-ssistant &copy; {{ datetime.now().year }} / Verzió: {{ version }}{% if build_date %} / {{ build_date }}{% endif %}
+                        CLAssistant &copy; {{ datetime.now().year }} / Verzió: {{ version }}{% if build_date %} / {{ build_date }}{% endif %}
                     </div>
                 </div>
             </div>
@@ -3294,7 +3294,9 @@ async function executeSingleRobot(button) {
             if (locked) window.__runUiLocks.add(key);
             else window.__runUiLocks.delete(key);
 
-            const hasLocks = window.__runUiLocks.size > 0;
+            const runLocks = window.__runUiLocks;
+            const installLocks = window.__installUiLocks || new Set();
+            const hasLocks = runLocks.size > 0 || installLocks.size > 0;
             const runBtns = Array.from(document.querySelectorAll('button[onclick*="executeSingleRobot("]'));
             const downloadBtns = Array.from(document.querySelectorAll('button[onclick*="installRobot("], button[onclick*="installSelectedRobots("]'));
             runBtns.forEach((btnEl) => {
@@ -3477,6 +3479,36 @@ function installSelectedRobots() {
 }
 function installRobots(robots, options = {}) {
     const { triggerButton = null } = options;
+    const _setInstallButtonsLocked = (locked, opKey) => {
+        try {
+            window.__installUiLocks = window.__installUiLocks || new Set();
+            const key = String(opKey || 'install');
+            if (locked) window.__installUiLocks.add(key);
+            else window.__installUiLocks.delete(key);
+
+            const runLocks = window.__runUiLocks || new Set();
+            const installLocks = window.__installUiLocks;
+            const hasLocks = runLocks.size > 0 || installLocks.size > 0;
+
+            const runBtns = Array.from(document.querySelectorAll('button[onclick*="executeSingleRobot("]'));
+            const downloadBtns = Array.from(document.querySelectorAll('button[onclick*="installRobot("], button[onclick*="installSelectedRobots("]'));
+            runBtns.forEach((btnEl) => {
+                try {
+                    btnEl.disabled = !!hasLocks;
+                    if (hasLocks) btnEl.classList.add('disabled');
+                    else btnEl.classList.remove('disabled');
+                } catch (e) { /* noop */ }
+            });
+            downloadBtns.forEach((btnEl) => {
+                try {
+                    btnEl.disabled = !!hasLocks;
+                    if (hasLocks) btnEl.classList.add('disabled');
+                    else btnEl.classList.remove('disabled');
+                } catch (e) { /* noop */ }
+            });
+        } catch (e) { /* noop */ }
+    };
+
     const installBtn = document.querySelector('button[onclick*="installSelectedRobots"]');
     if (installBtn) installBtn.disabled = true;
     let triggerOriginalHtml = null;
@@ -3515,6 +3547,7 @@ function installRobots(robots, options = {}) {
     if (!robots || robots.length === 0) {
         console.log('[DOWNLOAD] Nincs kijelölt robot a letöltéshez.');
         showToast('Nincs kijelölt robot a letöltéshez.', 'warning');
+        try { _setInstallButtonsLocked(false, 'install:pending'); } catch (e) { /* noop */ }
         if (installBtn) installBtn.disabled = false;
         if (triggerButton) {
             triggerButton.disabled = false;
@@ -3527,6 +3560,10 @@ function installRobots(robots, options = {}) {
         return;
     }
     console.log('[DOWNLOAD] Letöltési kérés elküldése a backendnek:', robots);
+    try {
+        const lockKey = String(waitOpKey || 'install:pending');
+        _setInstallButtonsLocked(true, lockKey);
+    } catch (e) { /* noop */ }
     let ctrl = null;
     try {
         if (waitOpKey) {
@@ -3604,6 +3641,10 @@ function installRobots(robots, options = {}) {
     })
     .finally(() => {
         console.log('[DOWNLOAD] Letöltési folyamat vége.');
+        try {
+            const lockKey = String(waitOpKey || 'install:pending');
+            _setInstallButtonsLocked(false, lockKey);
+        } catch (e) { /* noop */ }
         if (installBtn) installBtn.disabled = false;
         if (triggerButton) {
             triggerButton.disabled = false;
@@ -5146,7 +5187,7 @@ async function _pollSchedulePermissionRequests() {
             if (!window.__permissionPollState.warnedMissingEndpoint) {
                 window.__permissionPollState.warnedMissingEndpoint = true;
                 try {
-                    showToast('Az engedélykérés API nem elérhető (404/405). Indítsd újra a CLA-ssistant szervert a frissített verzióval.', 'warning');
+                    showToast('Az engedélykérés API nem elérhető (404/405). Indítsd újra a CLAssistant szervert a frissített verzióval.', 'warning');
                 } catch (e) { /* ignore */ }
             }
             return;

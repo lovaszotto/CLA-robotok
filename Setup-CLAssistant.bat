@@ -64,7 +64,7 @@ for %%d in (%subDirs%) do (
 )
 echo.
 
-REM CLA-robotok/CLA-ssistant konyvtar ellenorzese es letrehozasa
+REM CLA-robotok/CLAssistant konyvtar ellenorzese es letrehozasa
 set "claRobotsPath=%myRobotPath%\DownloadedRobots\CLA-robotok\CLA-ssistant"
 echo [4/7] %claRobotsPath% konyvtar ellenorzese...
 set "parentPath=%myRobotPath%\DownloadedRobots\CLA-robotok"
@@ -73,7 +73,7 @@ if exist "%parentPath%" (
     echo   - Meglevo tartalom torlese...
     rd /s /q "%parentPath%" >nul 2>&1
 )
-echo   - CLA-robotok/CLA-ssistant konyvtar kesz a letoltesre
+echo   - CLA-robotok/CLAssistant konyvtar kesz a letoltesre
 echo.
 
 REM Git ellenorzese
@@ -111,11 +111,11 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-echo   - Projekt sikeresen letoltve kozvetlenul a CLA-ssistant konyvtarba
+echo   - Projekt sikeresen letoltve kozvetlenul a CLAssistant konyvtarba
 
 echo   - Ellenorzés: telepito.bat keresése...
 if exist "%claRobotsPath%\telepito.bat" (
-    echo   - telepito.bat megtalálva a CLA-ssistant könyvtárban
+    echo   - telepito.bat megtalálva a CLAssistant könyvtárban
 ) else (
     echo   - FIGYELEM: telepito.bat nem található!
     echo   - Repository tartalom ellenőrzése szükséges

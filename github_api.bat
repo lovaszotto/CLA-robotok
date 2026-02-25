@@ -1,6 +1,6 @@
 @echo off 
 REM ========================================= 
-REM  CLA-SSISTANT - GITHUB API KEZELO 
+REM  CLASSISTANT - GITHUB API KEZELO 
 REM ========================================= 
 echo. 
 echo ========================================= 

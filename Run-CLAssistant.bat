@@ -11,16 +11,16 @@ set "actualUser=%USERNAME%"
 echo Aktualis felhasznalo: %actualUser%
 echo.
 
-REM Telepitett CLA-ssistant konyvtar meghatározasa
+REM Telepitett CLAssistant konyvtar meghatározasa
 set "myRobotPath=c:\users\%actualUser%\MyRobotFramework"
 set "installedPath=%myRobotPath%\DownloadedRobots\CLA-robotok\CLA-ssistant"
 
-echo [1/3] Telepitett CLA-ssistant keresese...
+echo [1/3] Telepitett CLAssistant keresese...
 echo Keresett hely: %installedPath%
 
 REM Ellenorizzuk, hogy letezik-e a telepitett konyvtar
 if not exist "%installedPath%" (
-    echo   HIBA: CLA-ssistant nincs telepitve!
+    echo   HIBA: CLAssistant nincs telepitve!
     echo   A telepitett konyvtar nem talalhato: %installedPath%
     echo.
     echo   Megoldasok:
@@ -31,7 +31,7 @@ if not exist "%installedPath%" (
     pause
     exit /b 1
 )
-echo   - CLA-ssistant telepitett konyvtar megtalálva
+echo   - CLAssistant telepitett konyvtar megtalálva
 echo.
 
 echo [2/3] start.bat fajl ellenorzese...
@@ -50,7 +50,7 @@ if not exist "%startBatPath%" (
 echo   - start.bat megtalálva: %startBatPath%
 echo.
 
-echo [3/3] CLA-ssistant Flask szerver inditasa...
+echo [3/3] CLAssistant Flask szerver inditasa...
 echo Valtás a telepitett konyvtarra: %installedPath%
 echo.
 
@@ -60,7 +60,7 @@ echo Aktualis munkakonyvtar: %CD%
 echo.
 
 echo ========================================
-echo  CLA-ssistant Flask szerver inditasa...
+echo  CLAssistant Flask szerver inditasa...
 echo ========================================
 echo.
 
@@ -70,7 +70,7 @@ call "%startBatPath%"
 REM Szerver leallitasa utan
 echo.
 echo ========================================
-echo     CLA-ssistant leállt
+echo     CLAssistant leállt
 echo ========================================
 echo.
 echo A Flask szerver leállt. Újraindításhoz futtassa újra ezt a scriptet.

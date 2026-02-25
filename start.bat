@@ -14,7 +14,7 @@ call "%~dp0stop.bat"
 
 :: Splash képernyő megnyitása (háttérkép látszódjon az inicializálás alatt is)
 if exist "%~dp0splash.html" (
-    start "CLA-ssistant" "%~dp0splash.html"
+    start "CLAssistant" "%~dp0splash.html"
 )
 
 :: Biztosítsuk, hogy a 5000-es port már tényleg szabad (különben a Flask azonnal elhasal)

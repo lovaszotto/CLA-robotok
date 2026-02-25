@@ -1,4 +1,4 @@
-# CLA-ssistant
+# CLAssistant
 
 Ez a projekt egy Flask-alapú webes felületet biztosít robotok kezeléséhez.
 
@@ -24,7 +24,7 @@ gh release create v1.0.0 --title "v1.0.0" --notes "Első stabil verzió"
 
 ## Fájlok
 - `flask_app.py` – Flask szerver és webes logika
-- `CLA-ssistant_main.robot`, `do-selected.robot` – Robot Framework tesztek
+- `do-selected.robot` és a fő Robot Framework suite fájlok
 - `fetch_github_repos.py`, `parse_repos.py` – Segédszkriptek
 - `resources/`, `libraries/` – Robot Framework erőforrások és könyvtárak
 - `results/` – Futtatási eredmények
