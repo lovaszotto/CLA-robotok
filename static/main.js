@@ -1,5 +1,157 @@
 // --- Globális állapot: letöltés/futtatás folyamatban ---
-var IS_BUSY = false;
+// Külön flag-ek: a futtatás zárolása ne tiltsa a letöltést.
+var IS_RUN_BUSY = false;
+var IS_INSTALL_BUSY = false;
+
+// --- Fallback globális várakozás óra (ha az inline script nem tölt be teljesen) ---
+window.__miniWaitState = window.__miniWaitState || {
+    ops: {},
+    activeKey: null,
+    timer: null
+};
+
+function _miniWaitEnsureEls() {
+    const textEl = document.getElementById('globalWaitTimerText');
+    const badgeEl = document.getElementById('globalWaitTimerBadge');
+    return { textEl, badgeEl };
+}
+
+function _miniWaitFormat(ms) {
+    const totalSec = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+    const ss = String(totalSec % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+}
+
+function _miniWaitApplyStyle(kind) {
+    const { badgeEl } = _miniWaitEnsureEls();
+    if (!badgeEl) return;
+    badgeEl.classList.remove('bg-secondary', 'bg-warning', 'bg-success', 'bg-danger', 'text-dark', 'text-white');
+    if (kind === 'run') {
+        badgeEl.classList.add('bg-success', 'text-white');
+    } else if (kind === 'delete') {
+        badgeEl.classList.add('bg-danger', 'text-white');
+    } else {
+        badgeEl.classList.add('bg-warning', 'text-dark');
+    }
+}
+
+function _miniWaitTick() {
+    const st = window.__miniWaitState || {};
+    const key = st.activeKey;
+    if (!key || !st.ops || !st.ops[key]) return;
+    const op = st.ops[key];
+    const { textEl } = _miniWaitEnsureEls();
+    if (!textEl) return;
+    textEl.textContent = `${op.label} ${_miniWaitFormat(Date.now() - op.startedAt)}`;
+    _miniWaitApplyStyle(op.kind);
+}
+
+function miniWaitStart(opKey, label, kind) {
+    try {
+        const key = String(opKey || 'op');
+        const st = window.__miniWaitState || (window.__miniWaitState = { ops: {}, activeKey: null, timer: null });
+        st.ops[key] = {
+            startedAt: Date.now(),
+            label: String(label || 'Folyamatban...'),
+            kind: String(kind || 'work')
+        };
+        st.activeKey = key;
+        _miniWaitTick();
+        if (!st.timer) {
+            st.timer = setInterval(_miniWaitTick, 1000);
+        }
+    } catch (e) {}
+}
+
+function miniWaitStop(opKey) {
+    try {
+        const key = String(opKey || '');
+        const st = window.__miniWaitState || {};
+        if (st.ops && key) delete st.ops[key];
+
+        const keys = Object.keys(st.ops || {});
+        st.activeKey = keys.length ? keys[keys.length - 1] : null;
+
+        if (!st.activeKey) {
+            if (st.timer) {
+                clearInterval(st.timer);
+                st.timer = null;
+            }
+            const { textEl, badgeEl } = _miniWaitEnsureEls();
+            if (textEl) textEl.textContent = 'Kész';
+            if (badgeEl) {
+                badgeEl.classList.remove('bg-warning', 'bg-success', 'bg-danger', 'text-dark', 'text-white');
+                badgeEl.classList.add('bg-secondary');
+            }
+        } else {
+            _miniWaitTick();
+        }
+    } catch (e) {}
+}
+
+async function stopWaitWhenBackendIdle(opKey) {
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const key = String(opKey || '');
+    const isRunOp = key.startsWith('run:');
+    try {
+        let seenBusy = false;
+        for (let i = 0; i < 240; i++) {
+            let busy = false;
+            try {
+                const r = await fetch('/api/busy', { cache: 'no-store' });
+                const j = await r.json().catch(() => ({}));
+                busy = !!(j && j.success && j.busy);
+            } catch (e) {
+                busy = false;
+            }
+            if (busy) seenBusy = true;
+            if (!busy && (seenBusy || i >= 1)) break;
+            await sleep(1000);
+        }
+    } catch (e) {
+        // noop
+    } finally {
+        try { miniWaitStop(opKey); } catch (e) {}
+        try {
+            if (typeof stopGlobalWaitStopwatch === 'function') {
+                stopGlobalWaitStopwatch(opKey);
+            }
+        } catch (e) {}
+        try {
+            if (isRunOp && typeof refreshRunnableRobots === 'function') {
+                refreshRunnableRobots();
+            }
+        } catch (e) {}
+    }
+}
+
+function setRunButtonsLocked(locked, opKey) {
+    try {
+        window.__runUiLocks = window.__runUiLocks || new Set();
+        const key = String(opKey || 'run');
+        if (locked) window.__runUiLocks.add(key);
+        else window.__runUiLocks.delete(key);
+
+        const hasLocks = window.__runUiLocks.size > 0;
+        const runButtons = Array.from(document.querySelectorAll('button[onclick*="executeSingleRobot("]'));
+        const downloadButtons = Array.from(document.querySelectorAll('button[onclick*="installRobot("], button[onclick*="installSelectedRobots("]'));
+        runButtons.forEach((buttonEl) => {
+            try {
+                buttonEl.disabled = !!hasLocks;
+                if (hasLocks) buttonEl.classList.add('disabled');
+                else buttonEl.classList.remove('disabled');
+            } catch (e) {}
+        });
+        downloadButtons.forEach((buttonEl) => {
+            try {
+                buttonEl.disabled = !!hasLocks;
+                if (hasLocks) buttonEl.classList.add('disabled');
+                else buttonEl.classList.remove('disabled');
+            } catch (e) {}
+        });
+    } catch (e) {}
+}
 
 async function sureConfirm({ title = 'Megerősítés', message = '', okText = 'OK', cancelText = 'Mégse', okVariant = 'primary' } = {}) {
     if (typeof showSureBox === 'function') {
@@ -25,7 +177,8 @@ async function sureInfo({ title = 'Információ', message = '', okText = 'OK' } 
 // --- Letöltés gombok kezelése: installRobot ---
 if (typeof window.installRobot !== 'function') {
     window.installRobot = async function(repo, branch, btn) {
-        if (IS_BUSY) return;
+        if (IS_INSTALL_BUSY) return;
+        const opKey = `install:${repo}:${branch}`;
         const ok = await sureConfirm({
             title: 'Robot letöltése',
             message: 'Biztosan le szeretnéd tölteni ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nRobot: ' + branch) : ''),
@@ -34,7 +187,14 @@ if (typeof window.installRobot !== 'function') {
             okVariant: 'primary'
         });
         if (!ok) return;
-        IS_BUSY = true;
+        IS_INSTALL_BUSY = true;
+        try {
+            if (btn) btn.dataset.waitKind = 'download';
+            miniWaitStart(opKey, 'Letöltés folyamatban...', 'download');
+            if (typeof startGlobalWaitStopwatch === 'function') {
+                startGlobalWaitStopwatch(opKey, 'Letöltés folyamatban...');
+            }
+        } catch (e) {}
         if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
@@ -62,7 +222,10 @@ if (typeof window.installRobot !== 'function') {
             return sureInfo({ title: 'Hiba', message: 'Hiba a letöltés során: ' + err, okText: 'OK' });
         })
         .finally(() => {
-            IS_BUSY = false;
+            IS_INSTALL_BUSY = false;
+            try {
+                stopWaitWhenBackendIdle(opKey);
+            } catch (e) {}
             if (btn) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-download"></i>';
@@ -74,9 +237,10 @@ if (typeof window.installRobot !== 'function') {
 // --- Futtatás gomb kezelése: executeSingleRobot ---
 if (typeof window.executeSingleRobot !== 'function') {
     window.executeSingleRobot = async function(btn) {
-        if (IS_BUSY) return;
+        if (IS_RUN_BUSY) return;
         const repo = btn.getAttribute('data-repo');
         const branch = btn.getAttribute('data-branch');
+        const opKey = `run:${repo}:${branch}`;
         const ok = await sureConfirm({
             title: 'Robot futtatása',
             message: 'Biztosan elindítod ezt a robotot?\n\nRepo: ' + repo + (branch ? ('\nRobot: ' + branch) : ''),
@@ -85,7 +249,15 @@ if (typeof window.executeSingleRobot !== 'function') {
             okVariant: 'primary'
         });
         if (!ok) return;
-        IS_BUSY = true;
+        IS_RUN_BUSY = true;
+        setRunButtonsLocked(true, opKey);
+        try {
+            btn.dataset.waitKind = 'run';
+            miniWaitStart(opKey, 'Fut a robot...', 'run');
+            if (typeof startGlobalWaitStopwatch === 'function') {
+                startGlobalWaitStopwatch(opKey, 'Fut a robot...');
+            }
+        } catch (e) {}
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
         fetch('/api/execute', {
@@ -106,9 +278,17 @@ if (typeof window.executeSingleRobot !== 'function') {
             return sureInfo({ title: 'Hiba', message: 'Hiba a futtatás során: ' + err, okText: 'OK' });
         })
         .finally(() => {
-            IS_BUSY = false;
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-play-fill"></i>';
+            IS_RUN_BUSY = false;
+            Promise.resolve()
+                .then(() => stopWaitWhenBackendIdle(opKey))
+                .catch(() => {})
+                .finally(() => {
+                    try {
+                        setRunButtonsLocked(false, opKey);
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-play-fill"></i>';
+                    } catch (e) {}
+                });
         });
     };
 }

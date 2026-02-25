@@ -3286,6 +3286,34 @@ async function executeSingleRobot(button) {
     const msg = `Valóban futtassam a robotot?\n\nRepo: ${repo}\nRobot: ${branch}`;
     const ok = await showSureBox({ title: 'Robot futtatása', message: msg, okText: 'Futtatás', cancelText: 'Mégse', okVariant: 'primary', showCancel: true });
     if (!ok) return;
+
+    const _setRunButtonsLocked = (locked, opKey) => {
+        try {
+            window.__runUiLocks = window.__runUiLocks || new Set();
+            const key = String(opKey || 'run');
+            if (locked) window.__runUiLocks.add(key);
+            else window.__runUiLocks.delete(key);
+
+            const hasLocks = window.__runUiLocks.size > 0;
+            const runBtns = Array.from(document.querySelectorAll('button[onclick*="executeSingleRobot("]'));
+            const downloadBtns = Array.from(document.querySelectorAll('button[onclick*="installRobot("], button[onclick*="installSelectedRobots("]'));
+            runBtns.forEach((btnEl) => {
+                try {
+                    btnEl.disabled = !!hasLocks;
+                    if (hasLocks) btnEl.classList.add('disabled');
+                    else btnEl.classList.remove('disabled');
+                } catch (e) { /* noop */ }
+            });
+            downloadBtns.forEach((btnEl) => {
+                try {
+                    btnEl.disabled = !!hasLocks;
+                    if (hasLocks) btnEl.classList.add('disabled');
+                    else btnEl.classList.remove('disabled');
+                } catch (e) { /* noop */ }
+            });
+        } catch (e) { /* noop */ }
+    };
+
     try {
         // Indulás toast kikapcsolva: "Státusz: Fut" értesítés ne jelenjen meg.
         if (button) {
@@ -3296,22 +3324,71 @@ async function executeSingleRobot(button) {
         }
         const opKey = `run:${repo}:${branch}`;
         if (button) button._waitOpKey = opKey;
-        startGlobalWaitStopwatch(opKey, 'Fut a robot...');
-        executeRobot(repo, branch, button);
+        _setRunButtonsLocked(true, opKey);
+        safeStartGlobalWaitStopwatch(opKey, 'Fut a robot...');
+        executeRobot(repo, branch, button, _setRunButtonsLocked);
     } catch (e) {
         showToast('Robot indítás hiba: ' + String(e), 'danger');
         if (button) {
             button.disabled = false;
             if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
         }
-        stopGlobalWaitStopwatch(`run:${repo}:${branch}`);
+        try { _setRunButtonsLocked(false, `run:${repo}:${branch}`); } catch (e2) { /* noop */ }
+        safeStopGlobalWaitStopwatch(`run:${repo}:${branch}`);
     }
 }
-function executeRobot(repo, branch, button) {
+function executeRobot(repo, branch, button, setRunButtonsLocked) {
     const container = document.getElementById('selectedRobotsContainer') || document.body;
     const currentTime = new Date().toLocaleString('hu-HU');
     // Futás közbeni "Elküldve a szervernek / Státusz: Fut" jelzés kikapcsolva.
     const opKey = (button && button._waitOpKey) ? String(button._waitOpKey) : `run:${repo}:${branch}`;
+    window.__runWaitStartedAtByOp = window.__runWaitStartedAtByOp || {};
+    try { window.__runWaitStartedAtByOp[opKey] = Date.now(); } catch (e) { /* noop */ }
+
+    const stopWhenBackendIdle = async () => {
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        try {
+            let seenBusy = false;
+            for (let i = 0; i < 240; i++) { // max ~4 perc
+                let busy = false;
+                try {
+                    const r = await fetch('/api/busy', { cache: 'no-store' });
+                    const j = await r.json().catch(() => ({}));
+                    busy = !!(j && j.success && j.busy);
+                } catch (e) {
+                    busy = false;
+                }
+
+                if (busy) seenBusy = true;
+                if (!busy && (seenBusy || i >= 1)) break;
+                await sleep(1000);
+            }
+        } catch (e) {
+            // noop
+        } finally {
+            try {
+                const startedAt = Number((window.__runWaitStartedAtByOp || {})[opKey] || Date.now());
+                const elapsed = Date.now() - startedAt;
+                if (elapsed < 700) {
+                    await sleep(700 - elapsed);
+                }
+            } catch (e) { /* noop */ }
+
+            try { safeStopGlobalWaitStopwatch(opKey); } catch (e) { /* noop */ }
+            try {
+                if (window.__runWaitStartedAtByOp) delete window.__runWaitStartedAtByOp[opKey];
+            } catch (e) { /* noop */ }
+            try {
+                if (button) {
+                    button.disabled = false;
+                    if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
+                }
+            } catch (e) { /* noop */ }
+            try { if (typeof setRunButtonsLocked === 'function') setRunButtonsLocked(false, opKey); } catch (e) { /* noop */ }
+            try { if (typeof refreshRunnableRobots === 'function') refreshRunnableRobots(); } catch (e) { /* noop */ }
+        }
+    };
+
     let ctrl = null;
     try {
         ctrl = new AbortController();
@@ -3331,11 +3408,7 @@ function executeRobot(repo, branch, button) {
     .then(r => r.json())
     .then(data => {
         // Nincs futás-közbeni státusz elem, ezért nincs mit eltávolítani.
-        if (button) {
-            button.disabled = false;
-            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
-        }
-        stopGlobalWaitStopwatch(opKey);
+        stopWhenBackendIdle();
         const msg = document.createElement('div');
         const currentTime = new Date().toLocaleString('hu-HU');
         const runStatus = (data && (data.run_status || data.status)) ? String(data.run_status || data.status) : '';
@@ -3360,11 +3433,7 @@ function executeRobot(repo, branch, button) {
         } else {
             showInfoBox('Hiba történt a szerver hívása közben.', 'Hiba');
         }
-        if (button) {
-            button.disabled = false;
-            if (button._originalInnerHTML) button.innerHTML = button._originalInnerHTML;
-        }
-        stopGlobalWaitStopwatch(opKey);
+        stopWhenBackendIdle();
     })
     .finally(() => {
         try {
@@ -3964,8 +4033,115 @@ function ensureGlobalWaitTimerRow() {
     }
 }
 
+function _ensureGlobalWaitState() {
+    try {
+        if (!(window.__waitOps instanceof Set)) window.__waitOps = new Set();
+        if (!window.__waitStartByOp || typeof window.__waitStartByOp !== 'object') window.__waitStartByOp = {};
+        if (!window.__waitLabelByOp || typeof window.__waitLabelByOp !== 'object') window.__waitLabelByOp = {};
+        if (!Array.isArray(window.__waitOpOrder)) window.__waitOpOrder = [];
+        if (typeof window.__waitMinVisibleMs !== 'number') window.__waitMinVisibleMs = 600;
+        if (typeof window.__abortControllerByOp !== 'object' || window.__abortControllerByOp === null) {
+            window.__abortControllerByOp = {};
+        }
+    } catch (e) { /* noop */ }
+}
+
+function _fallbackSimpleWaitStart(opKey, label) {
+    try {
+        const key = String(opKey || 'op');
+        const lbl = String(label || 'Folyamatban...');
+        const { textEl, badgeEl } = ensureGlobalWaitTimerRow();
+        if (!textEl) return;
+
+        window.__fallbackWait = window.__fallbackWait || { timer: null, startedAt: 0, key: null, label: null };
+        window.__fallbackWait.key = key;
+        window.__fallbackWait.label = lbl;
+        window.__fallbackWait.startedAt = Date.now();
+
+        try {
+            if (badgeEl) {
+                _applyWaitBadgeStyleForOp(key, lbl, badgeEl);
+            }
+        } catch (e) { /* noop */ }
+        _setGlobalWaitStopIndicatorActive(true);
+
+        const tick = () => {
+            try {
+                const st = window.__fallbackWait || {};
+                const elapsed = Date.now() - Number(st.startedAt || Date.now());
+                const curr = ensureGlobalWaitTimerRow();
+                const tEl = (curr && curr.textEl) ? curr.textEl : textEl;
+                const bEl = (curr && curr.badgeEl) ? curr.badgeEl : badgeEl;
+                if (tEl) tEl.textContent = `${String(st.label || lbl)} ${_formatElapsedMs(elapsed)}`;
+                _applyWaitBadgeStyleForOp(String(st.key || key), String(st.label || lbl), bEl);
+            } catch (e) { /* noop */ }
+        };
+
+        try {
+            if (window.__fallbackWait.timer) {
+                clearInterval(window.__fallbackWait.timer);
+                window.__fallbackWait.timer = null;
+            }
+        } catch (e) { /* noop */ }
+        tick();
+        window.__fallbackWait.timer = setInterval(tick, 1000);
+    } catch (e) { /* noop */ }
+}
+
+function _fallbackSimpleWaitStop() {
+    try {
+        const st = window.__fallbackWait || {};
+        try {
+            if (st.timer) {
+                clearInterval(st.timer);
+            }
+        } catch (e) { /* noop */ }
+        window.__fallbackWait = { timer: null, startedAt: 0, key: null, label: null };
+
+        const { textEl, badgeEl } = ensureGlobalWaitTimerRow();
+        if (textEl) textEl.textContent = 'Kész';
+        if (badgeEl) {
+            badgeEl.classList.remove('bg-warning', 'bg-success', 'bg-danger', 'text-dark', 'text-white');
+            badgeEl.classList.add('bg-secondary');
+        }
+        _setGlobalWaitStopIndicatorActive(false);
+    } catch (e) { /* noop */ }
+}
+
+function safeStartGlobalWaitStopwatch(opKey, label) {
+    try {
+        _ensureGlobalWaitState();
+        if (typeof startGlobalWaitStopwatch === 'function') {
+            startGlobalWaitStopwatch(opKey, label);
+            return;
+        }
+    } catch (e) { /* fallback below */ }
+    _fallbackSimpleWaitStart(opKey, label);
+}
+
+function safeStopGlobalWaitStopwatch(opKey) {
+    let stoppedByPrimary = false;
+    try {
+        _ensureGlobalWaitState();
+        if (typeof stopGlobalWaitStopwatch === 'function') {
+            stopGlobalWaitStopwatch(opKey);
+            stoppedByPrimary = true;
+        }
+    } catch (e) { /* fallback below */ }
+
+    try {
+        const stillBusy = !!(window.__waitOps && window.__waitOps.size > 0);
+        if (!stoppedByPrimary || !stillBusy) {
+            _fallbackSimpleWaitStop();
+        }
+    } catch (e) {
+        _fallbackSimpleWaitStop();
+    }
+}
+
 function startGlobalWaitStopwatch(opKey, label) {
     try {
+        _ensureGlobalWaitState();
         const wasIdle = !window.__waitOps || window.__waitOps.size === 0;
         const key = String(opKey || 'op');
         window.__waitOps.add(key);
@@ -4057,6 +4233,7 @@ function startGlobalWaitStopwatch(opKey, label) {
 
 function stopGlobalWaitStopwatch(opKey) {
     try {
+        _ensureGlobalWaitState();
         if (opKey) window.__waitOps.delete(String(opKey));
         try { if (opKey && window.__waitLabelByOp) delete window.__waitLabelByOp[String(opKey)]; } catch (e) { /* noop */ }
         try { if (opKey && window.__waitStartByOp) delete window.__waitStartByOp[String(opKey)]; } catch (e) { /* noop */ }

@@ -3186,47 +3186,47 @@ def run_robot_with_params(repo: str, branch: str, timeout_seconds: int | None = 
         except Exception:
             pass
 
-            output_lines = []
+        output_lines = []
+        try:
+            for line in result.stdout:
+                try:
+                    safe_line = line.strip()
+                    if isinstance(safe_line, bytes):
+                        safe_line = safe_line.decode('utf-8', errors='replace')
+                    else:
+                        safe_line = str(safe_line)
+                    logger.info(f": {safe_line}")
+                    output_lines.append(safe_line)
+                except Exception as e:
+                    logger.warning(f"[RUN][LOGGING ERROR]: {e}")
+        finally:
             try:
-                for line in result.stdout:
-                    try:
-                        safe_line = line.strip()
-                        if isinstance(safe_line, bytes):
-                            safe_line = safe_line.decode('utf-8', errors='replace')
-                        else:
-                            safe_line = str(safe_line)
-                        logger.info(f": {safe_line}")
-                        output_lines.append(safe_line)
-                    except Exception as e:
-                        logger.warning(f"[RUN][LOGGING ERROR]: {e}")
-            finally:
-                try:
-                    if watchdog_stop is not None:
-                        watchdog_stop.set()
-                except Exception:
-                    pass
-                try:
-                    result.wait()
-                except Exception:
-                    pass
+                if watchdog_stop is not None:
+                    watchdog_stop.set()
+            except Exception:
+                pass
+            try:
+                result.wait()
+            except Exception:
+                pass
 
-                try:
-                    with RUNNING_ROBOT_PROCS_LOCK:
-                        if RUNNING_ROBOT_PROCS.get(op_key) is result:
-                            del RUNNING_ROBOT_PROCS[op_key]
-                except Exception:
-                    pass
-                try:
-                    if op_started:
-                        _op_end('run')
-                except Exception:
-                    pass
+            try:
+                with RUNNING_ROBOT_PROCS_LOCK:
+                    if RUNNING_ROBOT_PROCS.get(op_key) is result:
+                        del RUNNING_ROBOT_PROCS[op_key]
+            except Exception:
+                pass
+            try:
+                if op_started:
+                    _op_end('run')
+            except Exception:
+                pass
 
-            if timed_out:
-                output_lines.append(f"[TIMEOUT] A futás túllépte a beállított {timeout_s}s időt, a folyamat megszakítva.")
-            logger.info(f"[RUN] Return code: {result.returncode}")
-            logger.info(f"[RUN] Robot output (first 500 chars): {''.join(output_lines)[:500]}")
-            return result.returncode, results_dir_abs, '\n'.join(output_lines), ''
+        if timed_out:
+            output_lines.append(f"[TIMEOUT] A futás túllépte a beállított {timeout_s}s időt, a folyamat megszakítva.")
+        logger.info(f"[RUN] Return code: {result.returncode}")
+        logger.info(f"[RUN] Robot output (first 500 chars): {''.join(output_lines)[:500]}")
+        return result.returncode, results_dir_abs, '\n'.join(output_lines), ''
     except FileNotFoundError as e:
         logger.error(f"[RUN][ERROR] FileNotFoundError: {e}")
         logger.info(f"[RUN] Robot visszatérés: returncode=1")
