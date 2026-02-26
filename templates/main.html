@@ -612,7 +612,7 @@ timestamp { margin-top: 10px; opacity: 0.9; font-size: 0.95rem; }
                                                                        data-repo-url="{{ repo.html_url or '' }}"
                                                                        data-repo-fullname="{{ repo.full_name or '' }}"
                                                                        onclick="openCreateReleaseModal(this)">
-                                                                       <i class="bi bi-box-seam"></i>
+                                                                       <i class="bi bi-box-seam me-1"></i> Új kiadás
                                                                    </button>
                                                                {% endif %}
                                                            </div>
@@ -1865,7 +1865,7 @@ function renderRunnableRepos(repos) {
                                             <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Környezet beállítás" data-repo="${repoName}" data-branch="${escAttr(br)}" onclick="openEnvironmentSettings(this)"><i class="bi bi-sliders"></i> Beállítás</button>
                                             <button class="btn btn-outline-info btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="${hasRelease ? 'Verziók' : 'Nincs release info'}" data-repo="${repoName}" data-branch="${escAttr(br)}" data-mode="run" data-repo-url="${repoUrl}" data-release-tag="${escAttr(hasRelease ? (rel.tag || '') : '')}" data-release-title="${escAttr(hasRelease ? (rel.title || '') : '')}" data-release-date="${escAttr(hasRelease ? (rel.date || '') : '')}" onclick="branchInfoClicked(this)"><i class="bi ${hasRelease ? 'bi-info-circle' : 'bi-hammer'}"></i> Info</button>
                                             <button class="btn btn-outline-warning btn-sm text-dark d-none" type="button" data-action="update" data-bs-toggle="tooltip" data-bs-title="Frissítés (új verzió telepítése)" data-repo="${repoName}" data-branch="${escAttr(br)}" onclick="updateInstalledRobot(this)"><i class="bi bi-arrow-repeat"></i> Frissítés</button>
-                                            ${sandboxEnabled ? `<button class="btn btn-outline-info btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése" data-repo="${repoName}" data-branch="${escAttr(br)}" data-repo-url="${repoUrl}" data-repo-fullname="${repoFullName}" onclick="openCreateReleaseModal(this)"><i class="bi bi-box-seam"></i></button>` : ''}
+                                            ${sandboxEnabled ? `<button class="btn btn-outline-info btn-sm" type="button" data-bs-toggle="tooltip" data-bs-title="Új kiadás készítése" data-repo="${repoName}" data-branch="${escAttr(br)}" data-repo-url="${repoUrl}" data-repo-fullname="${repoFullName}" onclick="openCreateReleaseModal(this)"><i class="bi bi-box-seam me-1"></i> Új kiadás</button>` : ''}
                                         </div>
                                     </div>
                                     <div class="ms-2">

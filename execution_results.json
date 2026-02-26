@@ -328,5 +328,16 @@
     "returncode": 9,
     "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\IKK-Robotok__IKK04-Dokumentum-WEB-Ellenőrzés__20260225_114452",
     "type": "bulk"
+  },
+  {
+    "id": 33,
+    "timestamp": "2026-02-25 11:54:21",
+    "repo": "SzotarRobi",
+    "branch": "Szó-kikérdező",
+    "status": "success",
+    "sikeresseg": "Hibás futás",
+    "returncode": 0,
+    "results_dir": "C:\\Users\\oLovasz\\MyRobotFramework\\RobotResults\\SzotarRobi__Szó-kikérdező__20260225_115421",
+    "type": "bulk"
   }
 ]
